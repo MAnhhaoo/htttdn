@@ -1,0 +1,14 @@
+[
+  { "id": "deal-1", "productId": "prod-4", "type": "flash_sale", "originalPrice": 399, "dealPrice": 279, "discount": 30, "stock": 120, "sold": 89, "startTime": "2024-10-22T00:00:00Z", "endTime": "2024-10-22T23:59:59Z", "active": true },
+  { "id": "deal-2", "productId": "prod-6", "type": "flash_sale", "originalPrice": 229, "dealPrice": 149, "discount": 35, "stock": 45, "sold": 32, "startTime": "2024-10-22T00:00:00Z", "endTime": "2024-10-22T23:59:59Z", "active": true },
+  { "id": "deal-3", "productId": "prod-9", "type": "flash_sale", "originalPrice": 249, "dealPrice": 199, "discount": 20, "stock": 200, "sold": 156, "startTime": "2024-10-22T00:00:00Z", "endTime": "2024-10-22T23:59:59Z", "active": true },
+  { "id": "deal-4", "productId": "prod-14", "type": "flash_sale", "originalPrice": 178, "dealPrice": 129, "discount": 28, "stock": 60, "sold": 41, "startTime": "2024-10-22T00:00:00Z", "endTime": "2024-10-22T23:59:59Z", "active": true },
+  { "id": "deal-5", "productId": "prod-15", "type": "flash_sale", "originalPrice": 49, "dealPrice": 29, "discount": 41, "stock": 300, "sold": 245, "startTime": "2024-10-22T00:00:00Z", "endTime": "2024-10-22T23:59:59Z", "active": true },
+  { "id": "deal-6", "productId": "prod-12", "type": "today_deal", "originalPrice": 120, "dealPrice": 79, "discount": 34, "stock": 200, "sold": 120, "startTime": "2024-10-22T00:00:00Z", "endTime": "2024-10-22T23:59:59Z", "active": true },
+  { "id": "deal-7", "productId": "prod-18", "type": "today_deal", "originalPrice": 22, "dealPrice": 15, "discount": 32, "stock": 500, "sold": 380, "startTime": "2024-10-22T00:00:00Z", "endTime": "2024-10-22T23:59:59Z", "active": true },
+  { "id": "deal-8", "productId": "prod-19", "type": "today_deal", "originalPrice": 48, "dealPrice": 34, "discount": 29, "stock": 120, "sold": 75, "startTime": "2024-10-22T00:00:00Z", "endTime": "2024-10-22T23:59:59Z", "active": true },
+  { "id": "deal-9", "productId": "prod-2", "type": "best_offer", "originalPrice": 1199, "dealPrice": 949, "discount": 21, "stock": 62, "sold": 35, "startTime": "2024-10-20T00:00:00Z", "endTime": "2024-10-30T23:59:59Z", "active": true },
+  { "id": "deal-10", "productId": "prod-8", "type": "best_offer", "originalPrice": 1299, "dealPrice": 899, "discount": 31, "stock": 8, "sold": 5, "startTime": "2024-10-20T00:00:00Z", "endTime": "2024-10-30T23:59:59Z", "active": true },
+  { "id": "deal-11", "productId": "prod-10", "type": "best_offer", "originalPrice": 79, "dealPrice": 59, "discount": 25, "stock": 150, "sold": 98, "startTime": "2024-10-20T00:00:00Z", "endTime": "2024-10-30T23:59:59Z", "active": true },
+  { "id": "deal-12", "productId": "prod-16", "type": "best_offer", "originalPrice": 450, "dealPrice": 299, "discount": 34, "stock": 25, "sold": 12, "startTime": "2024-10-20T00:00:00Z", "endTime": "2024-10-30T23:59:59Z", "active": true }
+]

@@ -1,0 +1,10 @@
+[
+  { "id": "voucher-1", "code": "WELCOME20", "type": "percentage", "discount": 20, "maxDiscount": 50, "minOrder": 100, "description": "20% off your first order", "expiresAt": "2025-12-31T23:59:59Z", "usageLimit": 1, "usedCount": 0, "active": true },
+  { "id": "voucher-2", "code": "FLASH10", "type": "fixed", "discount": 10, "maxDiscount": 10, "minOrder": 50, "description": "$10 off on orders over $50", "expiresAt": "2024-11-30T23:59:59Z", "usageLimit": 3, "usedCount": 1, "active": true },
+  { "id": "voucher-3", "code": "FREESHIP", "type": "shipping", "discount": 100, "maxDiscount": 15, "minOrder": 30, "description": "Free shipping on orders over $30", "expiresAt": "2024-12-31T23:59:59Z", "usageLimit": 5, "usedCount": 2, "active": true },
+  { "id": "voucher-4", "code": "PREMIUM50", "type": "percentage", "discount": 50, "maxDiscount": 200, "minOrder": 500, "description": "50% off premium collection (max $200)", "expiresAt": "2024-11-15T23:59:59Z", "usageLimit": 1, "usedCount": 0, "active": true },
+  { "id": "voucher-5", "code": "BEAUTY15", "type": "percentage", "discount": 15, "maxDiscount": 30, "minOrder": 50, "description": "15% off beauty products", "expiresAt": "2024-12-31T23:59:59Z", "usageLimit": 2, "usedCount": 0, "active": true },
+  { "id": "voucher-6", "code": "SAVE25", "type": "fixed", "discount": 25, "maxDiscount": 25, "minOrder": 150, "description": "$25 off on orders over $150", "expiresAt": "2024-11-30T23:59:59Z", "usageLimit": 1, "usedCount": 0, "active": true },
+  { "id": "voucher-7", "code": "HOLIDAY30", "type": "percentage", "discount": 30, "maxDiscount": 100, "minOrder": 200, "description": "30% off holiday sale (max $100)", "expiresAt": "2025-01-05T23:59:59Z", "usageLimit": 2, "usedCount": 0, "active": true },
+  { "id": "voucher-8", "code": "EXPIRED10", "type": "fixed", "discount": 10, "maxDiscount": 10, "minOrder": 30, "description": "$10 off (expired)", "expiresAt": "2024-09-01T23:59:59Z", "usageLimit": 1, "usedCount": 1, "active": false }
+]

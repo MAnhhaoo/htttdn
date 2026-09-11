@@ -1,0 +1,128 @@
+[
+  {
+    "id": "order-1",
+    "userId": "user-1",
+    "orderNumber": "MV-2024-001234",
+    "status": "delivered",
+    "items": [
+      { "productId": "prod-1", "name": "iPhone 15 Pro Max", "image": "https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=200", "variant": "Natural Titanium / 256GB", "price": 1099, "quantity": 1, "total": 1099 },
+      { "productId": "prod-9", "name": "AirPods Pro 2nd Generation", "image": "https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?w=200", "variant": "Default", "price": 199, "quantity": 1, "total": 199 }
+    ],
+    "subtotal": 1298,
+    "shippingFee": 0,
+    "discount": 50,
+    "voucherDiscount": 20,
+    "total": 1228,
+    "shippingAddress": { "fullName": "Alex Johnson", "phone": "+1 234 567 8901", "address": "123 Main Street, Apt 4B, Downtown, Los Angeles, California" },
+    "shippingMethod": "Express Delivery",
+    "paymentMethod": "Credit Card (Visa ****4242)",
+    "timeline": [
+      { "status": "Order Placed", "date": "2024-10-01T10:30:00Z", "completed": true },
+      { "status": "Processing", "date": "2024-10-01T14:00:00Z", "completed": true },
+      { "status": "Shipped", "date": "2024-10-02T08:00:00Z", "completed": true },
+      { "status": "Delivered", "date": "2024-10-03T15:30:00Z", "completed": true }
+    ],
+    "createdAt": "2024-10-01T10:30:00Z",
+    "estimatedDelivery": "2024-10-03"
+  },
+  {
+    "id": "order-2",
+    "userId": "user-1",
+    "orderNumber": "MV-2024-001567",
+    "status": "shipping",
+    "items": [
+      { "productId": "prod-8", "name": "Mid-Century Modern Sofa", "image": "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=200", "variant": "Charcoal Gray", "price": 899, "quantity": 1, "total": 899 }
+    ],
+    "subtotal": 899,
+    "shippingFee": 0,
+    "discount": 0,
+    "voucherDiscount": 0,
+    "total": 899,
+    "shippingAddress": { "fullName": "Alex Johnson", "phone": "+1 234 567 8901", "address": "123 Main Street, Apt 4B, Downtown, Los Angeles, California" },
+    "shippingMethod": "Standard Delivery",
+    "paymentMethod": "Bank Transfer",
+    "timeline": [
+      { "status": "Order Placed", "date": "2024-10-15T09:00:00Z", "completed": true },
+      { "status": "Processing", "date": "2024-10-15T16:00:00Z", "completed": true },
+      { "status": "Shipped", "date": "2024-10-17T10:00:00Z", "completed": true },
+      { "status": "Delivered", "date": null, "completed": false }
+    ],
+    "createdAt": "2024-10-15T09:00:00Z",
+    "estimatedDelivery": "2024-10-25"
+  },
+  {
+    "id": "order-3",
+    "userId": "user-1",
+    "orderNumber": "MV-2024-001890",
+    "status": "processing",
+    "items": [
+      { "productId": "prod-4", "name": "Sony WH-1000XM5 Headphones", "image": "https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=200", "variant": "Black", "price": 279, "quantity": 1, "total": 279 },
+      { "productId": "prod-15", "name": "Wireless Charging Pad", "image": "https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=200", "variant": "Black", "price": 29, "quantity": 2, "total": 58 }
+    ],
+    "subtotal": 337,
+    "shippingFee": 0,
+    "discount": 15,
+    "voucherDiscount": 10,
+    "total": 312,
+    "shippingAddress": { "fullName": "Alex Johnson", "phone": "+1 234 567 8901", "address": "456 Beach Ave, Ocean Park, Santa Monica, California" },
+    "shippingMethod": "Express Delivery",
+    "paymentMethod": "E-wallet (PayPal)",
+    "timeline": [
+      { "status": "Order Placed", "date": "2024-10-20T14:00:00Z", "completed": true },
+      { "status": "Processing", "date": "2024-10-20T18:00:00Z", "completed": true },
+      { "status": "Shipped", "date": null, "completed": false },
+      { "status": "Delivered", "date": null, "completed": false }
+    ],
+    "createdAt": "2024-10-20T14:00:00Z",
+    "estimatedDelivery": "2024-10-23"
+  },
+  {
+    "id": "order-4",
+    "userId": "user-1",
+    "orderNumber": "MV-2024-002100",
+    "status": "to_pay",
+    "items": [
+      { "productId": "prod-16", "name": "Cashmere Blend Overcoat", "image": "https://images.unsplash.com/photo-1544022613-e87ca75a784a?w=200", "variant": "Camel / L", "price": 299, "quantity": 1, "total": 299 }
+    ],
+    "subtotal": 299,
+    "shippingFee": 0,
+    "discount": 0,
+    "voucherDiscount": 0,
+    "total": 299,
+    "shippingAddress": { "fullName": "Alex Johnson", "phone": "+1 234 567 8901", "address": "123 Main Street, Apt 4B, Downtown, Los Angeles, California" },
+    "shippingMethod": "Standard Delivery",
+    "paymentMethod": "Pending",
+    "timeline": [
+      { "status": "Order Placed", "date": "2024-10-22T11:00:00Z", "completed": true },
+      { "status": "Processing", "date": null, "completed": false },
+      { "status": "Shipped", "date": null, "completed": false },
+      { "status": "Delivered", "date": null, "completed": false }
+    ],
+    "createdAt": "2024-10-22T11:00:00Z",
+    "estimatedDelivery": "2024-10-28"
+  },
+  {
+    "id": "order-5",
+    "userId": "user-1",
+    "orderNumber": "MV-2024-000890",
+    "status": "cancelled",
+    "items": [
+      { "productId": "prod-6", "name": "Minimalist Leather Watch", "image": "https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=200", "variant": "Brown/Gold", "price": 149, "quantity": 1, "total": 149 }
+    ],
+    "subtotal": 149,
+    "shippingFee": 0,
+    "discount": 0,
+    "voucherDiscount": 0,
+    "total": 149,
+    "shippingAddress": { "fullName": "Alex Johnson", "phone": "+1 234 567 8901", "address": "123 Main Street, Apt 4B, Downtown, Los Angeles, California" },
+    "shippingMethod": "Standard Delivery",
+    "paymentMethod": "Credit Card (Visa ****4242)",
+    "cancelReason": "Changed my mind",
+    "timeline": [
+      { "status": "Order Placed", "date": "2024-09-10T09:00:00Z", "completed": true },
+      { "status": "Cancelled", "date": "2024-09-10T12:00:00Z", "completed": true }
+    ],
+    "createdAt": "2024-09-10T09:00:00Z",
+    "estimatedDelivery": null
+  }
+]
