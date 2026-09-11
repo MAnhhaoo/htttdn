@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import ProductCard from '@/components/ProductCard';
 
 export default function CategoryPage({ params }) {
-  const { slug } = params;
+  const unwrappedParams = use(params);
+  const slug = unwrappedParams.slug;
   
   const [category, setCategory] = useState(null);
   const [products, setProducts] = useState([]);

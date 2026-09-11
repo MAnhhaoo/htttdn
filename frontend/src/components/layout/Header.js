@@ -17,8 +17,29 @@ export default function Header() {
   const [userDropdown, setUserDropdown] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [suggestions, setSuggestions] = useState(null);
+  const [user, setUser] = useState(null);
   const searchRef = useRef(null);
   const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    // Check auth status
+    const userData = localStorage.getItem('miva-user');
+    if (userData) {
+      try {
+        setUser(JSON.parse(userData));
+      } catch (e) {
+        console.error('Error parsing user data', e);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('miva-token');
+    localStorage.removeItem('miva-user');
+    setUser(null);
+    setUserDropdown(false);
+    window.location.href = '/';
+  };
 
   useEffect(() => {
     fetchCart();
@@ -165,13 +186,26 @@ export default function Header() {
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </button>
                 <div className={`dropdown-menu ${userDropdown ? 'active' : ''}`}>
-                  <Link href="/account" className="dropdown-item" onClick={() => setUserDropdown(false)}>👤 My Profile</Link>
-                  <Link href="/account/orders" className="dropdown-item" onClick={() => setUserDropdown(false)}>📦 My Orders</Link>
-                  <Link href="/account/wishlist" className="dropdown-item" onClick={() => setUserDropdown(false)}>❤️ Wishlist</Link>
-                  <Link href="/account/vouchers" className="dropdown-item" onClick={() => setUserDropdown(false)}>🎟️ My Vouchers</Link>
-                  <div className="dropdown-divider" />
-                  <Link href="/account/settings" className="dropdown-item" onClick={() => setUserDropdown(false)}>⚙️ Settings</Link>
-                  <Link href="/login" className="dropdown-item" onClick={() => setUserDropdown(false)}>🔑 Login / Register</Link>
+                  {user ? (
+                    <>
+                      <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', marginBottom: '8px' }}>
+                        <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{user.fullName || 'User'}</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>{user.email || ''}</div>
+                      </div>
+                      <Link href="/account" className="dropdown-item" onClick={() => setUserDropdown(false)}>👤 My Profile</Link>
+                      <Link href="/account/orders" className="dropdown-item" onClick={() => setUserDropdown(false)}>📦 My Orders</Link>
+                      <Link href="/account/wishlist" className="dropdown-item" onClick={() => setUserDropdown(false)}>❤️ Wishlist</Link>
+                      <Link href="/account/vouchers" className="dropdown-item" onClick={() => setUserDropdown(false)}>🎟️ My Vouchers</Link>
+                      <div className="dropdown-divider" />
+                      <Link href="/account/settings" className="dropdown-item" onClick={() => setUserDropdown(false)}>⚙️ Settings</Link>
+                      <button className="dropdown-item" onClick={handleLogout} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', color: 'var(--error)' }}>🚪 Log Out</button>
+                    </>
+                  ) : (
+                    <>
+                      <Link href="/login" className="dropdown-item" onClick={() => setUserDropdown(false)}>🔑 Login</Link>
+                      <Link href="/register" className="dropdown-item" onClick={() => setUserDropdown(false)}>📝 Register</Link>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
