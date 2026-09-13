@@ -4,13 +4,13 @@ export class CreateUserDto implements Prisma.UserCreateInput {
   id?: string | undefined;
   email: string;
   password: string;
-  firstName: string;
-  lastName?: string | null | undefined;
-  fullAddress: string;
+  fullName: string;
+  address: string;
   city?: string | null | undefined;
   province?: string | null | undefined;
   country?: string | null | undefined;
   phone?: string | null | undefined;
+  role?: $Enums.UserRole | undefined;
   status?: $Enums.UserStatus | undefined;
   createdAt?: string | Date | undefined;
   createdBy?: string | null | undefined;

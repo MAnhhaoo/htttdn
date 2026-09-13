@@ -1,18 +1,19 @@
-import { $Enums, User as UserPrisma } from '@prisma/client';
+import { User as UserPrisma, UserRole, UserStatus } from '@prisma/client';
+
 export class User implements UserPrisma {
   id: string;
+  fullName: string;
   email: string;
-  password: string;
-  firstName: string;
-  lastName: string | null;
-  fullAddress: string;
-  city: string | null;
-  province: string | null;
-  country: string | null;
   phone: string | null;
-  status: $Enums.UserStatus;
+  password: string;
+  avatar: string | null;
+  gender: string | null;
+  address: string | null;
+  status: UserStatus;
+
+  role: UserRole;
+
   createdAt: Date;
-  createdBy: string | null;
   updatedAt: Date;
   deletedAt: Date | null;
 }

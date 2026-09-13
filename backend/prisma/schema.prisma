@@ -1,11 +1,11 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
+}
+
+generator zod {
+  provider          = "zod-prisma-types"
+  output            = "../src/generated/zod"
+  useTypeAssertions = true
 }
 
 datasource db {
@@ -13,32 +13,312 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// =====================================================
+// ENUM
+// =====================================================
 
 enum UserStatus {
   active
   inactive
 }
 
-model User {
-  id          String     @id @default(uuid())
-  email       String     @unique /// @zod.string.email()
-  password    String
-  firstName   String
-  lastName    String?
-  fullAddress String
-  city        String?
-  province    String?
-  country     String?
-  phone       String?
-  status      UserStatus @default(active)
-  createdAt   DateTime   @default(now())
-  createdBy   String?
-  updatedAt   DateTime   @updatedAt
-  deletedAt   DateTime?
+enum UserRole {
+  customer
+  seller
+  admin
+}
 
-  // vendors         Vendor[]
-  // userVendorRoles UserVendorRole[]
-  // orders          Order[]
-  // cart            Cart?
-  // notifications   Notification[]
+enum ProductStatus {
+  active
+  inactive
+  draft
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  processing
+  shipping
+  completed
+  cancelled
+}
+
+enum PaymentStatus {
+  pending
+  success
+  failed
+  cancelled
+  refunded
+}
+
+enum PaymentMethod {
+  cod
+  vnpay
+  momo
+  zalopay
+  bank_transfer
+}
+
+// =====================================================
+// USER
+// =====================================================
+
+model User {
+  id       String  @id @default(uuid())
+  fullName String
+  email    String  @unique
+  phone    String?
+  password String
+  avatar   String?
+  gender   String?
+  address  String?
+
+  status UserStatus @default(active)
+  role   UserRole   @default(customer)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  cart     Cart?
+  orders   Order[]
+  reviews  Review[]
+  products Product[]
+
+  @@index([email])
+  @@index([status])
+  @@index([role])
+}
+
+// =====================================================
+// CATEGORY
+// =====================================================
+
+model Category {
+  id          String  @id @default(uuid())
+  name        String
+  slug        String  @unique
+  icon        String?
+  imageUrl    String?
+  description String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  products Product[]
+
+  @@index([name])
+}
+
+// =====================================================
+// PRODUCT
+// =====================================================
+
+model Product {
+  id          String  @id @default(uuid())
+  name        String
+  slug        String  @unique
+  description String?
+
+  categoryId String
+  sellerId   String
+
+  status ProductStatus @default(active)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  category Category @relation(fields: [categoryId], references: [id])
+  seller   User     @relation(fields: [sellerId], references: [id])
+
+  colors  ProductColor[]
+  reviews Review[]
+
+  @@index([categoryId])
+  @@index([sellerId])
+  @@index([status])
+}
+
+// =====================================================
+// PRODUCT COLOR
+// =====================================================
+
+model ProductColor {
+  id        String @id @default(uuid())
+  productId String
+
+  color    String
+  imageUrl String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  product  Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variants ProductVariant[]
+
+  @@unique([productId, color])
+  @@index([productId])
+}
+
+// =====================================================
+// PRODUCT VARIANT
+// =====================================================
+
+model ProductVariant {
+  id             String @id @default(uuid())
+  productColorId String
+
+  storage   String?
+  sku       String   @unique
+  price     Decimal  @db.Decimal(15, 2)
+  salePrice Decimal? @db.Decimal(15, 2)
+  stock     Int      @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  productColor ProductColor @relation(fields: [productColorId], references: [id], onDelete: Cascade)
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@index([productColorId])
+}
+
+// =====================================================
+// CART
+// =====================================================
+
+model Cart {
+  id     String @id @default(uuid())
+  userId String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@index([userId])
+}
+
+// =====================================================
+// CART ITEM
+// =====================================================
+
+model CartItem {
+  id               String @id @default(uuid())
+  cartId           String
+  productVariantId String
+  quantity         Int    @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart           Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productVariant ProductVariant @relation(fields: [productVariantId], references: [id])
+
+  @@unique([cartId, productVariantId])
+  @@index([cartId])
+  @@index([productVariantId])
+}
+
+// =====================================================
+// ORDER
+// =====================================================
+
+model Order {
+  id        String @id @default(uuid())
+  userId    String
+  orderCode String @unique
+
+  orderDate   DateTime    @default(now())
+  totalAmount Decimal     @db.Decimal(15, 2)
+  status      OrderStatus @default(pending)
+  notes       String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  cancelledAt DateTime?
+
+  user     User        @relation(fields: [userId], references: [id])
+  items    OrderItem[]
+  payments Payment[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([orderDate])
+}
+
+// =====================================================
+// ORDER ITEM
+// =====================================================
+
+model OrderItem {
+  id               String  @id @default(uuid())
+  orderId          String
+  productVariantId String?
+
+  quantity Int
+  price    Decimal @db.Decimal(15, 2)
+
+  createdAt DateTime @default(now())
+
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productVariant ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productVariantId])
+}
+
+// =====================================================
+// PAYMENT
+// =====================================================
+
+model Payment {
+  id      String @id @default(uuid())
+  orderId String
+
+  method        PaymentMethod
+  status        PaymentStatus @default(pending)
+  amount        Decimal       @db.Decimal(15, 2)
+  transactionId String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  cancelledAt DateTime?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@index([transactionId])
+}
+
+// =====================================================
+// REVIEW
+// =====================================================
+
+model Review {
+  id        String @id @default(uuid())
+  userId    String
+  productId String
+
+  description String?
+  star        Int
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
 }
