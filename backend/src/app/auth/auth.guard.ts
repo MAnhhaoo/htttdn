@@ -1,50 +1,71 @@
-// import { Request } from 'express';
-// import {
-//   Injectable,
-//   CanActivate,
-//   ExecutionContext,
-//   UnauthorizedException,
-// } from '@nestjs/common';
-// import { IS_SKIP_AUTH } from './auth.decorator';
-// import { Reflector } from '@nestjs/core';
-// import { AuthService } from './auth.service';
-// import { UserInfo } from '../../common/decorators/user.decorator';
-// import { TokenKeys } from './consts/jwt.const';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Request } from 'express';
 
-// @Injectable()
-// export class AuthGuard implements CanActivate {
-//   constructor(
-//     private reflector: Reflector,
-//     private authService: AuthService,
-//   ) {}
+import { IS_SKIP_AUTH } from './auth.decorator';
+import { AuthService, TokenPayload } from './auth.service';
+import { TokenKeys } from './consts/jwt.const';
 
-//   async canActivate(context: ExecutionContext): Promise<boolean> {
-//     const isSkipAuth = this.reflector.getAllAndOverride<boolean>(IS_SKIP_AUTH, [
-//       context.getHandler(),
-//       context.getClass(),
-//     ]);
-//     if (isSkipAuth) {
-//       return true;
-//     }
+type AuthenticatedRequest = Request & {
+  user?: TokenPayload;
+  cookies?: Record<string, string>;
+};
 
-//     const req = context.switchToHttp().getRequest<Request>();
-//     const token = this.extractTokenFromHeader(req);
-//     if (!token) throw new UnauthorizedException();
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly authService: AuthService,
+  ) {}
 
-//     try {
-//       const payload = await this.authService.verifyToken(token);
-//       const { iat, exp, ...user } = payload;
-//       req['user'] = user as UserInfo;
-//     } catch (err) {
-//       throw new UnauthorizedException(err.message);
-//     }
-//     return true;
-//   }
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isSkipAuth = this.reflector.getAllAndOverride<boolean>(IS_SKIP_AUTH, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
-//   private extractTokenFromHeader(req: Request): string | undefined {
-//     const [type, bearerToken] = req.headers.authorization?.split(' ') ?? [];
-//     if (type === 'Bearer') return bearerToken;
-//     const cookieToken = req.cookies[TokenKeys.ACCESS_TOKEN_KEY];
-//     return cookieToken ? cookieToken : undefined;
-//   }
-// }
+    if (isSkipAuth) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+
+    const token = this.extractTokenFromRequest(request);
+
+    if (!token) {
+      throw new UnauthorizedException('Không tìm thấy access token');
+    }
+
+    const payload = await this.authService.verifyToken(token);
+
+    request.user = {
+      userID: payload.userID,
+      userEmail: payload.userEmail,
+      fullName: payload.fullName,
+      phone: payload.phone,
+      avatar: payload.avatar,
+      gender: payload.gender,
+      address: payload.address,
+      role: payload.role,
+    };
+
+    return true;
+  }
+
+  private extractTokenFromRequest(
+    request: AuthenticatedRequest,
+  ): string | undefined {
+    const [type, bearerToken] = request.headers.authorization?.split(' ') ?? [];
+
+    if (type === 'Bearer' && bearerToken) {
+      return bearerToken;
+    }
+
+    return request.cookies?.[TokenKeys.ACCESS_TOKEN_KEY];
+  }
+}

@@ -12,6 +12,7 @@ export class User implements UserPrisma {
   status: UserStatus;
 
   role: UserRole;
+  createdBy: string;
 
   createdAt: Date;
   updatedAt: Date;

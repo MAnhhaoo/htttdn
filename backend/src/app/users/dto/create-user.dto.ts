@@ -1,19 +1,21 @@
-import { $Enums, Prisma } from '@prisma/client';
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
 
 export class CreateUserDto implements Prisma.UserCreateInput {
-  id?: string | undefined;
+  id?: string;
+
+  fullName: string;
   email: string;
   password: string;
-  fullName: string;
-  address: string;
-  city?: string | null | undefined;
-  province?: string | null | undefined;
-  country?: string | null | undefined;
-  phone?: string | null | undefined;
-  role?: $Enums.UserRole | undefined;
-  status?: $Enums.UserStatus | undefined;
-  createdAt?: string | Date | undefined;
-  createdBy?: string | null | undefined;
-  updatedAt?: string | Date | undefined;
-  deletedAt?: string | Date | null | undefined;
+
+  phone?: string | null;
+  avatar?: string | null;
+  gender?: string | null;
+  address?: string | null;
+
+  status?: UserStatus;
+  role?: UserRole;
+
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  deletedAt?: string | Date | null;
 }

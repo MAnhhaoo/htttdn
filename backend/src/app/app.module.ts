@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UserModule } from './users/users.module';
-import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { LoggingInterceptor } from 'src/logger/logging.interceptor';
 import { CatchEverythingFilter } from 'src/catch-everything/carch-everything.filter';
 import { ZodExceptionFilter } from 'src/catch-everything/zod-exception/zod-exception.filter';
@@ -11,13 +11,16 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from 'src/common/prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
+import { AccessControlGuard } from 'src/common/guards/access-control/access-control.guard';
+import { AuthGuard } from './auth/auth.guard';
+import { validate } from 'src/common/envs/validate.env';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true, // cho phép sử dụng config service
       expandVariables: true, // cho phép tái sử dụng các biến trong env
-      // validate: validate,
+      validate: validate,
     }),
     PrismaModule,
     UserModule,
@@ -43,6 +46,14 @@ import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
     {
       provide: APP_FILTER,
       useClass: CatchEverythingFilter,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: AuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: AccessControlGuard,
     },
   ],
 })

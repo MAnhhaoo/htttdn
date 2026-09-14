@@ -10,6 +10,7 @@ const SignUpSchema = SignInSchema.merge(
   UserSchema.pick({ fullName: true, address: true }),
 );
 
+// HOC / HOF: nhận một hàm kahcs làm tham so
 const SignInResponseSchema = withResponse(
   z.object({
     [TokenKeys.ACCESS_TOKEN_KEY]: z.string(),

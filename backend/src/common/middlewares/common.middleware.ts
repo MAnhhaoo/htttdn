@@ -1,7 +1,8 @@
 import { INestApplication } from '@nestjs/common';
-import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 
-export const applyMiddlewares = (app: INestApplication) => {
-  app.use(helmet(), cookieParser());
+export const applyMiddlewares = (app: INestApplication): void => {
+  app.use(helmet());
+  app.use(cookieParser());
 };
