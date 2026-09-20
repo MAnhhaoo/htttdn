@@ -14,6 +14,10 @@ import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import { AccessControlGuard } from 'src/common/guards/access-control/access-control.guard';
 import { AuthGuard } from './auth/auth.guard';
 import { validate } from 'src/common/envs/validate.env';
+import { CategoryModule } from './categories/category.module';
+import { StringUtilModule } from 'src/common/utils/string-util/string-util.module';
+import { ProductsModule } from './products/products.module';
+import { ProductColorModule } from './product-colors/productColor.module';
 
 @Module({
   imports: [
@@ -26,6 +30,10 @@ import { validate } from 'src/common/envs/validate.env';
     UserModule,
     ApiUtilModule,
     AuthModule,
+    CategoryModule,
+    StringUtilModule,
+    ProductsModule,
+    ProductColorModule,
   ],
   controllers: [AppController],
   providers: [

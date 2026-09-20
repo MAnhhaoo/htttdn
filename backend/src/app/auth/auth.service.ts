@@ -10,15 +10,12 @@ import { UsersService } from '../users/users.service';
 import { StringUtilService } from '../../common/utils/string-util/string-util.service';
 import { SignInDto, SignUpDto } from './dto/sign.dto';
 import { JWTToken, TokenKeys } from './consts/jwt.const';
-import { ForgotPasswordDto } from './dto/password.dto';
 
 export type TokenPayload = {
   userID: string;
   userEmail: string;
   fullName: string;
   phone: string | null;
-  avatar: string | null;
-  gender: string | null;
   address: string | null;
   role: UserRole;
 };
@@ -101,10 +98,7 @@ export class AuthService {
       userEmail: user.email,
       fullName: user.fullName,
       phone: user.phone,
-      avatar: user.avatar,
-      gender: user.gender,
       address: user.address,
-
       role: user.role,
     });
 
@@ -122,10 +116,7 @@ export class AuthService {
       userEmail: payload.userEmail,
       fullName: payload.fullName,
       phone: payload.phone,
-      avatar: payload.avatar,
-      gender: payload.gender,
       address: payload.address,
-
       role: payload.role,
     });
     return {

@@ -48,8 +48,6 @@ export class AuthGuard implements CanActivate {
       userEmail: payload.userEmail,
       fullName: payload.fullName,
       phone: payload.phone,
-      avatar: payload.avatar,
-      gender: payload.gender,
       address: payload.address,
       role: payload.role,
     };

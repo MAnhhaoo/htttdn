@@ -8,19 +8,21 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import { UserRole } from '@prisma/client';
 
 import { IS_SKIP_AUTH } from '../../../app/auth/auth.decorator';
+import { TokenPayload } from '../../../app/auth/auth.service';
 import { UsersService } from '../../../app/users/users.service';
 import { User } from '../../../app/users/entities/user.entity';
 import { Actions, ROLE_ACTION } from './access-control.const';
 import { ROLES_KEY } from './roles.decorator';
 import { RequestMethod } from '../../utils/api-util/api-util.const';
+import { UserRole } from '@prisma/client';
 
-type AuthenticatedUser = {
-  userID: User['id'];
-  role?: UserRole;
-};
+/**
+ * Dùng TokenPayload (đầy đủ trường từ JWT) thay vì type cục bộ
+ * để đảm bảo kiểu dữ liệu `request.user` đồng bộ với AuthGuard.
+ */
+type AuthenticatedUser = TokenPayload;
 
 @Injectable()
 export class AccessControlGuard implements CanActivate {

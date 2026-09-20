@@ -4,15 +4,15 @@ export class User implements UserPrisma {
   id: string;
   fullName: string;
   email: string;
-  phone: string | null;
   password: string;
-  avatar: string | null;
-  gender: string | null;
+
+  phone: string | null;
   address: string | null;
-  status: UserStatus;
 
   role: UserRole;
-  createdBy: string;
+  status: UserStatus;
+
+  createdBy: string | null;
 
   createdAt: Date;
   updatedAt: Date;

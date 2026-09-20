@@ -6,14 +6,10 @@ import {
 } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { omit } from 'es-toolkit';
-// import { Product } from '../../app/products/entities/product.entity';
-// import { Vendor } from '../../app/vendors/entities/vendor.entity';
-// import { Category } from '../../app/categories/entities/category.entity';
+
 import { StringUtilService } from '../utils/string-util/string-util.service';
 import { DateUtilService } from '../utils/date-util/date-util.service';
-// import { Vendor } from '../../app/vendors/entities/vendor.entity';
-// import { RolePermission } from '../../app/role-permissions/entities/role-permission.entity';
-// import { UserVendorRole } from '../../app/user-vendor-roles/entities/user-vendor-role.entity';
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -76,7 +72,7 @@ export class PrismaService
 
   private generateData<T>(data: T, model: string) {
     // const modelsGenSlug = [Vendor.name];
-    const modelsGenSlug = [''];
+    const modelsGenSlug = ['Product', 'Category'];
     if (modelsGenSlug.includes(model)) {
       if (Array.isArray(data)) {
         const result = data.map((item) => ({

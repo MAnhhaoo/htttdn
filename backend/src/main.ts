@@ -13,7 +13,8 @@ async function bootstrap() {
     PORT = 3000,
     HOST = 'localhost',
     APP_PREFIX = '/api',
-    APP_NAME = 'nestjs_app',
+    // Giữ đồng bộ với giá trị default trong validate.env.ts
+    APP_NAME = 'nestjs_ecommerce',
     NODE_ENV = 'development',
   } = process.env;
 

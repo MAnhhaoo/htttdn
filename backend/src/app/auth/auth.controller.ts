@@ -89,7 +89,13 @@ export class AuthController {
   }
 
   /**
-   * Đăng xuất và xóa cookie.
+   * Đăng xuất.
+   *
+   * @remarks
+   * **Stateless logout** – Chỉ xóa cookie access_token và refresh_token phía client.
+   * Token phía server KHÔNG bị revoke (không dùng blacklist/denylist).
+   * Điều này có nghĩa là nếu ai đó giữ token hợp lệ, họ vẫn có thể dùng cho đến khi token hết hạn.
+   * Nếu cần revoke token (vd: force logout, đổi mật khẩu), hãy triển khai token blacklist (Redis,...).
    */
   @Post('sign-out')
   @SkipAuth()

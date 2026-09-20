@@ -1,7 +1,8 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
+
 import { User } from '../entities/user.entity';
-// import { Pagination } from '../../../common/utils/pagination-util/pagination-util.interface';
-import { IntersectionType, PartialType } from '@nestjs/mapped-types';
+
+import { Pagination } from '../../../common/utils/paginaton-util/pagination-util.interface';
 
 class ExportUsersDto {
   ids: NonNullable<Prisma.UserWhereUniqueInput['id']>[];
@@ -12,9 +13,9 @@ class IsExistPermissionKeyDto {
   permissionKey: string;
 }
 
-class GetUsersPaginationDto extends IntersectionType(
-  //   Pagination,
-  PartialType(User),
-) {}
+class GetUsersPaginationDto extends Pagination {
+  status?: UserStatus;
+  role?: UserRole;
+}
 
 export { ExportUsersDto, IsExistPermissionKeyDto, GetUsersPaginationDto };
