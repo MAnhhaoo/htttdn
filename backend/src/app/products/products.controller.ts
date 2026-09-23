@@ -8,7 +8,6 @@ import {
   Patch,
   Post,
   Query,
-  UsePipes,
 } from '@nestjs/common';
 import { ProductService } from './products.service';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
@@ -19,6 +18,7 @@ import { GetProductsPaginationDto } from './dto/get-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
+import { SkipAuth } from 'src/app/auth/auth.decorator';
 
 @Controller('products')
 export class ProductsController {
@@ -33,22 +33,23 @@ export class ProductsController {
     return this.productService.createProduct(createProductDto, user.userID);
   }
   @Get()
-  @UsePipes(ParseParamsPaginationPipe)
+  @SkipAuth()
   getProducts(
-    @Query()
+    @Query(ParseParamsPaginationPipe)
     query: GetProductsPaginationDto,
   ) {
     return this.productService.getProducts(query);
   }
   @Get('category/:categorySlug')
-  @UsePipes(ParseParamsPaginationPipe)
+  @SkipAuth()
   getProductsByCategory(
     @Param('categorySlug') categorySlug: string,
-    @Query() query: GetProductsPaginationDto,
+    @Query(ParseParamsPaginationPipe) query: GetProductsPaginationDto,
   ) {
     return this.productService.getProductsByCategory(categorySlug, query);
   }
   @Get(':id')
+  @SkipAuth()
   getProductById(@Param('id', ParseUUIDPipe) id: string) {
     return this.productService.getProductById(id);
   }

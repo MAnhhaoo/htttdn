@@ -7,7 +7,6 @@ import {
   Patch,
   Post,
   Query,
-  UsePipes,
 } from '@nestjs/common';
 
 import { UserRole } from '@prisma/client';
@@ -22,6 +21,7 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 
 import type { GetCategoriesPaginationDto } from './dto/get-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { SkipAuth } from 'src/app/auth/auth.decorator';
 
 @Controller('categories')
 export class CategoryController {
@@ -33,9 +33,9 @@ export class CategoryController {
    * - tìm kiếm
    */
   @Get()
-  @UsePipes(ParseParamsPaginationPipe)
+  @SkipAuth()
   getCategories(
-    @Query()
+    @Query(ParseParamsPaginationPipe)
     query: GetCategoriesPaginationDto,
   ) {
     return this.categoryService.getCategories(query);
