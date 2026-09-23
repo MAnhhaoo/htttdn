@@ -7,8 +7,6 @@ export class Category implements CategoryPrisma {
 
   slug: string;
 
-  description: string | null;
-
   createdAt: Date;
 
   updatedAt: Date;

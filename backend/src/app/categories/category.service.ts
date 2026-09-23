@@ -52,7 +52,6 @@ export class CategoryService
     const searchCondition = this.queryUtil.createStringSearchCondition(search, [
       'name',
       'slug',
-      'description',
     ]) as Prisma.CategoryWhereInput;
 
     const where: Prisma.CategoryWhereInput = {

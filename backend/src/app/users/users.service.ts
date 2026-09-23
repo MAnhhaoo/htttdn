@@ -77,6 +77,7 @@ export class UsersService
     });
 
     const list = await this.extended.findMany({
+      omit: { password: true },
       where,
       skip: paging.skip,
       take: itemPerPage,
@@ -95,7 +96,29 @@ export class UsersService
   async getOptions(params: GetOptionsParams<User>) {
     const { limit = 10, select = 'id,fullName', ...searchFields } = params;
 
-    const fieldsSelect = this.queryUtil.convertFieldsSelectOption(select);
+    const requestedFields =
+      this.queryUtil.convertFieldsSelectOption(select) ?? {};
+    const publicFields = [
+      'id',
+      'fullName',
+      'email',
+      'phone',
+      'address',
+      'role',
+      'status',
+      'createdAt',
+      'updatedAt',
+      'deletedAt',
+      'createdBy',
+    ];
+    const fieldsSelect = Object.fromEntries(
+      Object.entries(requestedFields).filter(([field]) =>
+        publicFields.includes(field),
+      ),
+    );
+    if (!Object.values(fieldsSelect).some(Boolean)) {
+      fieldsSelect.id = true;
+    }
 
     return this.extended.findMany({
       select: fieldsSelect,
@@ -116,6 +139,7 @@ export class UsersService
   async getUser(where: Prisma.UserWhereUniqueInput) {
     const user = await this.extended.findUnique({
       where,
+      omit: { password: true },
     });
 
     if (!user) {
@@ -148,6 +172,8 @@ export class UsersService
       select: {
         id: true,
         role: true,
+        status: true,
+        deletedAt: true,
       },
     });
   }
@@ -161,6 +187,7 @@ export class UsersService
     const data = await this.extended.update({
       data: dataUpdate,
       where,
+      omit: { password: true },
     });
 
     return data;
@@ -177,6 +204,7 @@ export class UsersService
 
     return this.extended.update({
       where,
+      omit: { password: true },
 
       data: {
         status: 'inactive',

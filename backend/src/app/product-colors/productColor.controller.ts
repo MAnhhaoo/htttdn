@@ -14,12 +14,15 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { UserRole } from '@prisma/client';
 import { diskStorage } from 'multer';
+import { unlink } from 'node:fs/promises';
 import { extname } from 'path';
 
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 import { CreateProductColorDto } from './dto/create-productColor.dto';
 import { UpdateProductColorDto } from './dto/update-productColor.dto';
 import { ProductColorService } from './productColor.service';
+import { User as CurrentUser } from 'src/common/decorators/user.decorator';
+import type { UserInfo } from 'src/common/decorators/user.decorator';
 
 /**
  * Cấu hình upload ảnh dùng chung.
@@ -69,18 +72,21 @@ export class ProductColorController {
    * POST /api/productColors
    */
   @Post()
-  @Roles(UserRole.seller)
+  @Roles(UserRole.vendor)
   @UseInterceptors(ProductImagesInterceptor)
   createProductColor(
     @Body() dto: CreateProductColorDto,
     @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: UserInfo,
   ) {
     const imageUrls = this.createImageUrls(files);
 
-    return this.productColorService.createProductColor({
-      ...dto,
-      imageUrls,
-    });
+    return this.withFileCleanup(files, () =>
+      this.productColorService.createProductColor(
+        { ...dto, imageUrls },
+        user.userID,
+      ),
+    );
   }
 
   /**
@@ -116,27 +122,29 @@ export class ProductColorController {
    * PATCH /api/productColors/:id
    */
   @Patch(':id')
-  @Roles(UserRole.seller)
+  @Roles(UserRole.vendor)
   @UseInterceptors(ProductImagesInterceptor)
   updateProductColor(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProductColorDto,
     @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: UserInfo,
   ) {
     const imageUrls = this.createImageUrls(files);
 
-    return this.productColorService.updateProductColor({
-      where: {
+    return this.withFileCleanup(files, () =>
+      this.productColorService.updateProductColor({
         id,
-      },
-      data: {
-        ...dto,
+        data: {
+          ...dto,
 
-        ...(imageUrls.length > 0 && {
-          imageUrls,
-        }),
-      },
-    });
+          ...(imageUrls.length > 0 && {
+            imageUrls,
+          }),
+        },
+        vendorId: user.userID,
+      }),
+    );
   }
 
   /**
@@ -145,11 +153,12 @@ export class ProductColorController {
    * POST /api/productColors/:id/images
    */
   @Post(':id/images')
-  @Roles(UserRole.seller)
+  @Roles(UserRole.vendor)
   @UseInterceptors(ProductImagesInterceptor)
   addImages(
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: UserInfo,
   ) {
     const imageUrls = this.createImageUrls(files);
 
@@ -157,7 +166,9 @@ export class ProductColorController {
       throw new BadRequestException('Vui lòng chọn ít nhất một ảnh');
     }
 
-    return this.productColorService.addImages(id, imageUrls);
+    return this.withFileCleanup(files, () =>
+      this.productColorService.addImages(id, imageUrls, user.userID),
+    );
   }
 
   /**
@@ -166,11 +177,12 @@ export class ProductColorController {
    * PATCH /api/productColors/:id/restore
    */
   @Patch(':id/restore')
-  @Roles(UserRole.seller)
-  restoreProductColor(@Param('id', ParseUUIDPipe) id: string) {
-    return this.productColorService.restoreProductColor({
-      id,
-    });
+  @Roles(UserRole.vendor)
+  restoreProductColor(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserInfo,
+  ) {
+    return this.productColorService.restoreProductColor(id, user.userID);
   }
 
   /**
@@ -182,11 +194,12 @@ export class ProductColorController {
    * DELETE /api/productColors/:id
    */
   @Delete(':id')
-  @Roles(UserRole.seller)
-  deleteProductColor(@Param('id', ParseUUIDPipe) id: string) {
-    return this.productColorService.deleteProductColor({
-      id,
-    });
+  @Roles(UserRole.vendor)
+  deleteProductColor(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserInfo,
+  ) {
+    return this.productColorService.deleteProductColor(id, user.userID);
   }
 
   /**
@@ -194,5 +207,17 @@ export class ProductColorController {
    */
   private createImageUrls(files?: Express.Multer.File[]): string[] {
     return (files ?? []).map((file) => `/uploads/products/${file.filename}`);
+  }
+
+  private async withFileCleanup<T>(
+    files: Express.Multer.File[] | undefined,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await action();
+    } catch (error) {
+      await Promise.allSettled((files ?? []).map((file) => unlink(file.path)));
+      throw error;
+    }
   }
 }

@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -16,15 +17,20 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
 import { GetProductsPaginationDto } from './dto/get-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { User as CurrentUser } from 'src/common/decorators/user.decorator';
+import type { UserInfo } from 'src/common/decorators/user.decorator';
 
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productService: ProductService) {}
 
   @Post()
-  @Roles(UserRole.seller)
-  createProduct(@Body() createProductDto: CreateProductDto) {
-    return this.productService.createProduct(createProductDto);
+  @Roles(UserRole.vendor)
+  createProduct(
+    @Body() createProductDto: CreateProductDto,
+    @CurrentUser() user: UserInfo,
+  ) {
+    return this.productService.createProduct(createProductDto, user.userID);
   }
   @Get()
   @UsePipes(ParseParamsPaginationPipe)
@@ -34,22 +40,33 @@ export class ProductsController {
   ) {
     return this.productService.getProducts(query);
   }
-  @Patch(':id')
-  @Roles(UserRole.seller)
-  updateProduct(
-    @Param('id') id: string,
-    @Body() updateProductDto: UpdateProductDto,
+  @Get('category/:categorySlug')
+  @UsePipes(ParseParamsPaginationPipe)
+  getProductsByCategory(
+    @Param('categorySlug') categorySlug: string,
+    @Query() query: GetProductsPaginationDto,
   ) {
-    return this.productService.updateProduct({
-      where: {
-        id,
-      },
-      data: updateProductDto,
-    });
+    return this.productService.getProductsByCategory(categorySlug, query);
+  }
+  @Get(':id')
+  getProductById(@Param('id', ParseUUIDPipe) id: string) {
+    return this.productService.getProductById(id);
+  }
+  @Patch(':id')
+  @Roles(UserRole.vendor)
+  updateProduct(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateProductDto: UpdateProductDto,
+    @CurrentUser() user: UserInfo,
+  ) {
+    return this.productService.updateProduct(id, updateProductDto, user.userID);
   }
   @Delete(':id')
-  @Roles(UserRole.seller)
-  deleteProduct(@Param('id') id: string) {
-    return this.productService.deleteProduct({ id });
+  @Roles(UserRole.vendor)
+  deleteProduct(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserInfo,
+  ) {
+    return this.productService.deleteProduct(id, user.userID);
   }
 }

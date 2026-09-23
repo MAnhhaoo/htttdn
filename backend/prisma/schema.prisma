@@ -14,7 +14,7 @@ datasource db {
 
 enum UserRole {
   customer
-  seller
+  vendor
   admin
 }
 
@@ -83,6 +83,7 @@ model User {
   reviews   Review[]
   cart      Cart?
   orders    Order[]
+  products  Product[]  @relation("VendorProducts")
 }
 
 // model Survey {
@@ -171,6 +172,7 @@ model Category {
 model Product {
   id          String        @id @default(uuid()) @db.Uuid
   categoryId  String        @db.Uuid
+  vendorId    String?       @db.Uuid
   name        String        @db.VarChar(255)
   slug        String        @unique @db.VarChar(255)
   description String?       @db.Text
@@ -180,11 +182,13 @@ model Product {
   deletedAt   DateTime?
 
   category       Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  vendor         User?           @relation("VendorProducts", fields: [vendorId], references: [id], onDelete: Restrict)
   colors         ProductColor[]
   reviews        Review[]
   voucherDetails VoucherDetail[]
 
   @@index([categoryId])
+  @@index([vendorId])
   @@index([status])
 }
 
@@ -208,6 +212,7 @@ model ProductVariant {
   id             String    @id @default(uuid()) @db.Uuid
   productColorId String    @db.Uuid
   stock          Int       @default(0)
+  size           String    @db.VarChar(100)
   price          Decimal   @db.Decimal(12, 2)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

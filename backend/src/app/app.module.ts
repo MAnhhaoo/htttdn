@@ -18,6 +18,7 @@ import { CategoryModule } from './categories/category.module';
 import { StringUtilModule } from 'src/common/utils/string-util/string-util.module';
 import { ProductsModule } from './products/products.module';
 import { ProductColorModule } from './product-colors/productColor.module';
+import { ProductVariantModule } from './product-variants/productVariant.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ProductColorModule } from './product-colors/productColor.module';
     StringUtilModule,
     ProductsModule,
     ProductColorModule,
+    ProductVariantModule,
   ],
   controllers: [AppController],
   providers: [
