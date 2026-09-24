@@ -334,10 +334,8 @@ describe('Product detail and variants (HTTP integration)', () => {
   };
 
   it('returns product detail with only active colors and variants', async () => {
-    const accessToken = await token('customer');
     const response = await request(server())
       .get(`/api/products/${ids.product}`)
-      .auth(accessToken, { type: 'bearer' })
       .expect(200);
     expect(response.body.category.slug).toBe('shoes');
     expect(response.body.colors[0].variants.map((item) => item.id)).toEqual([
@@ -348,6 +346,16 @@ describe('Product detail and variants (HTTP integration)', () => {
         .where,
     ).toEqual({
       deletedAt: null,
+    });
+    expect(response.body).toMatchObject({
+      thumbnail: null,
+      minPrice: '150',
+      maxPrice: '150',
+      totalStock: 3,
+    });
+    expect(productDelegate.findFirst.mock.calls[0][0].where).toMatchObject({
+      status: 'active',
+      category: { deletedAt: null },
     });
   });
 

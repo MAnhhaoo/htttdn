@@ -13,8 +13,10 @@ import { ProductService } from './products.service';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { CreateProductDto } from './dto/create-product.dto';
-import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
-import { GetProductsPaginationDto } from './dto/get-product.dto';
+import {
+  GetProductsPaginationDto,
+  GetVendorProductsPaginationDto,
+} from './dto/get-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
@@ -32,19 +34,25 @@ export class ProductsController {
   ) {
     return this.productService.createProduct(createProductDto, user.userID);
   }
+  @Get('vendor/mine')
+  @Roles(UserRole.vendor)
+  getVendorProducts(
+    @Query() query: GetVendorProductsPaginationDto,
+    @CurrentUser() user: UserInfo,
+  ) {
+    return this.productService.getVendorProducts(query, user.userID);
+  }
+
   @Get()
   @SkipAuth()
-  getProducts(
-    @Query(ParseParamsPaginationPipe)
-    query: GetProductsPaginationDto,
-  ) {
+  getProducts(@Query() query: GetProductsPaginationDto) {
     return this.productService.getProducts(query);
   }
   @Get('category/:categorySlug')
   @SkipAuth()
   getProductsByCategory(
     @Param('categorySlug') categorySlug: string,
-    @Query(ParseParamsPaginationPipe) query: GetProductsPaginationDto,
+    @Query() query: GetProductsPaginationDto,
   ) {
     return this.productService.getProductsByCategory(categorySlug, query);
   }

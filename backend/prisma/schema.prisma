@@ -36,6 +36,11 @@ enum VoucherStatus {
   expired
 }
 
+enum VoucherScope {
+  platform
+  vendor
+}
+
 enum DiscountType {
   percentage
   fixed_amount
@@ -64,26 +69,35 @@ enum PaymentMethod {
   bank_transfer
 }
 
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  cancelled
+  refunded
+}
+
 model User {
-  id        String     @id @default(uuid()) @db.Uuid
-  fullName  String     @db.VarChar(255)
-  email     String     @unique @db.VarChar(255)
-  password  String     @db.VarChar(255)
-  address   String?    @db.VarChar(500)
-  phone     String?    @db.VarChar(255)
-  role      UserRole   @default(customer)
-  status    UserStatus @default(active)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  deletedAt DateTime?
-  createdBy String?    @db.VarChar(255)
+  id                   String               @id @default(uuid()) @db.Uuid
+  fullName             String               @db.VarChar(255)
+  email                String               @unique @db.VarChar(255)
+  password             String               @db.VarChar(255)
+  address              String?              @db.VarChar(500)
+  phone                String?              @db.VarChar(255)
+  role                 UserRole             @default(customer)
+  status               UserStatus           @default(active)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  deletedAt            DateTime?
+  createdBy            String?              @db.VarChar(255)
   // surveys         Survey[]         @relation("SurveyCreator")
   // surveyResponses SurveyResponse[] @relation("SurveyRespondent")
-  vouchers  Voucher[]
-  reviews   Review[]
-  cart      Cart?
-  orders    Order[]
-  products  Product[]  @relation("VendorProducts")
+  vouchers             Voucher[]
+  reviews              Review[]
+  cart                 Cart?
+  orders               Order[]
+  products             Product[]            @relation("VendorProducts")
+  orderStatusHistories OrderStatusHistory[] @relation("OrderStatusActor")
 }
 
 // model Survey {
@@ -123,36 +137,47 @@ model Voucher {
   userId            String        @db.Uuid
   code              String        @unique @db.VarChar(50)
   name              String        @db.VarChar(255)
+  scope             VoucherScope
   discountType      DiscountType
   discountValue     Decimal       @db.Decimal(12, 2)
   minOrderAmount    Decimal?      @db.Decimal(12, 2)
   maxDiscountAmount Decimal?      @db.Decimal(12, 2)
   quantity          Int
   usedQuantity      Int           @default(0)
+  perUserLimit      Int           @default(1)
   startDate         DateTime
   endDate           DateTime
   status            VoucherStatus @default(draft)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
 
   user    User            @relation(fields: [userId], references: [id], onDelete: Restrict)
   details VoucherDetail[]
 
   @@index([userId])
+  @@index([scope])
   @@index([status, startDate, endDate])
 }
 
 model VoucherDetail {
-  id        String   @id @default(uuid()) @db.Uuid
-  voucherId String   @db.Uuid
-  productId String?  @db.Uuid
-  orderId   String?  @db.Uuid
-  createdAt DateTime @default(now())
+  id             String    @id @default(uuid()) @db.Uuid
+  voucherId      String    @db.Uuid
+  productId      String?   @db.Uuid
+  orderId        String?   @db.Uuid
+  eligibleAmount Decimal?  @db.Decimal(12, 2)
+  discountAmount Decimal?  @db.Decimal(12, 2)
+  sequence       Int?
+  createdAt      DateTime  @default(now())
+  reversedAt     DateTime?
 
   voucher Voucher  @relation(fields: [voucherId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
   order   Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@unique([voucherId, productId])
+  @@unique([voucherId, orderId])
+  @@unique([orderId, sequence])
   @@index([voucherId])
   @@index([productId])
   @@index([orderId])
@@ -226,14 +251,15 @@ model ProductVariant {
 }
 
 model Review {
-  id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @db.Uuid
-  productId     String   @db.Uuid
-  orderDetailId String   @unique @db.Uuid
-  content       String?  @db.Text
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  productId     String    @db.Uuid
+  orderDetailId String    @unique @db.Uuid
+  content       String?   @db.Text
   rating        Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
 
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -255,10 +281,12 @@ model Cart {
 }
 
 model CartItem {
-  id               String @id @default(uuid()) @db.Uuid
-  productVariantId String @db.Uuid
-  cartId           String @db.Uuid
-  quantity         Int    @default(1)
+  id               String   @id @default(uuid()) @db.Uuid
+  productVariantId String   @db.Uuid
+  cartId           String   @db.Uuid
+  quantity         Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
   cart           Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
@@ -268,17 +296,27 @@ model CartItem {
 }
 
 model Order {
-  id          String      @id @default(uuid()) @db.Uuid
-  userId      String      @db.Uuid
-  totalAmount Decimal     @db.Decimal(12, 2)
-  status      OrderStatus @default(pending)
-  notes       String?     @db.VarChar(1000)
-  createdAt   DateTime    @default(now())
+  id              String      @id @default(uuid()) @db.Uuid
+  orderCode       String      @unique @default(cuid()) @db.VarChar(50)
+  userId          String      @db.Uuid
+  subtotalAmount  Decimal     @default(0) @db.Decimal(12, 2)
+  discountAmount  Decimal     @default(0) @db.Decimal(12, 2)
+  shippingFee     Decimal     @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal     @db.Decimal(12, 2)
+  status          OrderStatus @default(pending)
+  notes           String?     @db.VarChar(1000)
+  receiverName    String?     @db.VarChar(255)
+  receiverPhone   String?     @db.VarChar(50)
+  shippingAddress String?     @db.VarChar(500)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  cancelledAt     DateTime?
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   details        OrderDetail[]
   payment        Payment?
   voucherDetails VoucherDetail[]
+  statusHistory  OrderStatusHistory[]
 
   @@index([userId])
   @@index([status])
@@ -291,6 +329,10 @@ model OrderDetail {
   productVariantId String  @db.Uuid
   quantity         Int
   price            Decimal @db.Decimal(12, 2)
+  productName      String? @db.VarChar(255)
+  colorName        String? @db.VarChar(100)
+  sizeName         String? @db.VarChar(100)
+  imageUrl         String? @db.VarChar(1000)
 
   order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Restrict)
@@ -301,9 +343,34 @@ model OrderDetail {
 }
 
 model Payment {
-  id      String        @id @default(uuid()) @db.Uuid
-  orderId String        @unique @db.Uuid
-  method  PaymentMethod
+  id              String        @id @default(uuid()) @db.Uuid
+  orderId         String        @unique @db.Uuid
+  method          PaymentMethod
+  amount          Decimal       @default(0) @db.Decimal(12, 2)
+  status          PaymentStatus @default(pending)
+  transactionCode String?       @unique @db.VarChar(255)
+  gateway         String?       @db.VarChar(100)
+  gatewayResponse Json?
+  paidAt          DateTime?
+  failedAt        DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderStatusHistory {
+  id         String       @id @default(uuid()) @db.Uuid
+  orderId    String       @db.Uuid
+  actorId    String?      @db.Uuid
+  fromStatus OrderStatus?
+  toStatus   OrderStatus
+  note       String?      @db.VarChar(1000)
+  createdAt  DateTime     @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actor User? @relation("OrderStatusActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+  @@index([actorId])
 }

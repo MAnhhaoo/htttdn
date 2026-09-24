@@ -5,6 +5,50 @@ import { Prisma } from '@prisma/client';
 // HELPER FUNCTIONS
 /////////////////////////////////////////
 
+// JSON
+//------------------------------------------------------
+
+export type NullableJsonInput = Prisma.JsonValue | null | 'JsonNull' | 'DbNull' | Prisma.NullTypes.DbNull | Prisma.NullTypes.JsonNull;
+
+export const transformJsonNull = (v?: NullableJsonInput) => {
+  if (!v || v === 'DbNull') return Prisma.NullTypes.DbNull;
+  if (v === 'JsonNull') return Prisma.NullTypes.JsonNull;
+  return v;
+};
+
+export const JsonValueSchema: z.ZodType<Prisma.JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.literal(null),
+    z.record(z.string(), z.lazy(() => JsonValueSchema.optional())),
+    z.array(z.lazy(() => JsonValueSchema)),
+  ])
+);
+
+export type JsonValueType = z.infer<typeof JsonValueSchema>;
+
+export const NullableJsonValue = z
+  .union([JsonValueSchema, z.literal('DbNull'), z.literal('JsonNull')])
+  .nullable()
+  .transform((v) => transformJsonNull(v));
+
+export type NullableJsonValueType = z.infer<typeof NullableJsonValue>;
+
+export const InputJsonValueSchema: z.ZodType<Prisma.InputJsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.object({ toJSON: z.any() }),
+    z.record(z.string(), z.lazy(() => z.union([InputJsonValueSchema, z.literal(null)]))),
+    z.array(z.lazy(() => z.union([InputJsonValueSchema, z.literal(null)]))),
+  ])
+);
+
+export type InputJsonValueType = z.infer<typeof InputJsonValueSchema>;
+
 // DECIMAL
 //------------------------------------------------------
 
@@ -35,9 +79,9 @@ export const TransactionIsolationLevelSchema = z.enum(['ReadUncommitted','ReadCo
 
 export const UserScalarFieldEnumSchema = z.enum(['id','fullName','email','password','address','phone','role','status','createdAt','updatedAt','deletedAt','createdBy']);
 
-export const VoucherScalarFieldEnumSchema = z.enum(['id','userId','code','name','discountType','discountValue','minOrderAmount','maxDiscountAmount','quantity','usedQuantity','startDate','endDate','status','createdAt','updatedAt']);
+export const VoucherScalarFieldEnumSchema = z.enum(['id','userId','code','name','scope','discountType','discountValue','minOrderAmount','maxDiscountAmount','quantity','usedQuantity','perUserLimit','startDate','endDate','status','createdAt','updatedAt','deletedAt']);
 
-export const VoucherDetailScalarFieldEnumSchema = z.enum(['id','voucherId','productId','orderId','createdAt']);
+export const VoucherDetailScalarFieldEnumSchema = z.enum(['id','voucherId','productId','orderId','eligibleAmount','discountAmount','sequence','createdAt','reversedAt']);
 
 export const CategoryScalarFieldEnumSchema = z.enum(['id','name','slug','createdAt','updatedAt','deletedAt']);
 
@@ -47,23 +91,29 @@ export const ProductColorScalarFieldEnumSchema = z.enum(['id','productId','color
 
 export const ProductVariantScalarFieldEnumSchema = z.enum(['id','productColorId','stock','size','price','createdAt','updatedAt','deletedAt']);
 
-export const ReviewScalarFieldEnumSchema = z.enum(['id','userId','productId','orderDetailId','content','rating','createdAt','updatedAt']);
+export const ReviewScalarFieldEnumSchema = z.enum(['id','userId','productId','orderDetailId','content','rating','createdAt','updatedAt','deletedAt']);
 
 export const CartScalarFieldEnumSchema = z.enum(['id','userId','createdAt','updatedAt','deletedAt']);
 
-export const CartItemScalarFieldEnumSchema = z.enum(['id','productVariantId','cartId','quantity']);
+export const CartItemScalarFieldEnumSchema = z.enum(['id','productVariantId','cartId','quantity','createdAt','updatedAt']);
 
-export const OrderScalarFieldEnumSchema = z.enum(['id','userId','totalAmount','status','notes','createdAt']);
+export const OrderScalarFieldEnumSchema = z.enum(['id','orderCode','userId','subtotalAmount','discountAmount','shippingFee','totalAmount','status','notes','receiverName','receiverPhone','shippingAddress','createdAt','updatedAt','cancelledAt']);
 
-export const OrderDetailScalarFieldEnumSchema = z.enum(['id','orderId','productVariantId','quantity','price']);
+export const OrderDetailScalarFieldEnumSchema = z.enum(['id','orderId','productVariantId','quantity','price','productName','colorName','sizeName','imageUrl']);
 
-export const PaymentScalarFieldEnumSchema = z.enum(['id','orderId','method']);
+export const PaymentScalarFieldEnumSchema = z.enum(['id','orderId','method','amount','status','transactionCode','gateway','gatewayResponse','paidAt','failedAt','createdAt','updatedAt']);
+
+export const OrderStatusHistoryScalarFieldEnumSchema = z.enum(['id','orderId','actorId','fromStatus','toStatus','note','createdAt']);
 
 export const SortOrderSchema = z.enum(['asc','desc']);
+
+export const NullableJsonNullValueInputSchema: z.ZodType<Prisma.NullableJsonNullValueInput> = z.enum(['DbNull','JsonNull',]).transform((value) => value === 'JsonNull' ? Prisma.JsonNull : value === 'DbNull' ? Prisma.DbNull : value);
 
 export const QueryModeSchema = z.enum(['default','insensitive']);
 
 export const NullsOrderSchema = z.enum(['first','last']);
+
+export const JsonNullValueFilterSchema: z.ZodType<Prisma.JsonNullValueFilter> = z.enum(['DbNull','JsonNull','AnyNull',]).transform((value) => value === 'JsonNull' ? Prisma.JsonNull : value === 'DbNull' ? Prisma.DbNull : value === 'AnyNull' ? Prisma.AnyNull : value);
 
 export const UserRoleSchema = z.enum(['customer','vendor','admin']);
 
@@ -81,6 +131,10 @@ export const VoucherStatusSchema = z.enum(['draft','active','inactive','expired'
 
 export type VoucherStatusType = `${z.infer<typeof VoucherStatusSchema>}`
 
+export const VoucherScopeSchema = z.enum(['platform','vendor']);
+
+export type VoucherScopeType = `${z.infer<typeof VoucherScopeSchema>}`
+
 export const DiscountTypeSchema = z.enum(['percentage','fixed_amount']);
 
 export type DiscountTypeType = `${z.infer<typeof DiscountTypeSchema>}`
@@ -96,6 +150,10 @@ export type OrderStatusType = `${z.infer<typeof OrderStatusSchema>}`
 export const PaymentMethodSchema = z.enum(['cod','vnpay','momo','zalopay','bank_transfer']);
 
 export type PaymentMethodType = `${z.infer<typeof PaymentMethodSchema>}`
+
+export const PaymentStatusSchema = z.enum(['pending','paid','failed','cancelled','refunded']);
+
+export type PaymentStatusType = `${z.infer<typeof PaymentStatusSchema>}`
 
 /////////////////////////////////////////
 // MODELS
@@ -127,6 +185,7 @@ export type User = z.infer<typeof UserSchema>
 /////////////////////////////////////////
 
 export const VoucherSchema = z.object({
+  scope: VoucherScopeSchema,
   discountType: DiscountTypeSchema,
   status: VoucherStatusSchema,
   id: z.uuid(),
@@ -138,10 +197,12 @@ export const VoucherSchema = z.object({
   maxDiscountAmount: z.instanceof(Prisma.Decimal, { message: "Field 'maxDiscountAmount' must be a Decimal. Location: ['Models', 'Voucher']"}).nullable(),
   quantity: z.number().int(),
   usedQuantity: z.number().int(),
+  perUserLimit: z.number().int(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
+  deletedAt: z.coerce.date().nullable(),
 })
 
 export type Voucher = z.infer<typeof VoucherSchema>
@@ -155,7 +216,11 @@ export const VoucherDetailSchema = z.object({
   voucherId: z.string(),
   productId: z.string().nullable(),
   orderId: z.string().nullable(),
+  eligibleAmount: z.instanceof(Prisma.Decimal, { message: "Field 'eligibleAmount' must be a Decimal. Location: ['Models', 'VoucherDetail']"}).nullable(),
+  discountAmount: z.instanceof(Prisma.Decimal, { message: "Field 'discountAmount' must be a Decimal. Location: ['Models', 'VoucherDetail']"}).nullable(),
+  sequence: z.number().int().nullable(),
   createdAt: z.coerce.date(),
+  reversedAt: z.coerce.date().nullable(),
 })
 
 export type VoucherDetail = z.infer<typeof VoucherDetailSchema>
@@ -240,6 +305,7 @@ export const ReviewSchema = z.object({
   rating: z.number().int(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
+  deletedAt: z.coerce.date().nullable(),
 })
 
 export type Review = z.infer<typeof ReviewSchema>
@@ -267,6 +333,8 @@ export const CartItemSchema = z.object({
   productVariantId: z.string(),
   cartId: z.string(),
   quantity: z.number().int(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
 })
 
 export type CartItem = z.infer<typeof CartItemSchema>
@@ -278,10 +346,19 @@ export type CartItem = z.infer<typeof CartItemSchema>
 export const OrderSchema = z.object({
   status: OrderStatusSchema,
   id: z.uuid(),
+  orderCode: z.cuid(),
   userId: z.string(),
+  subtotalAmount: z.instanceof(Prisma.Decimal, { message: "Field 'subtotalAmount' must be a Decimal. Location: ['Models', 'Order']"}),
+  discountAmount: z.instanceof(Prisma.Decimal, { message: "Field 'discountAmount' must be a Decimal. Location: ['Models', 'Order']"}),
+  shippingFee: z.instanceof(Prisma.Decimal, { message: "Field 'shippingFee' must be a Decimal. Location: ['Models', 'Order']"}),
   totalAmount: z.instanceof(Prisma.Decimal, { message: "Field 'totalAmount' must be a Decimal. Location: ['Models', 'Order']"}),
   notes: z.string().nullable(),
+  receiverName: z.string().nullable(),
+  receiverPhone: z.string().nullable(),
+  shippingAddress: z.string().nullable(),
   createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+  cancelledAt: z.coerce.date().nullable(),
 })
 
 export type Order = z.infer<typeof OrderSchema>
@@ -296,6 +373,10 @@ export const OrderDetailSchema = z.object({
   productVariantId: z.string(),
   quantity: z.number().int(),
   price: z.instanceof(Prisma.Decimal, { message: "Field 'price' must be a Decimal. Location: ['Models', 'OrderDetail']"}),
+  productName: z.string().nullable(),
+  colorName: z.string().nullable(),
+  sizeName: z.string().nullable(),
+  imageUrl: z.string().nullable(),
 })
 
 export type OrderDetail = z.infer<typeof OrderDetailSchema>
@@ -306,11 +387,36 @@ export type OrderDetail = z.infer<typeof OrderDetailSchema>
 
 export const PaymentSchema = z.object({
   method: PaymentMethodSchema,
+  status: PaymentStatusSchema,
   id: z.uuid(),
   orderId: z.string(),
+  amount: z.instanceof(Prisma.Decimal, { message: "Field 'amount' must be a Decimal. Location: ['Models', 'Payment']"}),
+  transactionCode: z.string().nullable(),
+  gateway: z.string().nullable(),
+  gatewayResponse: JsonValueSchema.nullable(),
+  paidAt: z.coerce.date().nullable(),
+  failedAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
 })
 
 export type Payment = z.infer<typeof PaymentSchema>
+
+/////////////////////////////////////////
+// ORDER STATUS HISTORY SCHEMA
+/////////////////////////////////////////
+
+export const OrderStatusHistorySchema = z.object({
+  fromStatus: OrderStatusSchema.nullable(),
+  toStatus: OrderStatusSchema,
+  id: z.uuid(),
+  orderId: z.string(),
+  actorId: z.string().nullable(),
+  note: z.string().nullable(),
+  createdAt: z.coerce.date(),
+})
+
+export type OrderStatusHistory = z.infer<typeof OrderStatusHistorySchema>
 
 /////////////////////////////////////////
 // SELECT & INCLUDE
@@ -325,6 +431,7 @@ export const UserIncludeSchema: z.ZodType<Prisma.UserInclude> = z.object({
   cart: z.union([z.boolean(),z.lazy(() => CartArgsSchema)]).optional(),
   orders: z.union([z.boolean(),z.lazy(() => OrderFindManyArgsSchema)]).optional(),
   products: z.union([z.boolean(),z.lazy(() => ProductFindManyArgsSchema)]).optional(),
+  orderStatusHistories: z.union([z.boolean(),z.lazy(() => OrderStatusHistoryFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => UserCountOutputTypeArgsSchema)]).optional(),
 }).strict();
 
@@ -342,6 +449,7 @@ export const UserCountOutputTypeSelectSchema: z.ZodType<Prisma.UserCountOutputTy
   reviews: z.boolean().optional(),
   orders: z.boolean().optional(),
   products: z.boolean().optional(),
+  orderStatusHistories: z.boolean().optional(),
 }).strict();
 
 export const UserSelectSchema: z.ZodType<Prisma.UserSelect> = z.object({
@@ -362,6 +470,7 @@ export const UserSelectSchema: z.ZodType<Prisma.UserSelect> = z.object({
   cart: z.union([z.boolean(),z.lazy(() => CartArgsSchema)]).optional(),
   orders: z.union([z.boolean(),z.lazy(() => OrderFindManyArgsSchema)]).optional(),
   products: z.union([z.boolean(),z.lazy(() => ProductFindManyArgsSchema)]).optional(),
+  orderStatusHistories: z.union([z.boolean(),z.lazy(() => OrderStatusHistoryFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => UserCountOutputTypeArgsSchema)]).optional(),
 }).strict()
 
@@ -392,17 +501,20 @@ export const VoucherSelectSchema: z.ZodType<Prisma.VoucherSelect> = z.object({
   userId: z.boolean().optional(),
   code: z.boolean().optional(),
   name: z.boolean().optional(),
+  scope: z.boolean().optional(),
   discountType: z.boolean().optional(),
   discountValue: z.boolean().optional(),
   minOrderAmount: z.boolean().optional(),
   maxDiscountAmount: z.boolean().optional(),
   quantity: z.boolean().optional(),
   usedQuantity: z.boolean().optional(),
+  perUserLimit: z.boolean().optional(),
   startDate: z.boolean().optional(),
   endDate: z.boolean().optional(),
   status: z.boolean().optional(),
   createdAt: z.boolean().optional(),
   updatedAt: z.boolean().optional(),
+  deletedAt: z.boolean().optional(),
   user: z.union([z.boolean(),z.lazy(() => UserArgsSchema)]).optional(),
   details: z.union([z.boolean(),z.lazy(() => VoucherDetailFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => VoucherCountOutputTypeArgsSchema)]).optional(),
@@ -427,7 +539,11 @@ export const VoucherDetailSelectSchema: z.ZodType<Prisma.VoucherDetailSelect> = 
   voucherId: z.boolean().optional(),
   productId: z.boolean().optional(),
   orderId: z.boolean().optional(),
+  eligibleAmount: z.boolean().optional(),
+  discountAmount: z.boolean().optional(),
+  sequence: z.boolean().optional(),
   createdAt: z.boolean().optional(),
+  reversedAt: z.boolean().optional(),
   voucher: z.union([z.boolean(),z.lazy(() => VoucherArgsSchema)]).optional(),
   product: z.union([z.boolean(),z.lazy(() => ProductArgsSchema)]).optional(),
   order: z.union([z.boolean(),z.lazy(() => OrderArgsSchema)]).optional(),
@@ -608,6 +724,7 @@ export const ReviewSelectSchema: z.ZodType<Prisma.ReviewSelect> = z.object({
   rating: z.boolean().optional(),
   createdAt: z.boolean().optional(),
   updatedAt: z.boolean().optional(),
+  deletedAt: z.boolean().optional(),
   user: z.union([z.boolean(),z.lazy(() => UserArgsSchema)]).optional(),
   product: z.union([z.boolean(),z.lazy(() => ProductArgsSchema)]).optional(),
   orderDetail: z.union([z.boolean(),z.lazy(() => OrderDetailArgsSchema)]).optional(),
@@ -664,6 +781,8 @@ export const CartItemSelectSchema: z.ZodType<Prisma.CartItemSelect> = z.object({
   productVariantId: z.boolean().optional(),
   cartId: z.boolean().optional(),
   quantity: z.boolean().optional(),
+  createdAt: z.boolean().optional(),
+  updatedAt: z.boolean().optional(),
   productVariant: z.union([z.boolean(),z.lazy(() => ProductVariantArgsSchema)]).optional(),
   cart: z.union([z.boolean(),z.lazy(() => CartArgsSchema)]).optional(),
 }).strict()
@@ -676,6 +795,7 @@ export const OrderIncludeSchema: z.ZodType<Prisma.OrderInclude> = z.object({
   details: z.union([z.boolean(),z.lazy(() => OrderDetailFindManyArgsSchema)]).optional(),
   payment: z.union([z.boolean(),z.lazy(() => PaymentArgsSchema)]).optional(),
   voucherDetails: z.union([z.boolean(),z.lazy(() => VoucherDetailFindManyArgsSchema)]).optional(),
+  statusHistory: z.union([z.boolean(),z.lazy(() => OrderStatusHistoryFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => OrderCountOutputTypeArgsSchema)]).optional(),
 }).strict();
 
@@ -691,19 +811,30 @@ export const OrderCountOutputTypeArgsSchema: z.ZodType<Prisma.OrderCountOutputTy
 export const OrderCountOutputTypeSelectSchema: z.ZodType<Prisma.OrderCountOutputTypeSelect> = z.object({
   details: z.boolean().optional(),
   voucherDetails: z.boolean().optional(),
+  statusHistory: z.boolean().optional(),
 }).strict();
 
 export const OrderSelectSchema: z.ZodType<Prisma.OrderSelect> = z.object({
   id: z.boolean().optional(),
+  orderCode: z.boolean().optional(),
   userId: z.boolean().optional(),
+  subtotalAmount: z.boolean().optional(),
+  discountAmount: z.boolean().optional(),
+  shippingFee: z.boolean().optional(),
   totalAmount: z.boolean().optional(),
   status: z.boolean().optional(),
   notes: z.boolean().optional(),
+  receiverName: z.boolean().optional(),
+  receiverPhone: z.boolean().optional(),
+  shippingAddress: z.boolean().optional(),
   createdAt: z.boolean().optional(),
+  updatedAt: z.boolean().optional(),
+  cancelledAt: z.boolean().optional(),
   user: z.union([z.boolean(),z.lazy(() => UserArgsSchema)]).optional(),
   details: z.union([z.boolean(),z.lazy(() => OrderDetailFindManyArgsSchema)]).optional(),
   payment: z.union([z.boolean(),z.lazy(() => PaymentArgsSchema)]).optional(),
   voucherDetails: z.union([z.boolean(),z.lazy(() => VoucherDetailFindManyArgsSchema)]).optional(),
+  statusHistory: z.union([z.boolean(),z.lazy(() => OrderStatusHistoryFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => OrderCountOutputTypeArgsSchema)]).optional(),
 }).strict()
 
@@ -727,6 +858,10 @@ export const OrderDetailSelectSchema: z.ZodType<Prisma.OrderDetailSelect> = z.ob
   productVariantId: z.boolean().optional(),
   quantity: z.boolean().optional(),
   price: z.boolean().optional(),
+  productName: z.boolean().optional(),
+  colorName: z.boolean().optional(),
+  sizeName: z.boolean().optional(),
+  imageUrl: z.boolean().optional(),
   order: z.union([z.boolean(),z.lazy(() => OrderArgsSchema)]).optional(),
   productVariant: z.union([z.boolean(),z.lazy(() => ProductVariantArgsSchema)]).optional(),
   review: z.union([z.boolean(),z.lazy(() => ReviewArgsSchema)]).optional(),
@@ -748,7 +883,41 @@ export const PaymentSelectSchema: z.ZodType<Prisma.PaymentSelect> = z.object({
   id: z.boolean().optional(),
   orderId: z.boolean().optional(),
   method: z.boolean().optional(),
+  amount: z.boolean().optional(),
+  status: z.boolean().optional(),
+  transactionCode: z.boolean().optional(),
+  gateway: z.boolean().optional(),
+  gatewayResponse: z.boolean().optional(),
+  paidAt: z.boolean().optional(),
+  failedAt: z.boolean().optional(),
+  createdAt: z.boolean().optional(),
+  updatedAt: z.boolean().optional(),
   order: z.union([z.boolean(),z.lazy(() => OrderArgsSchema)]).optional(),
+}).strict()
+
+// ORDER STATUS HISTORY
+//------------------------------------------------------
+
+export const OrderStatusHistoryIncludeSchema: z.ZodType<Prisma.OrderStatusHistoryInclude> = z.object({
+  order: z.union([z.boolean(),z.lazy(() => OrderArgsSchema)]).optional(),
+  actor: z.union([z.boolean(),z.lazy(() => UserArgsSchema)]).optional(),
+}).strict();
+
+export const OrderStatusHistoryArgsSchema: z.ZodType<Prisma.OrderStatusHistoryDefaultArgs> = z.object({
+  select: z.lazy(() => OrderStatusHistorySelectSchema).optional(),
+  include: z.lazy(() => OrderStatusHistoryIncludeSchema).optional(),
+}).strict();
+
+export const OrderStatusHistorySelectSchema: z.ZodType<Prisma.OrderStatusHistorySelect> = z.object({
+  id: z.boolean().optional(),
+  orderId: z.boolean().optional(),
+  actorId: z.boolean().optional(),
+  fromStatus: z.boolean().optional(),
+  toStatus: z.boolean().optional(),
+  note: z.boolean().optional(),
+  createdAt: z.boolean().optional(),
+  order: z.union([z.boolean(),z.lazy(() => OrderArgsSchema)]).optional(),
+  actor: z.union([z.boolean(),z.lazy(() => UserArgsSchema)]).optional(),
 }).strict()
 
 
@@ -777,6 +946,7 @@ export const UserWhereInputSchema: z.ZodType<Prisma.UserWhereInput> = z.strictOb
   cart: z.union([ z.lazy(() => CartNullableScalarRelationFilterSchema), z.lazy(() => CartWhereInputSchema) ]).optional().nullable(),
   orders: z.lazy(() => OrderListRelationFilterSchema).optional(),
   products: z.lazy(() => ProductListRelationFilterSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryListRelationFilterSchema).optional(),
 });
 
 export const UserOrderByWithRelationInputSchema: z.ZodType<Prisma.UserOrderByWithRelationInput> = z.strictObject({
@@ -797,6 +967,7 @@ export const UserOrderByWithRelationInputSchema: z.ZodType<Prisma.UserOrderByWit
   cart: z.lazy(() => CartOrderByWithRelationInputSchema).optional(),
   orders: z.lazy(() => OrderOrderByRelationAggregateInputSchema).optional(),
   products: z.lazy(() => ProductOrderByRelationAggregateInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryOrderByRelationAggregateInputSchema).optional(),
 });
 
 export const UserWhereUniqueInputSchema: z.ZodType<Prisma.UserWhereUniqueInput> = z.union([
@@ -832,6 +1003,7 @@ export const UserWhereUniqueInputSchema: z.ZodType<Prisma.UserWhereUniqueInput> 
   cart: z.union([ z.lazy(() => CartNullableScalarRelationFilterSchema), z.lazy(() => CartWhereInputSchema) ]).optional().nullable(),
   orders: z.lazy(() => OrderListRelationFilterSchema).optional(),
   products: z.lazy(() => ProductListRelationFilterSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryListRelationFilterSchema).optional(),
 }));
 
 export const UserOrderByWithAggregationInputSchema: z.ZodType<Prisma.UserOrderByWithAggregationInput> = z.strictObject({
@@ -878,17 +1050,20 @@ export const VoucherWhereInputSchema: z.ZodType<Prisma.VoucherWhereInput> = z.st
   userId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   code: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   name: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  scope: z.union([ z.lazy(() => EnumVoucherScopeFilterSchema), z.lazy(() => VoucherScopeSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => EnumDiscountTypeFilterSchema), z.lazy(() => DiscountTypeSchema) ]).optional(),
   discountValue: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   minOrderAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   usedQuantity: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  perUserLimit: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   startDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   endDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   status: z.union([ z.lazy(() => EnumVoucherStatusFilterSchema), z.lazy(() => VoucherStatusSchema) ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   user: z.union([ z.lazy(() => UserScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional(),
   details: z.lazy(() => VoucherDetailListRelationFilterSchema).optional(),
 });
@@ -898,17 +1073,20 @@ export const VoucherOrderByWithRelationInputSchema: z.ZodType<Prisma.VoucherOrde
   userId: z.lazy(() => SortOrderSchema).optional(),
   code: z.lazy(() => SortOrderSchema).optional(),
   name: z.lazy(() => SortOrderSchema).optional(),
+  scope: z.lazy(() => SortOrderSchema).optional(),
   discountType: z.lazy(() => SortOrderSchema).optional(),
   discountValue: z.lazy(() => SortOrderSchema).optional(),
   minOrderAmount: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   maxDiscountAmount: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   usedQuantity: z.lazy(() => SortOrderSchema).optional(),
+  perUserLimit: z.lazy(() => SortOrderSchema).optional(),
   startDate: z.lazy(() => SortOrderSchema).optional(),
   endDate: z.lazy(() => SortOrderSchema).optional(),
   status: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   user: z.lazy(() => UserOrderByWithRelationInputSchema).optional(),
   details: z.lazy(() => VoucherDetailOrderByRelationAggregateInputSchema).optional(),
 });
@@ -933,17 +1111,20 @@ export const VoucherWhereUniqueInputSchema: z.ZodType<Prisma.VoucherWhereUniqueI
   NOT: z.union([ z.lazy(() => VoucherWhereInputSchema), z.lazy(() => VoucherWhereInputSchema).array() ]).optional(),
   userId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   name: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  scope: z.union([ z.lazy(() => EnumVoucherScopeFilterSchema), z.lazy(() => VoucherScopeSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => EnumDiscountTypeFilterSchema), z.lazy(() => DiscountTypeSchema) ]).optional(),
   discountValue: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   minOrderAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   usedQuantity: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
+  perUserLimit: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   startDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   endDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   status: z.union([ z.lazy(() => EnumVoucherStatusFilterSchema), z.lazy(() => VoucherStatusSchema) ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   user: z.union([ z.lazy(() => UserScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional(),
   details: z.lazy(() => VoucherDetailListRelationFilterSchema).optional(),
 }));
@@ -953,17 +1134,20 @@ export const VoucherOrderByWithAggregationInputSchema: z.ZodType<Prisma.VoucherO
   userId: z.lazy(() => SortOrderSchema).optional(),
   code: z.lazy(() => SortOrderSchema).optional(),
   name: z.lazy(() => SortOrderSchema).optional(),
+  scope: z.lazy(() => SortOrderSchema).optional(),
   discountType: z.lazy(() => SortOrderSchema).optional(),
   discountValue: z.lazy(() => SortOrderSchema).optional(),
   minOrderAmount: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   maxDiscountAmount: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   usedQuantity: z.lazy(() => SortOrderSchema).optional(),
+  perUserLimit: z.lazy(() => SortOrderSchema).optional(),
   startDate: z.lazy(() => SortOrderSchema).optional(),
   endDate: z.lazy(() => SortOrderSchema).optional(),
   status: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => VoucherCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => VoucherAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => VoucherMaxOrderByAggregateInputSchema).optional(),
@@ -979,17 +1163,20 @@ export const VoucherScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.Vouch
   userId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
   code: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   name: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
+  scope: z.union([ z.lazy(() => EnumVoucherScopeWithAggregatesFilterSchema), z.lazy(() => VoucherScopeSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => EnumDiscountTypeWithAggregatesFilterSchema), z.lazy(() => DiscountTypeSchema) ]).optional(),
   discountValue: z.union([ z.lazy(() => DecimalWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   minOrderAmount: z.union([ z.lazy(() => DecimalNullableWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.lazy(() => DecimalNullableWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
   quantity: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   usedQuantity: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  perUserLimit: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   startDate: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   endDate: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   status: z.union([ z.lazy(() => EnumVoucherStatusWithAggregatesFilterSchema), z.lazy(() => VoucherStatusSchema) ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const VoucherDetailWhereInputSchema: z.ZodType<Prisma.VoucherDetailWhereInput> = z.strictObject({
@@ -1000,7 +1187,11 @@ export const VoucherDetailWhereInputSchema: z.ZodType<Prisma.VoucherDetailWhereI
   voucherId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   productId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   orderId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
+  eligibleAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
+  discountAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
+  sequence: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  reversedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   voucher: z.union([ z.lazy(() => VoucherScalarRelationFilterSchema), z.lazy(() => VoucherWhereInputSchema) ]).optional(),
   product: z.union([ z.lazy(() => ProductNullableScalarRelationFilterSchema), z.lazy(() => ProductWhereInputSchema) ]).optional().nullable(),
   order: z.union([ z.lazy(() => OrderNullableScalarRelationFilterSchema), z.lazy(() => OrderWhereInputSchema) ]).optional().nullable(),
@@ -1011,24 +1202,96 @@ export const VoucherDetailOrderByWithRelationInputSchema: z.ZodType<Prisma.Vouch
   voucherId: z.lazy(() => SortOrderSchema).optional(),
   productId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   orderId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  eligibleAmount: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  discountAmount: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  sequence: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  reversedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   voucher: z.lazy(() => VoucherOrderByWithRelationInputSchema).optional(),
   product: z.lazy(() => ProductOrderByWithRelationInputSchema).optional(),
   order: z.lazy(() => OrderOrderByWithRelationInputSchema).optional(),
 });
 
-export const VoucherDetailWhereUniqueInputSchema: z.ZodType<Prisma.VoucherDetailWhereUniqueInput> = z.object({
-  id: z.uuid(),
-})
+export const VoucherDetailWhereUniqueInputSchema: z.ZodType<Prisma.VoucherDetailWhereUniqueInput> = z.union([
+  z.object({
+    id: z.uuid(),
+    voucherId_productId: z.lazy(() => VoucherDetailVoucherIdProductIdCompoundUniqueInputSchema),
+    voucherId_orderId: z.lazy(() => VoucherDetailVoucherIdOrderIdCompoundUniqueInputSchema),
+    orderId_sequence: z.lazy(() => VoucherDetailOrderIdSequenceCompoundUniqueInputSchema),
+  }),
+  z.object({
+    id: z.uuid(),
+    voucherId_productId: z.lazy(() => VoucherDetailVoucherIdProductIdCompoundUniqueInputSchema),
+    voucherId_orderId: z.lazy(() => VoucherDetailVoucherIdOrderIdCompoundUniqueInputSchema),
+  }),
+  z.object({
+    id: z.uuid(),
+    voucherId_productId: z.lazy(() => VoucherDetailVoucherIdProductIdCompoundUniqueInputSchema),
+    orderId_sequence: z.lazy(() => VoucherDetailOrderIdSequenceCompoundUniqueInputSchema),
+  }),
+  z.object({
+    id: z.uuid(),
+    voucherId_productId: z.lazy(() => VoucherDetailVoucherIdProductIdCompoundUniqueInputSchema),
+  }),
+  z.object({
+    id: z.uuid(),
+    voucherId_orderId: z.lazy(() => VoucherDetailVoucherIdOrderIdCompoundUniqueInputSchema),
+    orderId_sequence: z.lazy(() => VoucherDetailOrderIdSequenceCompoundUniqueInputSchema),
+  }),
+  z.object({
+    id: z.uuid(),
+    voucherId_orderId: z.lazy(() => VoucherDetailVoucherIdOrderIdCompoundUniqueInputSchema),
+  }),
+  z.object({
+    id: z.uuid(),
+    orderId_sequence: z.lazy(() => VoucherDetailOrderIdSequenceCompoundUniqueInputSchema),
+  }),
+  z.object({
+    id: z.uuid(),
+  }),
+  z.object({
+    voucherId_productId: z.lazy(() => VoucherDetailVoucherIdProductIdCompoundUniqueInputSchema),
+    voucherId_orderId: z.lazy(() => VoucherDetailVoucherIdOrderIdCompoundUniqueInputSchema),
+    orderId_sequence: z.lazy(() => VoucherDetailOrderIdSequenceCompoundUniqueInputSchema),
+  }),
+  z.object({
+    voucherId_productId: z.lazy(() => VoucherDetailVoucherIdProductIdCompoundUniqueInputSchema),
+    voucherId_orderId: z.lazy(() => VoucherDetailVoucherIdOrderIdCompoundUniqueInputSchema),
+  }),
+  z.object({
+    voucherId_productId: z.lazy(() => VoucherDetailVoucherIdProductIdCompoundUniqueInputSchema),
+    orderId_sequence: z.lazy(() => VoucherDetailOrderIdSequenceCompoundUniqueInputSchema),
+  }),
+  z.object({
+    voucherId_productId: z.lazy(() => VoucherDetailVoucherIdProductIdCompoundUniqueInputSchema),
+  }),
+  z.object({
+    voucherId_orderId: z.lazy(() => VoucherDetailVoucherIdOrderIdCompoundUniqueInputSchema),
+    orderId_sequence: z.lazy(() => VoucherDetailOrderIdSequenceCompoundUniqueInputSchema),
+  }),
+  z.object({
+    voucherId_orderId: z.lazy(() => VoucherDetailVoucherIdOrderIdCompoundUniqueInputSchema),
+  }),
+  z.object({
+    orderId_sequence: z.lazy(() => VoucherDetailOrderIdSequenceCompoundUniqueInputSchema),
+  }),
+])
 .and(z.strictObject({
   id: z.uuid().optional(),
+  voucherId_productId: z.lazy(() => VoucherDetailVoucherIdProductIdCompoundUniqueInputSchema).optional(),
+  voucherId_orderId: z.lazy(() => VoucherDetailVoucherIdOrderIdCompoundUniqueInputSchema).optional(),
+  orderId_sequence: z.lazy(() => VoucherDetailOrderIdSequenceCompoundUniqueInputSchema).optional(),
   AND: z.union([ z.lazy(() => VoucherDetailWhereInputSchema), z.lazy(() => VoucherDetailWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => VoucherDetailWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => VoucherDetailWhereInputSchema), z.lazy(() => VoucherDetailWhereInputSchema).array() ]).optional(),
   voucherId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   productId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   orderId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
+  eligibleAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
+  discountAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
+  sequence: z.union([ z.lazy(() => IntNullableFilterSchema), z.number().int() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  reversedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   voucher: z.union([ z.lazy(() => VoucherScalarRelationFilterSchema), z.lazy(() => VoucherWhereInputSchema) ]).optional(),
   product: z.union([ z.lazy(() => ProductNullableScalarRelationFilterSchema), z.lazy(() => ProductWhereInputSchema) ]).optional().nullable(),
   order: z.union([ z.lazy(() => OrderNullableScalarRelationFilterSchema), z.lazy(() => OrderWhereInputSchema) ]).optional().nullable(),
@@ -1039,10 +1302,16 @@ export const VoucherDetailOrderByWithAggregationInputSchema: z.ZodType<Prisma.Vo
   voucherId: z.lazy(() => SortOrderSchema).optional(),
   productId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   orderId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  eligibleAmount: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  discountAmount: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  sequence: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  reversedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => VoucherDetailCountOrderByAggregateInputSchema).optional(),
+  _avg: z.lazy(() => VoucherDetailAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => VoucherDetailMaxOrderByAggregateInputSchema).optional(),
   _min: z.lazy(() => VoucherDetailMinOrderByAggregateInputSchema).optional(),
+  _sum: z.lazy(() => VoucherDetailSumOrderByAggregateInputSchema).optional(),
 });
 
 export const VoucherDetailScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.VoucherDetailScalarWhereWithAggregatesInput> = z.strictObject({
@@ -1053,7 +1322,11 @@ export const VoucherDetailScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma
   voucherId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
   productId: z.union([ z.lazy(() => UuidNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   orderId: z.union([ z.lazy(() => UuidNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  eligibleAmount: z.union([ z.lazy(() => DecimalNullableWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
+  discountAmount: z.union([ z.lazy(() => DecimalNullableWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
+  sequence: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema), z.number() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  reversedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const CategoryWhereInputSchema: z.ZodType<Prisma.CategoryWhereInput> = z.strictObject({
@@ -1406,6 +1679,7 @@ export const ReviewWhereInputSchema: z.ZodType<Prisma.ReviewWhereInput> = z.stri
   rating: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   user: z.union([ z.lazy(() => UserScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional(),
   product: z.union([ z.lazy(() => ProductScalarRelationFilterSchema), z.lazy(() => ProductWhereInputSchema) ]).optional(),
   orderDetail: z.union([ z.lazy(() => OrderDetailScalarRelationFilterSchema), z.lazy(() => OrderDetailWhereInputSchema) ]).optional(),
@@ -1420,6 +1694,7 @@ export const ReviewOrderByWithRelationInputSchema: z.ZodType<Prisma.ReviewOrderB
   rating: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   user: z.lazy(() => UserOrderByWithRelationInputSchema).optional(),
   product: z.lazy(() => ProductOrderByWithRelationInputSchema).optional(),
   orderDetail: z.lazy(() => OrderDetailOrderByWithRelationInputSchema).optional(),
@@ -1449,6 +1724,7 @@ export const ReviewWhereUniqueInputSchema: z.ZodType<Prisma.ReviewWhereUniqueInp
   rating: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   user: z.union([ z.lazy(() => UserScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional(),
   product: z.union([ z.lazy(() => ProductScalarRelationFilterSchema), z.lazy(() => ProductWhereInputSchema) ]).optional(),
   orderDetail: z.union([ z.lazy(() => OrderDetailScalarRelationFilterSchema), z.lazy(() => OrderDetailWhereInputSchema) ]).optional(),
@@ -1463,6 +1739,7 @@ export const ReviewOrderByWithAggregationInputSchema: z.ZodType<Prisma.ReviewOrd
   rating: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => ReviewCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => ReviewAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => ReviewMaxOrderByAggregateInputSchema).optional(),
@@ -1482,6 +1759,7 @@ export const ReviewScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.Review
   rating: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const CartWhereInputSchema: z.ZodType<Prisma.CartWhereInput> = z.strictObject({
@@ -1562,6 +1840,8 @@ export const CartItemWhereInputSchema: z.ZodType<Prisma.CartItemWhereInput> = z.
   productVariantId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   cartId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   productVariant: z.union([ z.lazy(() => ProductVariantScalarRelationFilterSchema), z.lazy(() => ProductVariantWhereInputSchema) ]).optional(),
   cart: z.union([ z.lazy(() => CartScalarRelationFilterSchema), z.lazy(() => CartWhereInputSchema) ]).optional(),
 });
@@ -1571,6 +1851,8 @@ export const CartItemOrderByWithRelationInputSchema: z.ZodType<Prisma.CartItemOr
   productVariantId: z.lazy(() => SortOrderSchema).optional(),
   cartId: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
   productVariant: z.lazy(() => ProductVariantOrderByWithRelationInputSchema).optional(),
   cart: z.lazy(() => CartOrderByWithRelationInputSchema).optional(),
 });
@@ -1596,6 +1878,8 @@ export const CartItemWhereUniqueInputSchema: z.ZodType<Prisma.CartItemWhereUniqu
   productVariantId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   cartId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   productVariant: z.union([ z.lazy(() => ProductVariantScalarRelationFilterSchema), z.lazy(() => ProductVariantWhereInputSchema) ]).optional(),
   cart: z.union([ z.lazy(() => CartScalarRelationFilterSchema), z.lazy(() => CartWhereInputSchema) ]).optional(),
 }));
@@ -1605,6 +1889,8 @@ export const CartItemOrderByWithAggregationInputSchema: z.ZodType<Prisma.CartIte
   productVariantId: z.lazy(() => SortOrderSchema).optional(),
   cartId: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
   _count: z.lazy(() => CartItemCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => CartItemAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => CartItemMaxOrderByAggregateInputSchema).optional(),
@@ -1620,6 +1906,8 @@ export const CartItemScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.Cart
   productVariantId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
   cartId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
   quantity: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
 });
 
 export const OrderWhereInputSchema: z.ZodType<Prisma.OrderWhereInput> = z.strictObject({
@@ -1627,56 +1915,104 @@ export const OrderWhereInputSchema: z.ZodType<Prisma.OrderWhereInput> = z.strict
   OR: z.lazy(() => OrderWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => OrderWhereInputSchema), z.lazy(() => OrderWhereInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  orderCode: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   userId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  subtotalAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  discountAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  shippingFee: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   totalAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   status: z.union([ z.lazy(() => EnumOrderStatusFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional(),
   notes: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  receiverName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  receiverPhone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  shippingAddress: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  cancelledAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   user: z.union([ z.lazy(() => UserScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional(),
   details: z.lazy(() => OrderDetailListRelationFilterSchema).optional(),
   payment: z.union([ z.lazy(() => PaymentNullableScalarRelationFilterSchema), z.lazy(() => PaymentWhereInputSchema) ]).optional().nullable(),
   voucherDetails: z.lazy(() => VoucherDetailListRelationFilterSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryListRelationFilterSchema).optional(),
 });
 
 export const OrderOrderByWithRelationInputSchema: z.ZodType<Prisma.OrderOrderByWithRelationInput> = z.strictObject({
   id: z.lazy(() => SortOrderSchema).optional(),
+  orderCode: z.lazy(() => SortOrderSchema).optional(),
   userId: z.lazy(() => SortOrderSchema).optional(),
+  subtotalAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  shippingFee: z.lazy(() => SortOrderSchema).optional(),
   totalAmount: z.lazy(() => SortOrderSchema).optional(),
   status: z.lazy(() => SortOrderSchema).optional(),
   notes: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  receiverName: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  receiverPhone: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  shippingAddress: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  cancelledAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   user: z.lazy(() => UserOrderByWithRelationInputSchema).optional(),
   details: z.lazy(() => OrderDetailOrderByRelationAggregateInputSchema).optional(),
   payment: z.lazy(() => PaymentOrderByWithRelationInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailOrderByRelationAggregateInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryOrderByRelationAggregateInputSchema).optional(),
 });
 
-export const OrderWhereUniqueInputSchema: z.ZodType<Prisma.OrderWhereUniqueInput> = z.object({
-  id: z.uuid(),
-})
+export const OrderWhereUniqueInputSchema: z.ZodType<Prisma.OrderWhereUniqueInput> = z.union([
+  z.object({
+    id: z.uuid(),
+    orderCode: z.cuid(),
+  }),
+  z.object({
+    id: z.uuid(),
+  }),
+  z.object({
+    orderCode: z.cuid(),
+  }),
+])
 .and(z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
   AND: z.union([ z.lazy(() => OrderWhereInputSchema), z.lazy(() => OrderWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => OrderWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => OrderWhereInputSchema), z.lazy(() => OrderWhereInputSchema).array() ]).optional(),
   userId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  subtotalAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  discountAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  shippingFee: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   totalAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   status: z.union([ z.lazy(() => EnumOrderStatusFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional(),
   notes: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  receiverName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  receiverPhone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  shippingAddress: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  cancelledAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   user: z.union([ z.lazy(() => UserScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional(),
   details: z.lazy(() => OrderDetailListRelationFilterSchema).optional(),
   payment: z.union([ z.lazy(() => PaymentNullableScalarRelationFilterSchema), z.lazy(() => PaymentWhereInputSchema) ]).optional().nullable(),
   voucherDetails: z.lazy(() => VoucherDetailListRelationFilterSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryListRelationFilterSchema).optional(),
 }));
 
 export const OrderOrderByWithAggregationInputSchema: z.ZodType<Prisma.OrderOrderByWithAggregationInput> = z.strictObject({
   id: z.lazy(() => SortOrderSchema).optional(),
+  orderCode: z.lazy(() => SortOrderSchema).optional(),
   userId: z.lazy(() => SortOrderSchema).optional(),
+  subtotalAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  shippingFee: z.lazy(() => SortOrderSchema).optional(),
   totalAmount: z.lazy(() => SortOrderSchema).optional(),
   status: z.lazy(() => SortOrderSchema).optional(),
   notes: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  receiverName: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  receiverPhone: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  shippingAddress: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  cancelledAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => OrderCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => OrderAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => OrderMaxOrderByAggregateInputSchema).optional(),
@@ -1689,11 +2025,20 @@ export const OrderScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.OrderSc
   OR: z.lazy(() => OrderScalarWhereWithAggregatesInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => OrderScalarWhereWithAggregatesInputSchema), z.lazy(() => OrderScalarWhereWithAggregatesInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
+  orderCode: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   userId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
+  subtotalAmount: z.union([ z.lazy(() => DecimalWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  discountAmount: z.union([ z.lazy(() => DecimalWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  shippingFee: z.union([ z.lazy(() => DecimalWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   totalAmount: z.union([ z.lazy(() => DecimalWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   status: z.union([ z.lazy(() => EnumOrderStatusWithAggregatesFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional(),
   notes: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  receiverName: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  receiverPhone: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  shippingAddress: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  cancelledAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const OrderDetailWhereInputSchema: z.ZodType<Prisma.OrderDetailWhereInput> = z.strictObject({
@@ -1705,6 +2050,10 @@ export const OrderDetailWhereInputSchema: z.ZodType<Prisma.OrderDetailWhereInput
   productVariantId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   price: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  productName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  colorName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  sizeName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  imageUrl: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   order: z.union([ z.lazy(() => OrderScalarRelationFilterSchema), z.lazy(() => OrderWhereInputSchema) ]).optional(),
   productVariant: z.union([ z.lazy(() => ProductVariantScalarRelationFilterSchema), z.lazy(() => ProductVariantWhereInputSchema) ]).optional(),
   review: z.union([ z.lazy(() => ReviewNullableScalarRelationFilterSchema), z.lazy(() => ReviewWhereInputSchema) ]).optional().nullable(),
@@ -1716,6 +2065,10 @@ export const OrderDetailOrderByWithRelationInputSchema: z.ZodType<Prisma.OrderDe
   productVariantId: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
+  productName: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  colorName: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  sizeName: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  imageUrl: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   order: z.lazy(() => OrderOrderByWithRelationInputSchema).optional(),
   productVariant: z.lazy(() => ProductVariantOrderByWithRelationInputSchema).optional(),
   review: z.lazy(() => ReviewOrderByWithRelationInputSchema).optional(),
@@ -1743,6 +2096,10 @@ export const OrderDetailWhereUniqueInputSchema: z.ZodType<Prisma.OrderDetailWher
   productVariantId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   price: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  productName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  colorName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  sizeName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  imageUrl: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   order: z.union([ z.lazy(() => OrderScalarRelationFilterSchema), z.lazy(() => OrderWhereInputSchema) ]).optional(),
   productVariant: z.union([ z.lazy(() => ProductVariantScalarRelationFilterSchema), z.lazy(() => ProductVariantWhereInputSchema) ]).optional(),
   review: z.union([ z.lazy(() => ReviewNullableScalarRelationFilterSchema), z.lazy(() => ReviewWhereInputSchema) ]).optional().nullable(),
@@ -1754,6 +2111,10 @@ export const OrderDetailOrderByWithAggregationInputSchema: z.ZodType<Prisma.Orde
   productVariantId: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
+  productName: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  colorName: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  sizeName: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  imageUrl: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => OrderDetailCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => OrderDetailAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => OrderDetailMaxOrderByAggregateInputSchema).optional(),
@@ -1770,6 +2131,10 @@ export const OrderDetailScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.O
   productVariantId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
   quantity: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   price: z.union([ z.lazy(() => DecimalWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  productName: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  colorName: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  sizeName: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  imageUrl: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
 });
 
 export const PaymentWhereInputSchema: z.ZodType<Prisma.PaymentWhereInput> = z.strictObject({
@@ -1779,6 +2144,15 @@ export const PaymentWhereInputSchema: z.ZodType<Prisma.PaymentWhereInput> = z.st
   id: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   orderId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   method: z.union([ z.lazy(() => EnumPaymentMethodFilterSchema), z.lazy(() => PaymentMethodSchema) ]).optional(),
+  amount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  status: z.union([ z.lazy(() => EnumPaymentStatusFilterSchema), z.lazy(() => PaymentStatusSchema) ]).optional(),
+  transactionCode: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  gateway: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  gatewayResponse: z.lazy(() => JsonNullableFilterSchema).optional(),
+  paidAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  failedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   order: z.union([ z.lazy(() => OrderScalarRelationFilterSchema), z.lazy(() => OrderWhereInputSchema) ]).optional(),
 });
 
@@ -1786,6 +2160,15 @@ export const PaymentOrderByWithRelationInputSchema: z.ZodType<Prisma.PaymentOrde
   id: z.lazy(() => SortOrderSchema).optional(),
   orderId: z.lazy(() => SortOrderSchema).optional(),
   method: z.lazy(() => SortOrderSchema).optional(),
+  amount: z.lazy(() => SortOrderSchema).optional(),
+  status: z.lazy(() => SortOrderSchema).optional(),
+  transactionCode: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  gateway: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  gatewayResponse: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  paidAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  failedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
   order: z.lazy(() => OrderOrderByWithRelationInputSchema).optional(),
 });
 
@@ -1793,21 +2176,46 @@ export const PaymentWhereUniqueInputSchema: z.ZodType<Prisma.PaymentWhereUniqueI
   z.object({
     id: z.uuid(),
     orderId: z.string(),
+    transactionCode: z.string(),
+  }),
+  z.object({
+    id: z.uuid(),
+    orderId: z.string(),
+  }),
+  z.object({
+    id: z.uuid(),
+    transactionCode: z.string(),
   }),
   z.object({
     id: z.uuid(),
   }),
   z.object({
     orderId: z.string(),
+    transactionCode: z.string(),
+  }),
+  z.object({
+    orderId: z.string(),
+  }),
+  z.object({
+    transactionCode: z.string(),
   }),
 ])
 .and(z.strictObject({
   id: z.uuid().optional(),
   orderId: z.string().optional(),
+  transactionCode: z.string().optional(),
   AND: z.union([ z.lazy(() => PaymentWhereInputSchema), z.lazy(() => PaymentWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => PaymentWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => PaymentWhereInputSchema), z.lazy(() => PaymentWhereInputSchema).array() ]).optional(),
   method: z.union([ z.lazy(() => EnumPaymentMethodFilterSchema), z.lazy(() => PaymentMethodSchema) ]).optional(),
+  amount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  status: z.union([ z.lazy(() => EnumPaymentStatusFilterSchema), z.lazy(() => PaymentStatusSchema) ]).optional(),
+  gateway: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  gatewayResponse: z.lazy(() => JsonNullableFilterSchema).optional(),
+  paidAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  failedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   order: z.union([ z.lazy(() => OrderScalarRelationFilterSchema), z.lazy(() => OrderWhereInputSchema) ]).optional(),
 }));
 
@@ -1815,9 +2223,20 @@ export const PaymentOrderByWithAggregationInputSchema: z.ZodType<Prisma.PaymentO
   id: z.lazy(() => SortOrderSchema).optional(),
   orderId: z.lazy(() => SortOrderSchema).optional(),
   method: z.lazy(() => SortOrderSchema).optional(),
+  amount: z.lazy(() => SortOrderSchema).optional(),
+  status: z.lazy(() => SortOrderSchema).optional(),
+  transactionCode: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  gateway: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  gatewayResponse: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  paidAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  failedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
   _count: z.lazy(() => PaymentCountOrderByAggregateInputSchema).optional(),
+  _avg: z.lazy(() => PaymentAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => PaymentMaxOrderByAggregateInputSchema).optional(),
   _min: z.lazy(() => PaymentMinOrderByAggregateInputSchema).optional(),
+  _sum: z.lazy(() => PaymentSumOrderByAggregateInputSchema).optional(),
 });
 
 export const PaymentScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.PaymentScalarWhereWithAggregatesInput> = z.strictObject({
@@ -1827,6 +2246,86 @@ export const PaymentScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.Payme
   id: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
   orderId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
   method: z.union([ z.lazy(() => EnumPaymentMethodWithAggregatesFilterSchema), z.lazy(() => PaymentMethodSchema) ]).optional(),
+  amount: z.union([ z.lazy(() => DecimalWithAggregatesFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  status: z.union([ z.lazy(() => EnumPaymentStatusWithAggregatesFilterSchema), z.lazy(() => PaymentStatusSchema) ]).optional(),
+  transactionCode: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  gateway: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  gatewayResponse: z.lazy(() => JsonNullableWithAggregatesFilterSchema).optional(),
+  paidAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
+  failedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
+  createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+});
+
+export const OrderStatusHistoryWhereInputSchema: z.ZodType<Prisma.OrderStatusHistoryWhereInput> = z.strictObject({
+  AND: z.union([ z.lazy(() => OrderStatusHistoryWhereInputSchema), z.lazy(() => OrderStatusHistoryWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => OrderStatusHistoryWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => OrderStatusHistoryWhereInputSchema), z.lazy(() => OrderStatusHistoryWhereInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  orderId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  actorId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
+  fromStatus: z.union([ z.lazy(() => EnumOrderStatusNullableFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => EnumOrderStatusFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional(),
+  note: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  order: z.union([ z.lazy(() => OrderScalarRelationFilterSchema), z.lazy(() => OrderWhereInputSchema) ]).optional(),
+  actor: z.union([ z.lazy(() => UserNullableScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional().nullable(),
+});
+
+export const OrderStatusHistoryOrderByWithRelationInputSchema: z.ZodType<Prisma.OrderStatusHistoryOrderByWithRelationInput> = z.strictObject({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  orderId: z.lazy(() => SortOrderSchema).optional(),
+  actorId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  fromStatus: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  toStatus: z.lazy(() => SortOrderSchema).optional(),
+  note: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  order: z.lazy(() => OrderOrderByWithRelationInputSchema).optional(),
+  actor: z.lazy(() => UserOrderByWithRelationInputSchema).optional(),
+});
+
+export const OrderStatusHistoryWhereUniqueInputSchema: z.ZodType<Prisma.OrderStatusHistoryWhereUniqueInput> = z.object({
+  id: z.uuid(),
+})
+.and(z.strictObject({
+  id: z.uuid().optional(),
+  AND: z.union([ z.lazy(() => OrderStatusHistoryWhereInputSchema), z.lazy(() => OrderStatusHistoryWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => OrderStatusHistoryWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => OrderStatusHistoryWhereInputSchema), z.lazy(() => OrderStatusHistoryWhereInputSchema).array() ]).optional(),
+  orderId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  actorId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
+  fromStatus: z.union([ z.lazy(() => EnumOrderStatusNullableFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => EnumOrderStatusFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional(),
+  note: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  order: z.union([ z.lazy(() => OrderScalarRelationFilterSchema), z.lazy(() => OrderWhereInputSchema) ]).optional(),
+  actor: z.union([ z.lazy(() => UserNullableScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional().nullable(),
+}));
+
+export const OrderStatusHistoryOrderByWithAggregationInputSchema: z.ZodType<Prisma.OrderStatusHistoryOrderByWithAggregationInput> = z.strictObject({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  orderId: z.lazy(() => SortOrderSchema).optional(),
+  actorId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  fromStatus: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  toStatus: z.lazy(() => SortOrderSchema).optional(),
+  note: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  _count: z.lazy(() => OrderStatusHistoryCountOrderByAggregateInputSchema).optional(),
+  _max: z.lazy(() => OrderStatusHistoryMaxOrderByAggregateInputSchema).optional(),
+  _min: z.lazy(() => OrderStatusHistoryMinOrderByAggregateInputSchema).optional(),
+});
+
+export const OrderStatusHistoryScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.OrderStatusHistoryScalarWhereWithAggregatesInput> = z.strictObject({
+  AND: z.union([ z.lazy(() => OrderStatusHistoryScalarWhereWithAggregatesInputSchema), z.lazy(() => OrderStatusHistoryScalarWhereWithAggregatesInputSchema).array() ]).optional(),
+  OR: z.lazy(() => OrderStatusHistoryScalarWhereWithAggregatesInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => OrderStatusHistoryScalarWhereWithAggregatesInputSchema), z.lazy(() => OrderStatusHistoryScalarWhereWithAggregatesInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
+  orderId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
+  actorId: z.union([ z.lazy(() => UuidNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  fromStatus: z.union([ z.lazy(() => EnumOrderStatusNullableWithAggregatesFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => EnumOrderStatusWithAggregatesFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional(),
+  note: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
 });
 
 export const UserCreateInputSchema: z.ZodType<Prisma.UserCreateInput> = z.strictObject({
@@ -1847,6 +2346,7 @@ export const UserCreateInputSchema: z.ZodType<Prisma.UserCreateInput> = z.strict
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderCreateNestedManyWithoutUserInputSchema).optional(),
   products: z.lazy(() => ProductCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserUncheckedCreateInputSchema: z.ZodType<Prisma.UserUncheckedCreateInput> = z.strictObject({
@@ -1867,6 +2367,7 @@ export const UserUncheckedCreateInputSchema: z.ZodType<Prisma.UserUncheckedCreat
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   products: z.lazy(() => ProductUncheckedCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserUpdateInputSchema: z.ZodType<Prisma.UserUpdateInput> = z.strictObject({
@@ -1887,6 +2388,7 @@ export const UserUpdateInputSchema: z.ZodType<Prisma.UserUpdateInput> = z.strict
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUpdateManyWithoutUserNestedInputSchema).optional(),
   products: z.lazy(() => ProductUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const UserUncheckedUpdateInputSchema: z.ZodType<Prisma.UserUncheckedUpdateInput> = z.strictObject({
@@ -1907,6 +2409,7 @@ export const UserUncheckedUpdateInputSchema: z.ZodType<Prisma.UserUncheckedUpdat
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   products: z.lazy(() => ProductUncheckedUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const UserCreateManyInputSchema: z.ZodType<Prisma.UserCreateManyInput> = z.strictObject({
@@ -1958,17 +2461,20 @@ export const VoucherCreateInputSchema: z.ZodType<Prisma.VoucherCreateInput> = z.
   id: z.uuid().optional(),
   code: z.string(),
   name: z.string(),
+  scope: z.lazy(() => VoucherScopeSchema),
   discountType: z.lazy(() => DiscountTypeSchema),
   discountValue: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   minOrderAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   maxDiscountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   quantity: z.number().int(),
   usedQuantity: z.number().int().optional(),
+  perUserLimit: z.number().int().optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   status: z.lazy(() => VoucherStatusSchema).optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutVouchersInputSchema),
   details: z.lazy(() => VoucherDetailCreateNestedManyWithoutVoucherInputSchema).optional(),
 });
@@ -1978,17 +2484,20 @@ export const VoucherUncheckedCreateInputSchema: z.ZodType<Prisma.VoucherUnchecke
   userId: z.string(),
   code: z.string(),
   name: z.string(),
+  scope: z.lazy(() => VoucherScopeSchema),
   discountType: z.lazy(() => DiscountTypeSchema),
   discountValue: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   minOrderAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   maxDiscountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   quantity: z.number().int(),
   usedQuantity: z.number().int().optional(),
+  perUserLimit: z.number().int().optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   status: z.lazy(() => VoucherStatusSchema).optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   details: z.lazy(() => VoucherDetailUncheckedCreateNestedManyWithoutVoucherInputSchema).optional(),
 });
 
@@ -1996,17 +2505,20 @@ export const VoucherUpdateInputSchema: z.ZodType<Prisma.VoucherUpdateInput> = z.
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   code: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  scope: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => EnumVoucherScopeFieldUpdateOperationsInputSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => DiscountTypeSchema), z.lazy(() => EnumDiscountTypeFieldUpdateOperationsInputSchema) ]).optional(),
   discountValue: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   minOrderAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   usedQuantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  perUserLimit: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => VoucherStatusSchema), z.lazy(() => EnumVoucherStatusFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneRequiredWithoutVouchersNestedInputSchema).optional(),
   details: z.lazy(() => VoucherDetailUpdateManyWithoutVoucherNestedInputSchema).optional(),
 });
@@ -2016,17 +2528,20 @@ export const VoucherUncheckedUpdateInputSchema: z.ZodType<Prisma.VoucherUnchecke
   userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   code: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  scope: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => EnumVoucherScopeFieldUpdateOperationsInputSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => DiscountTypeSchema), z.lazy(() => EnumDiscountTypeFieldUpdateOperationsInputSchema) ]).optional(),
   discountValue: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   minOrderAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   usedQuantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  perUserLimit: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => VoucherStatusSchema), z.lazy(() => EnumVoucherStatusFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   details: z.lazy(() => VoucherDetailUncheckedUpdateManyWithoutVoucherNestedInputSchema).optional(),
 });
 
@@ -2035,34 +2550,40 @@ export const VoucherCreateManyInputSchema: z.ZodType<Prisma.VoucherCreateManyInp
   userId: z.string(),
   code: z.string(),
   name: z.string(),
+  scope: z.lazy(() => VoucherScopeSchema),
   discountType: z.lazy(() => DiscountTypeSchema),
   discountValue: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   minOrderAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   maxDiscountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   quantity: z.number().int(),
   usedQuantity: z.number().int().optional(),
+  perUserLimit: z.number().int().optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   status: z.lazy(() => VoucherStatusSchema).optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const VoucherUpdateManyMutationInputSchema: z.ZodType<Prisma.VoucherUpdateManyMutationInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   code: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  scope: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => EnumVoucherScopeFieldUpdateOperationsInputSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => DiscountTypeSchema), z.lazy(() => EnumDiscountTypeFieldUpdateOperationsInputSchema) ]).optional(),
   discountValue: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   minOrderAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   usedQuantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  perUserLimit: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => VoucherStatusSchema), z.lazy(() => EnumVoucherStatusFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const VoucherUncheckedUpdateManyInputSchema: z.ZodType<Prisma.VoucherUncheckedUpdateManyInput> = z.strictObject({
@@ -2070,22 +2591,29 @@ export const VoucherUncheckedUpdateManyInputSchema: z.ZodType<Prisma.VoucherUnch
   userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   code: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  scope: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => EnumVoucherScopeFieldUpdateOperationsInputSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => DiscountTypeSchema), z.lazy(() => EnumDiscountTypeFieldUpdateOperationsInputSchema) ]).optional(),
   discountValue: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   minOrderAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   usedQuantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  perUserLimit: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => VoucherStatusSchema), z.lazy(() => EnumVoucherStatusFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const VoucherDetailCreateInputSchema: z.ZodType<Prisma.VoucherDetailCreateInput> = z.strictObject({
   id: z.uuid().optional(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
   voucher: z.lazy(() => VoucherCreateNestedOneWithoutDetailsInputSchema),
   product: z.lazy(() => ProductCreateNestedOneWithoutVoucherDetailsInputSchema).optional(),
   order: z.lazy(() => OrderCreateNestedOneWithoutVoucherDetailsInputSchema).optional(),
@@ -2096,12 +2624,20 @@ export const VoucherDetailUncheckedCreateInputSchema: z.ZodType<Prisma.VoucherDe
   voucherId: z.string(),
   productId: z.string().optional().nullable(),
   orderId: z.string().optional().nullable(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
 });
 
 export const VoucherDetailUpdateInputSchema: z.ZodType<Prisma.VoucherDetailUpdateInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   voucher: z.lazy(() => VoucherUpdateOneRequiredWithoutDetailsNestedInputSchema).optional(),
   product: z.lazy(() => ProductUpdateOneWithoutVoucherDetailsNestedInputSchema).optional(),
   order: z.lazy(() => OrderUpdateOneWithoutVoucherDetailsNestedInputSchema).optional(),
@@ -2112,7 +2648,11 @@ export const VoucherDetailUncheckedUpdateInputSchema: z.ZodType<Prisma.VoucherDe
   voucherId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   orderId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const VoucherDetailCreateManyInputSchema: z.ZodType<Prisma.VoucherDetailCreateManyInput> = z.strictObject({
@@ -2120,12 +2660,20 @@ export const VoucherDetailCreateManyInputSchema: z.ZodType<Prisma.VoucherDetailC
   voucherId: z.string(),
   productId: z.string().optional().nullable(),
   orderId: z.string().optional().nullable(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
 });
 
 export const VoucherDetailUpdateManyMutationInputSchema: z.ZodType<Prisma.VoucherDetailUpdateManyMutationInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const VoucherDetailUncheckedUpdateManyInputSchema: z.ZodType<Prisma.VoucherDetailUncheckedUpdateManyInput> = z.strictObject({
@@ -2133,7 +2681,11 @@ export const VoucherDetailUncheckedUpdateManyInputSchema: z.ZodType<Prisma.Vouch
   voucherId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   orderId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const CategoryCreateInputSchema: z.ZodType<Prisma.CategoryCreateInput> = z.strictObject({
@@ -2467,6 +3019,7 @@ export const ReviewCreateInputSchema: z.ZodType<Prisma.ReviewCreateInput> = z.st
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutReviewsInputSchema),
   product: z.lazy(() => ProductCreateNestedOneWithoutReviewsInputSchema),
   orderDetail: z.lazy(() => OrderDetailCreateNestedOneWithoutReviewInputSchema),
@@ -2481,6 +3034,7 @@ export const ReviewUncheckedCreateInputSchema: z.ZodType<Prisma.ReviewUncheckedC
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ReviewUpdateInputSchema: z.ZodType<Prisma.ReviewUpdateInput> = z.strictObject({
@@ -2489,6 +3043,7 @@ export const ReviewUpdateInputSchema: z.ZodType<Prisma.ReviewUpdateInput> = z.st
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneRequiredWithoutReviewsNestedInputSchema).optional(),
   product: z.lazy(() => ProductUpdateOneRequiredWithoutReviewsNestedInputSchema).optional(),
   orderDetail: z.lazy(() => OrderDetailUpdateOneRequiredWithoutReviewNestedInputSchema).optional(),
@@ -2503,6 +3058,7 @@ export const ReviewUncheckedUpdateInputSchema: z.ZodType<Prisma.ReviewUncheckedU
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ReviewCreateManyInputSchema: z.ZodType<Prisma.ReviewCreateManyInput> = z.strictObject({
@@ -2514,6 +3070,7 @@ export const ReviewCreateManyInputSchema: z.ZodType<Prisma.ReviewCreateManyInput
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ReviewUpdateManyMutationInputSchema: z.ZodType<Prisma.ReviewUpdateManyMutationInput> = z.strictObject({
@@ -2522,6 +3079,7 @@ export const ReviewUpdateManyMutationInputSchema: z.ZodType<Prisma.ReviewUpdateM
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ReviewUncheckedUpdateManyInputSchema: z.ZodType<Prisma.ReviewUncheckedUpdateManyInput> = z.strictObject({
@@ -2533,6 +3091,7 @@ export const ReviewUncheckedUpdateManyInputSchema: z.ZodType<Prisma.ReviewUnchec
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const CartCreateInputSchema: z.ZodType<Prisma.CartCreateInput> = z.strictObject({
@@ -2597,6 +3156,8 @@ export const CartUncheckedUpdateManyInputSchema: z.ZodType<Prisma.CartUncheckedU
 export const CartItemCreateInputSchema: z.ZodType<Prisma.CartItemCreateInput> = z.strictObject({
   id: z.uuid().optional(),
   quantity: z.number().int().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
   productVariant: z.lazy(() => ProductVariantCreateNestedOneWithoutCartItemsInputSchema),
   cart: z.lazy(() => CartCreateNestedOneWithoutItemsInputSchema),
 });
@@ -2606,11 +3167,15 @@ export const CartItemUncheckedCreateInputSchema: z.ZodType<Prisma.CartItemUnchec
   productVariantId: z.string(),
   cartId: z.string(),
   quantity: z.number().int().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export const CartItemUpdateInputSchema: z.ZodType<Prisma.CartItemUpdateInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   productVariant: z.lazy(() => ProductVariantUpdateOneRequiredWithoutCartItemsNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneRequiredWithoutItemsNestedInputSchema).optional(),
 });
@@ -2620,6 +3185,8 @@ export const CartItemUncheckedUpdateInputSchema: z.ZodType<Prisma.CartItemUnchec
   productVariantId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   cartId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const CartItemCreateManyInputSchema: z.ZodType<Prisma.CartItemCreateManyInput> = z.strictObject({
@@ -2627,11 +3194,15 @@ export const CartItemCreateManyInputSchema: z.ZodType<Prisma.CartItemCreateManyI
   productVariantId: z.string(),
   cartId: z.string(),
   quantity: z.number().int().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export const CartItemUpdateManyMutationInputSchema: z.ZodType<Prisma.CartItemUpdateManyMutationInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const CartItemUncheckedUpdateManyInputSchema: z.ZodType<Prisma.CartItemUncheckedUpdateManyInput> = z.strictObject({
@@ -2639,86 +3210,159 @@ export const CartItemUncheckedUpdateManyInputSchema: z.ZodType<Prisma.CartItemUn
   productVariantId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   cartId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const OrderCreateInputSchema: z.ZodType<Prisma.OrderCreateInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutOrdersInputSchema),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
 });
 
 export const OrderUncheckedCreateInputSchema: z.ZodType<Prisma.OrderUncheckedCreateInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
   userId: z.string(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
   details: z.lazy(() => OrderDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentUncheckedCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
 });
 
 export const OrderUpdateInputSchema: z.ZodType<Prisma.OrderUpdateInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
 });
 
 export const OrderUncheckedUpdateInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   details: z.lazy(() => OrderDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUncheckedUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
 });
 
 export const OrderCreateManyInputSchema: z.ZodType<Prisma.OrderCreateManyInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
   userId: z.string(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
 });
 
 export const OrderUpdateManyMutationInputSchema: z.ZodType<Prisma.OrderUpdateManyMutationInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const OrderUncheckedUpdateManyInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateManyInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const OrderDetailCreateInputSchema: z.ZodType<Prisma.OrderDetailCreateInput> = z.strictObject({
   id: z.uuid().optional(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   order: z.lazy(() => OrderCreateNestedOneWithoutDetailsInputSchema),
   productVariant: z.lazy(() => ProductVariantCreateNestedOneWithoutOrderDetailsInputSchema),
   review: z.lazy(() => ReviewCreateNestedOneWithoutOrderDetailInputSchema).optional(),
@@ -2730,6 +3374,10 @@ export const OrderDetailUncheckedCreateInputSchema: z.ZodType<Prisma.OrderDetail
   productVariantId: z.string(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   review: z.lazy(() => ReviewUncheckedCreateNestedOneWithoutOrderDetailInputSchema).optional(),
 });
 
@@ -2737,6 +3385,10 @@ export const OrderDetailUpdateInputSchema: z.ZodType<Prisma.OrderDetailUpdateInp
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   order: z.lazy(() => OrderUpdateOneRequiredWithoutDetailsNestedInputSchema).optional(),
   productVariant: z.lazy(() => ProductVariantUpdateOneRequiredWithoutOrderDetailsNestedInputSchema).optional(),
   review: z.lazy(() => ReviewUpdateOneWithoutOrderDetailNestedInputSchema).optional(),
@@ -2748,6 +3400,10 @@ export const OrderDetailUncheckedUpdateInputSchema: z.ZodType<Prisma.OrderDetail
   productVariantId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   review: z.lazy(() => ReviewUncheckedUpdateOneWithoutOrderDetailNestedInputSchema).optional(),
 });
 
@@ -2757,12 +3413,20 @@ export const OrderDetailCreateManyInputSchema: z.ZodType<Prisma.OrderDetailCreat
   productVariantId: z.string(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
 });
 
 export const OrderDetailUpdateManyMutationInputSchema: z.ZodType<Prisma.OrderDetailUpdateManyMutationInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const OrderDetailUncheckedUpdateManyInputSchema: z.ZodType<Prisma.OrderDetailUncheckedUpdateManyInput> = z.strictObject({
@@ -2771,11 +3435,24 @@ export const OrderDetailUncheckedUpdateManyInputSchema: z.ZodType<Prisma.OrderDe
   productVariantId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const PaymentCreateInputSchema: z.ZodType<Prisma.PaymentCreateInput> = z.strictObject({
   id: z.uuid().optional(),
   method: z.lazy(() => PaymentMethodSchema),
+  amount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  status: z.lazy(() => PaymentStatusSchema).optional(),
+  transactionCode: z.string().optional().nullable(),
+  gateway: z.string().optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.coerce.date().optional().nullable(),
+  failedAt: z.coerce.date().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
   order: z.lazy(() => OrderCreateNestedOneWithoutPaymentInputSchema),
 });
 
@@ -2783,11 +3460,29 @@ export const PaymentUncheckedCreateInputSchema: z.ZodType<Prisma.PaymentUnchecke
   id: z.uuid().optional(),
   orderId: z.string(),
   method: z.lazy(() => PaymentMethodSchema),
+  amount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  status: z.lazy(() => PaymentStatusSchema).optional(),
+  transactionCode: z.string().optional().nullable(),
+  gateway: z.string().optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.coerce.date().optional().nullable(),
+  failedAt: z.coerce.date().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export const PaymentUpdateInputSchema: z.ZodType<Prisma.PaymentUpdateInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   method: z.union([ z.lazy(() => PaymentMethodSchema), z.lazy(() => EnumPaymentMethodFieldUpdateOperationsInputSchema) ]).optional(),
+  amount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => PaymentStatusSchema), z.lazy(() => EnumPaymentStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  transactionCode: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gateway: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  failedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   order: z.lazy(() => OrderUpdateOneRequiredWithoutPaymentNestedInputSchema).optional(),
 });
 
@@ -2795,23 +3490,127 @@ export const PaymentUncheckedUpdateInputSchema: z.ZodType<Prisma.PaymentUnchecke
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   orderId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   method: z.union([ z.lazy(() => PaymentMethodSchema), z.lazy(() => EnumPaymentMethodFieldUpdateOperationsInputSchema) ]).optional(),
+  amount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => PaymentStatusSchema), z.lazy(() => EnumPaymentStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  transactionCode: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gateway: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  failedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const PaymentCreateManyInputSchema: z.ZodType<Prisma.PaymentCreateManyInput> = z.strictObject({
   id: z.uuid().optional(),
   orderId: z.string(),
   method: z.lazy(() => PaymentMethodSchema),
+  amount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  status: z.lazy(() => PaymentStatusSchema).optional(),
+  transactionCode: z.string().optional().nullable(),
+  gateway: z.string().optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.coerce.date().optional().nullable(),
+  failedAt: z.coerce.date().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export const PaymentUpdateManyMutationInputSchema: z.ZodType<Prisma.PaymentUpdateManyMutationInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   method: z.union([ z.lazy(() => PaymentMethodSchema), z.lazy(() => EnumPaymentMethodFieldUpdateOperationsInputSchema) ]).optional(),
+  amount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => PaymentStatusSchema), z.lazy(() => EnumPaymentStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  transactionCode: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gateway: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  failedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const PaymentUncheckedUpdateManyInputSchema: z.ZodType<Prisma.PaymentUncheckedUpdateManyInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   orderId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   method: z.union([ z.lazy(() => PaymentMethodSchema), z.lazy(() => EnumPaymentMethodFieldUpdateOperationsInputSchema) ]).optional(),
+  amount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => PaymentStatusSchema), z.lazy(() => EnumPaymentStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  transactionCode: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gateway: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  failedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+});
+
+export const OrderStatusHistoryCreateInputSchema: z.ZodType<Prisma.OrderStatusHistoryCreateInput> = z.strictObject({
+  id: z.uuid().optional(),
+  fromStatus: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  toStatus: z.lazy(() => OrderStatusSchema),
+  note: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  order: z.lazy(() => OrderCreateNestedOneWithoutStatusHistoryInputSchema),
+  actor: z.lazy(() => UserCreateNestedOneWithoutOrderStatusHistoriesInputSchema).optional(),
+});
+
+export const OrderStatusHistoryUncheckedCreateInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedCreateInput> = z.strictObject({
+  id: z.uuid().optional(),
+  orderId: z.string(),
+  actorId: z.string().optional().nullable(),
+  fromStatus: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  toStatus: z.lazy(() => OrderStatusSchema),
+  note: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+});
+
+export const OrderStatusHistoryUpdateInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fromStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NullableEnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  note: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  order: z.lazy(() => OrderUpdateOneRequiredWithoutStatusHistoryNestedInputSchema).optional(),
+  actor: z.lazy(() => UserUpdateOneWithoutOrderStatusHistoriesNestedInputSchema).optional(),
+});
+
+export const OrderStatusHistoryUncheckedUpdateInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedUpdateInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  actorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  fromStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NullableEnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  note: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+});
+
+export const OrderStatusHistoryCreateManyInputSchema: z.ZodType<Prisma.OrderStatusHistoryCreateManyInput> = z.strictObject({
+  id: z.uuid().optional(),
+  orderId: z.string(),
+  actorId: z.string().optional().nullable(),
+  fromStatus: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  toStatus: z.lazy(() => OrderStatusSchema),
+  note: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+});
+
+export const OrderStatusHistoryUpdateManyMutationInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateManyMutationInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fromStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NullableEnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  note: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+});
+
+export const OrderStatusHistoryUncheckedUpdateManyInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedUpdateManyInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  actorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  fromStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NullableEnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  note: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const UuidFilterSchema: z.ZodType<Prisma.UuidFilter> = z.strictObject({
@@ -2921,6 +3720,12 @@ export const ProductListRelationFilterSchema: z.ZodType<Prisma.ProductListRelati
   none: z.lazy(() => ProductWhereInputSchema).optional(),
 });
 
+export const OrderStatusHistoryListRelationFilterSchema: z.ZodType<Prisma.OrderStatusHistoryListRelationFilter> = z.strictObject({
+  every: z.lazy(() => OrderStatusHistoryWhereInputSchema).optional(),
+  some: z.lazy(() => OrderStatusHistoryWhereInputSchema).optional(),
+  none: z.lazy(() => OrderStatusHistoryWhereInputSchema).optional(),
+});
+
 export const SortOrderInputSchema: z.ZodType<Prisma.SortOrderInput> = z.strictObject({
   sort: z.lazy(() => SortOrderSchema),
   nulls: z.lazy(() => NullsOrderSchema).optional(),
@@ -2939,6 +3744,10 @@ export const OrderOrderByRelationAggregateInputSchema: z.ZodType<Prisma.OrderOrd
 });
 
 export const ProductOrderByRelationAggregateInputSchema: z.ZodType<Prisma.ProductOrderByRelationAggregateInput> = z.strictObject({
+  _count: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const OrderStatusHistoryOrderByRelationAggregateInputSchema: z.ZodType<Prisma.OrderStatusHistoryOrderByRelationAggregateInput> = z.strictObject({
   _count: z.lazy(() => SortOrderSchema).optional(),
 });
 
@@ -3086,6 +3895,13 @@ export const DateTimeNullableWithAggregatesFilterSchema: z.ZodType<Prisma.DateTi
   _max: z.lazy(() => NestedDateTimeNullableFilterSchema).optional(),
 });
 
+export const EnumVoucherScopeFilterSchema: z.ZodType<Prisma.EnumVoucherScopeFilter> = z.strictObject({
+  equals: z.lazy(() => VoucherScopeSchema).optional(),
+  in: z.lazy(() => VoucherScopeSchema).array().optional(),
+  notIn: z.lazy(() => VoucherScopeSchema).array().optional(),
+  not: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => NestedEnumVoucherScopeFilterSchema) ]).optional(),
+});
+
 export const EnumDiscountTypeFilterSchema: z.ZodType<Prisma.EnumDiscountTypeFilter> = z.strictObject({
   equals: z.lazy(() => DiscountTypeSchema).optional(),
   in: z.lazy(() => DiscountTypeSchema).array().optional(),
@@ -3153,17 +3969,20 @@ export const VoucherCountOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherCo
   userId: z.lazy(() => SortOrderSchema).optional(),
   code: z.lazy(() => SortOrderSchema).optional(),
   name: z.lazy(() => SortOrderSchema).optional(),
+  scope: z.lazy(() => SortOrderSchema).optional(),
   discountType: z.lazy(() => SortOrderSchema).optional(),
   discountValue: z.lazy(() => SortOrderSchema).optional(),
   minOrderAmount: z.lazy(() => SortOrderSchema).optional(),
   maxDiscountAmount: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   usedQuantity: z.lazy(() => SortOrderSchema).optional(),
+  perUserLimit: z.lazy(() => SortOrderSchema).optional(),
   startDate: z.lazy(() => SortOrderSchema).optional(),
   endDate: z.lazy(() => SortOrderSchema).optional(),
   status: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const VoucherAvgOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherAvgOrderByAggregateInput> = z.strictObject({
@@ -3172,6 +3991,7 @@ export const VoucherAvgOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherAvgO
   maxDiscountAmount: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   usedQuantity: z.lazy(() => SortOrderSchema).optional(),
+  perUserLimit: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const VoucherMaxOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherMaxOrderByAggregateInput> = z.strictObject({
@@ -3179,17 +3999,20 @@ export const VoucherMaxOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherMaxO
   userId: z.lazy(() => SortOrderSchema).optional(),
   code: z.lazy(() => SortOrderSchema).optional(),
   name: z.lazy(() => SortOrderSchema).optional(),
+  scope: z.lazy(() => SortOrderSchema).optional(),
   discountType: z.lazy(() => SortOrderSchema).optional(),
   discountValue: z.lazy(() => SortOrderSchema).optional(),
   minOrderAmount: z.lazy(() => SortOrderSchema).optional(),
   maxDiscountAmount: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   usedQuantity: z.lazy(() => SortOrderSchema).optional(),
+  perUserLimit: z.lazy(() => SortOrderSchema).optional(),
   startDate: z.lazy(() => SortOrderSchema).optional(),
   endDate: z.lazy(() => SortOrderSchema).optional(),
   status: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const VoucherMinOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherMinOrderByAggregateInput> = z.strictObject({
@@ -3197,17 +4020,20 @@ export const VoucherMinOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherMinO
   userId: z.lazy(() => SortOrderSchema).optional(),
   code: z.lazy(() => SortOrderSchema).optional(),
   name: z.lazy(() => SortOrderSchema).optional(),
+  scope: z.lazy(() => SortOrderSchema).optional(),
   discountType: z.lazy(() => SortOrderSchema).optional(),
   discountValue: z.lazy(() => SortOrderSchema).optional(),
   minOrderAmount: z.lazy(() => SortOrderSchema).optional(),
   maxDiscountAmount: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   usedQuantity: z.lazy(() => SortOrderSchema).optional(),
+  perUserLimit: z.lazy(() => SortOrderSchema).optional(),
   startDate: z.lazy(() => SortOrderSchema).optional(),
   endDate: z.lazy(() => SortOrderSchema).optional(),
   status: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const VoucherSumOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherSumOrderByAggregateInput> = z.strictObject({
@@ -3216,6 +4042,17 @@ export const VoucherSumOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherSumO
   maxDiscountAmount: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   usedQuantity: z.lazy(() => SortOrderSchema).optional(),
+  perUserLimit: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const EnumVoucherScopeWithAggregatesFilterSchema: z.ZodType<Prisma.EnumVoucherScopeWithAggregatesFilter> = z.strictObject({
+  equals: z.lazy(() => VoucherScopeSchema).optional(),
+  in: z.lazy(() => VoucherScopeSchema).array().optional(),
+  notIn: z.lazy(() => VoucherScopeSchema).array().optional(),
+  not: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => NestedEnumVoucherScopeWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumVoucherScopeFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumVoucherScopeFilterSchema).optional(),
 });
 
 export const EnumDiscountTypeWithAggregatesFilterSchema: z.ZodType<Prisma.EnumDiscountTypeWithAggregatesFilter> = z.strictObject({
@@ -3298,6 +4135,17 @@ export const UuidNullableFilterSchema: z.ZodType<Prisma.UuidNullableFilter> = z.
   not: z.union([ z.string(),z.lazy(() => NestedUuidNullableFilterSchema) ]).optional().nullable(),
 });
 
+export const IntNullableFilterSchema: z.ZodType<Prisma.IntNullableFilter> = z.strictObject({
+  equals: z.number().optional().nullable(),
+  in: z.number().array().optional().nullable(),
+  notIn: z.number().array().optional().nullable(),
+  lt: z.number().optional(),
+  lte: z.number().optional(),
+  gt: z.number().optional(),
+  gte: z.number().optional(),
+  not: z.union([ z.number(),z.lazy(() => NestedIntNullableFilterSchema) ]).optional().nullable(),
+});
+
 export const VoucherScalarRelationFilterSchema: z.ZodType<Prisma.VoucherScalarRelationFilter> = z.strictObject({
   is: z.lazy(() => VoucherWhereInputSchema).optional(),
   isNot: z.lazy(() => VoucherWhereInputSchema).optional(),
@@ -3313,12 +4161,37 @@ export const OrderNullableScalarRelationFilterSchema: z.ZodType<Prisma.OrderNull
   isNot: z.lazy(() => OrderWhereInputSchema).optional().nullable(),
 });
 
+export const VoucherDetailVoucherIdProductIdCompoundUniqueInputSchema: z.ZodType<Prisma.VoucherDetailVoucherIdProductIdCompoundUniqueInput> = z.strictObject({
+  voucherId: z.string(),
+  productId: z.string(),
+});
+
+export const VoucherDetailVoucherIdOrderIdCompoundUniqueInputSchema: z.ZodType<Prisma.VoucherDetailVoucherIdOrderIdCompoundUniqueInput> = z.strictObject({
+  voucherId: z.string(),
+  orderId: z.string(),
+});
+
+export const VoucherDetailOrderIdSequenceCompoundUniqueInputSchema: z.ZodType<Prisma.VoucherDetailOrderIdSequenceCompoundUniqueInput> = z.strictObject({
+  orderId: z.string(),
+  sequence: z.number(),
+});
+
 export const VoucherDetailCountOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherDetailCountOrderByAggregateInput> = z.strictObject({
   id: z.lazy(() => SortOrderSchema).optional(),
   voucherId: z.lazy(() => SortOrderSchema).optional(),
   productId: z.lazy(() => SortOrderSchema).optional(),
   orderId: z.lazy(() => SortOrderSchema).optional(),
+  eligibleAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  sequence: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  reversedAt: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const VoucherDetailAvgOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherDetailAvgOrderByAggregateInput> = z.strictObject({
+  eligibleAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  sequence: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const VoucherDetailMaxOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherDetailMaxOrderByAggregateInput> = z.strictObject({
@@ -3326,7 +4199,11 @@ export const VoucherDetailMaxOrderByAggregateInputSchema: z.ZodType<Prisma.Vouch
   voucherId: z.lazy(() => SortOrderSchema).optional(),
   productId: z.lazy(() => SortOrderSchema).optional(),
   orderId: z.lazy(() => SortOrderSchema).optional(),
+  eligibleAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  sequence: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  reversedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const VoucherDetailMinOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherDetailMinOrderByAggregateInput> = z.strictObject({
@@ -3334,7 +4211,17 @@ export const VoucherDetailMinOrderByAggregateInputSchema: z.ZodType<Prisma.Vouch
   voucherId: z.lazy(() => SortOrderSchema).optional(),
   productId: z.lazy(() => SortOrderSchema).optional(),
   orderId: z.lazy(() => SortOrderSchema).optional(),
+  eligibleAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  sequence: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  reversedAt: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const VoucherDetailSumOrderByAggregateInputSchema: z.ZodType<Prisma.VoucherDetailSumOrderByAggregateInput> = z.strictObject({
+  eligibleAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  sequence: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const UuidNullableWithAggregatesFilterSchema: z.ZodType<Prisma.UuidNullableWithAggregatesFilter> = z.strictObject({
@@ -3350,6 +4237,22 @@ export const UuidNullableWithAggregatesFilterSchema: z.ZodType<Prisma.UuidNullab
   _count: z.lazy(() => NestedIntNullableFilterSchema).optional(),
   _min: z.lazy(() => NestedStringNullableFilterSchema).optional(),
   _max: z.lazy(() => NestedStringNullableFilterSchema).optional(),
+});
+
+export const IntNullableWithAggregatesFilterSchema: z.ZodType<Prisma.IntNullableWithAggregatesFilter> = z.strictObject({
+  equals: z.number().optional().nullable(),
+  in: z.number().array().optional().nullable(),
+  notIn: z.number().array().optional().nullable(),
+  lt: z.number().optional(),
+  lte: z.number().optional(),
+  gt: z.number().optional(),
+  gte: z.number().optional(),
+  not: z.union([ z.number(),z.lazy(() => NestedIntNullableWithAggregatesFilterSchema) ]).optional().nullable(),
+  _count: z.lazy(() => NestedIntNullableFilterSchema).optional(),
+  _avg: z.lazy(() => NestedFloatNullableFilterSchema).optional(),
+  _sum: z.lazy(() => NestedIntNullableFilterSchema).optional(),
+  _min: z.lazy(() => NestedIntNullableFilterSchema).optional(),
+  _max: z.lazy(() => NestedIntNullableFilterSchema).optional(),
 });
 
 export const CategoryCountOrderByAggregateInputSchema: z.ZodType<Prisma.CategoryCountOrderByAggregateInput> = z.strictObject({
@@ -3593,6 +4496,7 @@ export const ReviewCountOrderByAggregateInputSchema: z.ZodType<Prisma.ReviewCoun
   rating: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const ReviewAvgOrderByAggregateInputSchema: z.ZodType<Prisma.ReviewAvgOrderByAggregateInput> = z.strictObject({
@@ -3608,6 +4512,7 @@ export const ReviewMaxOrderByAggregateInputSchema: z.ZodType<Prisma.ReviewMaxOrd
   rating: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const ReviewMinOrderByAggregateInputSchema: z.ZodType<Prisma.ReviewMinOrderByAggregateInput> = z.strictObject({
@@ -3619,6 +4524,7 @@ export const ReviewMinOrderByAggregateInputSchema: z.ZodType<Prisma.ReviewMinOrd
   rating: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const ReviewSumOrderByAggregateInputSchema: z.ZodType<Prisma.ReviewSumOrderByAggregateInput> = z.strictObject({
@@ -3669,6 +4575,8 @@ export const CartItemCountOrderByAggregateInputSchema: z.ZodType<Prisma.CartItem
   productVariantId: z.lazy(() => SortOrderSchema).optional(),
   cartId: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const CartItemAvgOrderByAggregateInputSchema: z.ZodType<Prisma.CartItemAvgOrderByAggregateInput> = z.strictObject({
@@ -3680,6 +4588,8 @@ export const CartItemMaxOrderByAggregateInputSchema: z.ZodType<Prisma.CartItemMa
   productVariantId: z.lazy(() => SortOrderSchema).optional(),
   cartId: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const CartItemMinOrderByAggregateInputSchema: z.ZodType<Prisma.CartItemMinOrderByAggregateInput> = z.strictObject({
@@ -3687,6 +4597,8 @@ export const CartItemMinOrderByAggregateInputSchema: z.ZodType<Prisma.CartItemMi
   productVariantId: z.lazy(() => SortOrderSchema).optional(),
   cartId: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const CartItemSumOrderByAggregateInputSchema: z.ZodType<Prisma.CartItemSumOrderByAggregateInput> = z.strictObject({
@@ -3707,36 +4619,69 @@ export const PaymentNullableScalarRelationFilterSchema: z.ZodType<Prisma.Payment
 
 export const OrderCountOrderByAggregateInputSchema: z.ZodType<Prisma.OrderCountOrderByAggregateInput> = z.strictObject({
   id: z.lazy(() => SortOrderSchema).optional(),
+  orderCode: z.lazy(() => SortOrderSchema).optional(),
   userId: z.lazy(() => SortOrderSchema).optional(),
+  subtotalAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  shippingFee: z.lazy(() => SortOrderSchema).optional(),
   totalAmount: z.lazy(() => SortOrderSchema).optional(),
   status: z.lazy(() => SortOrderSchema).optional(),
   notes: z.lazy(() => SortOrderSchema).optional(),
+  receiverName: z.lazy(() => SortOrderSchema).optional(),
+  receiverPhone: z.lazy(() => SortOrderSchema).optional(),
+  shippingAddress: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  cancelledAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const OrderAvgOrderByAggregateInputSchema: z.ZodType<Prisma.OrderAvgOrderByAggregateInput> = z.strictObject({
+  subtotalAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  shippingFee: z.lazy(() => SortOrderSchema).optional(),
   totalAmount: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const OrderMaxOrderByAggregateInputSchema: z.ZodType<Prisma.OrderMaxOrderByAggregateInput> = z.strictObject({
   id: z.lazy(() => SortOrderSchema).optional(),
+  orderCode: z.lazy(() => SortOrderSchema).optional(),
   userId: z.lazy(() => SortOrderSchema).optional(),
+  subtotalAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  shippingFee: z.lazy(() => SortOrderSchema).optional(),
   totalAmount: z.lazy(() => SortOrderSchema).optional(),
   status: z.lazy(() => SortOrderSchema).optional(),
   notes: z.lazy(() => SortOrderSchema).optional(),
+  receiverName: z.lazy(() => SortOrderSchema).optional(),
+  receiverPhone: z.lazy(() => SortOrderSchema).optional(),
+  shippingAddress: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  cancelledAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const OrderMinOrderByAggregateInputSchema: z.ZodType<Prisma.OrderMinOrderByAggregateInput> = z.strictObject({
   id: z.lazy(() => SortOrderSchema).optional(),
+  orderCode: z.lazy(() => SortOrderSchema).optional(),
   userId: z.lazy(() => SortOrderSchema).optional(),
+  subtotalAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  shippingFee: z.lazy(() => SortOrderSchema).optional(),
   totalAmount: z.lazy(() => SortOrderSchema).optional(),
   status: z.lazy(() => SortOrderSchema).optional(),
   notes: z.lazy(() => SortOrderSchema).optional(),
+  receiverName: z.lazy(() => SortOrderSchema).optional(),
+  receiverPhone: z.lazy(() => SortOrderSchema).optional(),
+  shippingAddress: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  cancelledAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const OrderSumOrderByAggregateInputSchema: z.ZodType<Prisma.OrderSumOrderByAggregateInput> = z.strictObject({
+  subtotalAmount: z.lazy(() => SortOrderSchema).optional(),
+  discountAmount: z.lazy(() => SortOrderSchema).optional(),
+  shippingFee: z.lazy(() => SortOrderSchema).optional(),
   totalAmount: z.lazy(() => SortOrderSchema).optional(),
 });
 
@@ -3771,6 +4716,10 @@ export const OrderDetailCountOrderByAggregateInputSchema: z.ZodType<Prisma.Order
   productVariantId: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
+  productName: z.lazy(() => SortOrderSchema).optional(),
+  colorName: z.lazy(() => SortOrderSchema).optional(),
+  sizeName: z.lazy(() => SortOrderSchema).optional(),
+  imageUrl: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const OrderDetailAvgOrderByAggregateInputSchema: z.ZodType<Prisma.OrderDetailAvgOrderByAggregateInput> = z.strictObject({
@@ -3784,6 +4733,10 @@ export const OrderDetailMaxOrderByAggregateInputSchema: z.ZodType<Prisma.OrderDe
   productVariantId: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
+  productName: z.lazy(() => SortOrderSchema).optional(),
+  colorName: z.lazy(() => SortOrderSchema).optional(),
+  sizeName: z.lazy(() => SortOrderSchema).optional(),
+  imageUrl: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const OrderDetailMinOrderByAggregateInputSchema: z.ZodType<Prisma.OrderDetailMinOrderByAggregateInput> = z.strictObject({
@@ -3792,6 +4745,10 @@ export const OrderDetailMinOrderByAggregateInputSchema: z.ZodType<Prisma.OrderDe
   productVariantId: z.lazy(() => SortOrderSchema).optional(),
   quantity: z.lazy(() => SortOrderSchema).optional(),
   price: z.lazy(() => SortOrderSchema).optional(),
+  productName: z.lazy(() => SortOrderSchema).optional(),
+  colorName: z.lazy(() => SortOrderSchema).optional(),
+  sizeName: z.lazy(() => SortOrderSchema).optional(),
+  imageUrl: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const OrderDetailSumOrderByAggregateInputSchema: z.ZodType<Prisma.OrderDetailSumOrderByAggregateInput> = z.strictObject({
@@ -3806,22 +4763,79 @@ export const EnumPaymentMethodFilterSchema: z.ZodType<Prisma.EnumPaymentMethodFi
   not: z.union([ z.lazy(() => PaymentMethodSchema), z.lazy(() => NestedEnumPaymentMethodFilterSchema) ]).optional(),
 });
 
+export const EnumPaymentStatusFilterSchema: z.ZodType<Prisma.EnumPaymentStatusFilter> = z.strictObject({
+  equals: z.lazy(() => PaymentStatusSchema).optional(),
+  in: z.lazy(() => PaymentStatusSchema).array().optional(),
+  notIn: z.lazy(() => PaymentStatusSchema).array().optional(),
+  not: z.union([ z.lazy(() => PaymentStatusSchema), z.lazy(() => NestedEnumPaymentStatusFilterSchema) ]).optional(),
+});
+
+export const JsonNullableFilterSchema: z.ZodType<Prisma.JsonNullableFilter> = z.strictObject({
+  equals: InputJsonValueSchema.optional(),
+  path: z.string().array().optional(),
+  mode: z.lazy(() => QueryModeSchema).optional(),
+  string_contains: z.string().optional(),
+  string_starts_with: z.string().optional(),
+  string_ends_with: z.string().optional(),
+  array_starts_with: InputJsonValueSchema.optional().nullable(),
+  array_ends_with: InputJsonValueSchema.optional().nullable(),
+  array_contains: InputJsonValueSchema.optional().nullable(),
+  lt: InputJsonValueSchema.optional(),
+  lte: InputJsonValueSchema.optional(),
+  gt: InputJsonValueSchema.optional(),
+  gte: InputJsonValueSchema.optional(),
+  not: InputJsonValueSchema.optional(),
+});
+
 export const PaymentCountOrderByAggregateInputSchema: z.ZodType<Prisma.PaymentCountOrderByAggregateInput> = z.strictObject({
   id: z.lazy(() => SortOrderSchema).optional(),
   orderId: z.lazy(() => SortOrderSchema).optional(),
   method: z.lazy(() => SortOrderSchema).optional(),
+  amount: z.lazy(() => SortOrderSchema).optional(),
+  status: z.lazy(() => SortOrderSchema).optional(),
+  transactionCode: z.lazy(() => SortOrderSchema).optional(),
+  gateway: z.lazy(() => SortOrderSchema).optional(),
+  gatewayResponse: z.lazy(() => SortOrderSchema).optional(),
+  paidAt: z.lazy(() => SortOrderSchema).optional(),
+  failedAt: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const PaymentAvgOrderByAggregateInputSchema: z.ZodType<Prisma.PaymentAvgOrderByAggregateInput> = z.strictObject({
+  amount: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const PaymentMaxOrderByAggregateInputSchema: z.ZodType<Prisma.PaymentMaxOrderByAggregateInput> = z.strictObject({
   id: z.lazy(() => SortOrderSchema).optional(),
   orderId: z.lazy(() => SortOrderSchema).optional(),
   method: z.lazy(() => SortOrderSchema).optional(),
+  amount: z.lazy(() => SortOrderSchema).optional(),
+  status: z.lazy(() => SortOrderSchema).optional(),
+  transactionCode: z.lazy(() => SortOrderSchema).optional(),
+  gateway: z.lazy(() => SortOrderSchema).optional(),
+  paidAt: z.lazy(() => SortOrderSchema).optional(),
+  failedAt: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const PaymentMinOrderByAggregateInputSchema: z.ZodType<Prisma.PaymentMinOrderByAggregateInput> = z.strictObject({
   id: z.lazy(() => SortOrderSchema).optional(),
   orderId: z.lazy(() => SortOrderSchema).optional(),
   method: z.lazy(() => SortOrderSchema).optional(),
+  amount: z.lazy(() => SortOrderSchema).optional(),
+  status: z.lazy(() => SortOrderSchema).optional(),
+  transactionCode: z.lazy(() => SortOrderSchema).optional(),
+  gateway: z.lazy(() => SortOrderSchema).optional(),
+  paidAt: z.lazy(() => SortOrderSchema).optional(),
+  failedAt: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const PaymentSumOrderByAggregateInputSchema: z.ZodType<Prisma.PaymentSumOrderByAggregateInput> = z.strictObject({
+  amount: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const EnumPaymentMethodWithAggregatesFilterSchema: z.ZodType<Prisma.EnumPaymentMethodWithAggregatesFilter> = z.strictObject({
@@ -3832,6 +4846,83 @@ export const EnumPaymentMethodWithAggregatesFilterSchema: z.ZodType<Prisma.EnumP
   _count: z.lazy(() => NestedIntFilterSchema).optional(),
   _min: z.lazy(() => NestedEnumPaymentMethodFilterSchema).optional(),
   _max: z.lazy(() => NestedEnumPaymentMethodFilterSchema).optional(),
+});
+
+export const EnumPaymentStatusWithAggregatesFilterSchema: z.ZodType<Prisma.EnumPaymentStatusWithAggregatesFilter> = z.strictObject({
+  equals: z.lazy(() => PaymentStatusSchema).optional(),
+  in: z.lazy(() => PaymentStatusSchema).array().optional(),
+  notIn: z.lazy(() => PaymentStatusSchema).array().optional(),
+  not: z.union([ z.lazy(() => PaymentStatusSchema), z.lazy(() => NestedEnumPaymentStatusWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumPaymentStatusFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumPaymentStatusFilterSchema).optional(),
+});
+
+export const JsonNullableWithAggregatesFilterSchema: z.ZodType<Prisma.JsonNullableWithAggregatesFilter> = z.strictObject({
+  equals: InputJsonValueSchema.optional(),
+  path: z.string().array().optional(),
+  mode: z.lazy(() => QueryModeSchema).optional(),
+  string_contains: z.string().optional(),
+  string_starts_with: z.string().optional(),
+  string_ends_with: z.string().optional(),
+  array_starts_with: InputJsonValueSchema.optional().nullable(),
+  array_ends_with: InputJsonValueSchema.optional().nullable(),
+  array_contains: InputJsonValueSchema.optional().nullable(),
+  lt: InputJsonValueSchema.optional(),
+  lte: InputJsonValueSchema.optional(),
+  gt: InputJsonValueSchema.optional(),
+  gte: InputJsonValueSchema.optional(),
+  not: InputJsonValueSchema.optional(),
+  _count: z.lazy(() => NestedIntNullableFilterSchema).optional(),
+  _min: z.lazy(() => NestedJsonNullableFilterSchema).optional(),
+  _max: z.lazy(() => NestedJsonNullableFilterSchema).optional(),
+});
+
+export const EnumOrderStatusNullableFilterSchema: z.ZodType<Prisma.EnumOrderStatusNullableFilter> = z.strictObject({
+  equals: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  in: z.lazy(() => OrderStatusSchema).array().optional().nullable(),
+  notIn: z.lazy(() => OrderStatusSchema).array().optional().nullable(),
+  not: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NestedEnumOrderStatusNullableFilterSchema) ]).optional().nullable(),
+});
+
+export const OrderStatusHistoryCountOrderByAggregateInputSchema: z.ZodType<Prisma.OrderStatusHistoryCountOrderByAggregateInput> = z.strictObject({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  orderId: z.lazy(() => SortOrderSchema).optional(),
+  actorId: z.lazy(() => SortOrderSchema).optional(),
+  fromStatus: z.lazy(() => SortOrderSchema).optional(),
+  toStatus: z.lazy(() => SortOrderSchema).optional(),
+  note: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const OrderStatusHistoryMaxOrderByAggregateInputSchema: z.ZodType<Prisma.OrderStatusHistoryMaxOrderByAggregateInput> = z.strictObject({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  orderId: z.lazy(() => SortOrderSchema).optional(),
+  actorId: z.lazy(() => SortOrderSchema).optional(),
+  fromStatus: z.lazy(() => SortOrderSchema).optional(),
+  toStatus: z.lazy(() => SortOrderSchema).optional(),
+  note: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const OrderStatusHistoryMinOrderByAggregateInputSchema: z.ZodType<Prisma.OrderStatusHistoryMinOrderByAggregateInput> = z.strictObject({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  orderId: z.lazy(() => SortOrderSchema).optional(),
+  actorId: z.lazy(() => SortOrderSchema).optional(),
+  fromStatus: z.lazy(() => SortOrderSchema).optional(),
+  toStatus: z.lazy(() => SortOrderSchema).optional(),
+  note: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const EnumOrderStatusNullableWithAggregatesFilterSchema: z.ZodType<Prisma.EnumOrderStatusNullableWithAggregatesFilter> = z.strictObject({
+  equals: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  in: z.lazy(() => OrderStatusSchema).array().optional().nullable(),
+  notIn: z.lazy(() => OrderStatusSchema).array().optional().nullable(),
+  not: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NestedEnumOrderStatusNullableWithAggregatesFilterSchema) ]).optional().nullable(),
+  _count: z.lazy(() => NestedIntNullableFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumOrderStatusNullableFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumOrderStatusNullableFilterSchema).optional(),
 });
 
 export const VoucherCreateNestedManyWithoutUserInputSchema: z.ZodType<Prisma.VoucherCreateNestedManyWithoutUserInput> = z.strictObject({
@@ -3868,6 +4959,13 @@ export const ProductCreateNestedManyWithoutVendorInputSchema: z.ZodType<Prisma.P
   connect: z.union([ z.lazy(() => ProductWhereUniqueInputSchema), z.lazy(() => ProductWhereUniqueInputSchema).array() ]).optional(),
 });
 
+export const OrderStatusHistoryCreateNestedManyWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryCreateNestedManyWithoutActorInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryCreateWithoutActorInputSchema).array(), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutActorInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutActorInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderStatusHistoryCreateManyActorInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+});
+
 export const VoucherUncheckedCreateNestedManyWithoutUserInputSchema: z.ZodType<Prisma.VoucherUncheckedCreateNestedManyWithoutUserInput> = z.strictObject({
   create: z.union([ z.lazy(() => VoucherCreateWithoutUserInputSchema), z.lazy(() => VoucherCreateWithoutUserInputSchema).array(), z.lazy(() => VoucherUncheckedCreateWithoutUserInputSchema), z.lazy(() => VoucherUncheckedCreateWithoutUserInputSchema).array() ]).optional(),
   connectOrCreate: z.union([ z.lazy(() => VoucherCreateOrConnectWithoutUserInputSchema), z.lazy(() => VoucherCreateOrConnectWithoutUserInputSchema).array() ]).optional(),
@@ -3900,6 +4998,13 @@ export const ProductUncheckedCreateNestedManyWithoutVendorInputSchema: z.ZodType
   connectOrCreate: z.union([ z.lazy(() => ProductCreateOrConnectWithoutVendorInputSchema), z.lazy(() => ProductCreateOrConnectWithoutVendorInputSchema).array() ]).optional(),
   createMany: z.lazy(() => ProductCreateManyVendorInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => ProductWhereUniqueInputSchema), z.lazy(() => ProductWhereUniqueInputSchema).array() ]).optional(),
+});
+
+export const OrderStatusHistoryUncheckedCreateNestedManyWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedCreateNestedManyWithoutActorInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryCreateWithoutActorInputSchema).array(), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutActorInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutActorInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderStatusHistoryCreateManyActorInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
 });
 
 export const StringFieldUpdateOperationsInputSchema: z.ZodType<Prisma.StringFieldUpdateOperationsInput> = z.strictObject({
@@ -3992,6 +5097,20 @@ export const ProductUpdateManyWithoutVendorNestedInputSchema: z.ZodType<Prisma.P
   deleteMany: z.union([ z.lazy(() => ProductScalarWhereInputSchema), z.lazy(() => ProductScalarWhereInputSchema).array() ]).optional(),
 });
 
+export const OrderStatusHistoryUpdateManyWithoutActorNestedInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateManyWithoutActorNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryCreateWithoutActorInputSchema).array(), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutActorInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutActorInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => OrderStatusHistoryUpsertWithWhereUniqueWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUpsertWithWhereUniqueWithoutActorInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderStatusHistoryCreateManyActorInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => OrderStatusHistoryUpdateWithWhereUniqueWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUpdateWithWhereUniqueWithoutActorInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => OrderStatusHistoryUpdateManyWithWhereWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUpdateManyWithWhereWithoutActorInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => OrderStatusHistoryScalarWhereInputSchema), z.lazy(() => OrderStatusHistoryScalarWhereInputSchema).array() ]).optional(),
+});
+
 export const VoucherUncheckedUpdateManyWithoutUserNestedInputSchema: z.ZodType<Prisma.VoucherUncheckedUpdateManyWithoutUserNestedInput> = z.strictObject({
   create: z.union([ z.lazy(() => VoucherCreateWithoutUserInputSchema), z.lazy(() => VoucherCreateWithoutUserInputSchema).array(), z.lazy(() => VoucherUncheckedCreateWithoutUserInputSchema), z.lazy(() => VoucherUncheckedCreateWithoutUserInputSchema).array() ]).optional(),
   connectOrCreate: z.union([ z.lazy(() => VoucherCreateOrConnectWithoutUserInputSchema), z.lazy(() => VoucherCreateOrConnectWithoutUserInputSchema).array() ]).optional(),
@@ -4058,6 +5177,20 @@ export const ProductUncheckedUpdateManyWithoutVendorNestedInputSchema: z.ZodType
   deleteMany: z.union([ z.lazy(() => ProductScalarWhereInputSchema), z.lazy(() => ProductScalarWhereInputSchema).array() ]).optional(),
 });
 
+export const OrderStatusHistoryUncheckedUpdateManyWithoutActorNestedInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedUpdateManyWithoutActorNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryCreateWithoutActorInputSchema).array(), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutActorInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutActorInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => OrderStatusHistoryUpsertWithWhereUniqueWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUpsertWithWhereUniqueWithoutActorInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderStatusHistoryCreateManyActorInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => OrderStatusHistoryUpdateWithWhereUniqueWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUpdateWithWhereUniqueWithoutActorInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => OrderStatusHistoryUpdateManyWithWhereWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUpdateManyWithWhereWithoutActorInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => OrderStatusHistoryScalarWhereInputSchema), z.lazy(() => OrderStatusHistoryScalarWhereInputSchema).array() ]).optional(),
+});
+
 export const UserCreateNestedOneWithoutVouchersInputSchema: z.ZodType<Prisma.UserCreateNestedOneWithoutVouchersInput> = z.strictObject({
   create: z.union([ z.lazy(() => UserCreateWithoutVouchersInputSchema), z.lazy(() => UserUncheckedCreateWithoutVouchersInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => UserCreateOrConnectWithoutVouchersInputSchema).optional(),
@@ -4076,6 +5209,10 @@ export const VoucherDetailUncheckedCreateNestedManyWithoutVoucherInputSchema: z.
   connectOrCreate: z.union([ z.lazy(() => VoucherDetailCreateOrConnectWithoutVoucherInputSchema), z.lazy(() => VoucherDetailCreateOrConnectWithoutVoucherInputSchema).array() ]).optional(),
   createMany: z.lazy(() => VoucherDetailCreateManyVoucherInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => VoucherDetailWhereUniqueInputSchema), z.lazy(() => VoucherDetailWhereUniqueInputSchema).array() ]).optional(),
+});
+
+export const EnumVoucherScopeFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumVoucherScopeFieldUpdateOperationsInput> = z.strictObject({
+  set: z.lazy(() => VoucherScopeSchema).optional(),
 });
 
 export const EnumDiscountTypeFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumDiscountTypeFieldUpdateOperationsInput> = z.strictObject({
@@ -4162,6 +5299,14 @@ export const OrderCreateNestedOneWithoutVoucherDetailsInputSchema: z.ZodType<Pri
   create: z.union([ z.lazy(() => OrderCreateWithoutVoucherDetailsInputSchema), z.lazy(() => OrderUncheckedCreateWithoutVoucherDetailsInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => OrderCreateOrConnectWithoutVoucherDetailsInputSchema).optional(),
   connect: z.lazy(() => OrderWhereUniqueInputSchema).optional(),
+});
+
+export const NullableIntFieldUpdateOperationsInputSchema: z.ZodType<Prisma.NullableIntFieldUpdateOperationsInput> = z.strictObject({
+  set: z.number().optional().nullable(),
+  increment: z.number().optional(),
+  decrement: z.number().optional(),
+  multiply: z.number().optional(),
+  divide: z.number().optional(),
 });
 
 export const VoucherUpdateOneRequiredWithoutDetailsNestedInputSchema: z.ZodType<Prisma.VoucherUpdateOneRequiredWithoutDetailsNestedInput> = z.strictObject({
@@ -4709,6 +5854,13 @@ export const VoucherDetailCreateNestedManyWithoutOrderInputSchema: z.ZodType<Pri
   connect: z.union([ z.lazy(() => VoucherDetailWhereUniqueInputSchema), z.lazy(() => VoucherDetailWhereUniqueInputSchema).array() ]).optional(),
 });
 
+export const OrderStatusHistoryCreateNestedManyWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryCreateNestedManyWithoutOrderInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryCreateWithoutOrderInputSchema).array(), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutOrderInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderStatusHistoryCreateManyOrderInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+});
+
 export const OrderDetailUncheckedCreateNestedManyWithoutOrderInputSchema: z.ZodType<Prisma.OrderDetailUncheckedCreateNestedManyWithoutOrderInput> = z.strictObject({
   create: z.union([ z.lazy(() => OrderDetailCreateWithoutOrderInputSchema), z.lazy(() => OrderDetailCreateWithoutOrderInputSchema).array(), z.lazy(() => OrderDetailUncheckedCreateWithoutOrderInputSchema), z.lazy(() => OrderDetailUncheckedCreateWithoutOrderInputSchema).array() ]).optional(),
   connectOrCreate: z.union([ z.lazy(() => OrderDetailCreateOrConnectWithoutOrderInputSchema), z.lazy(() => OrderDetailCreateOrConnectWithoutOrderInputSchema).array() ]).optional(),
@@ -4727,6 +5879,13 @@ export const VoucherDetailUncheckedCreateNestedManyWithoutOrderInputSchema: z.Zo
   connectOrCreate: z.union([ z.lazy(() => VoucherDetailCreateOrConnectWithoutOrderInputSchema), z.lazy(() => VoucherDetailCreateOrConnectWithoutOrderInputSchema).array() ]).optional(),
   createMany: z.lazy(() => VoucherDetailCreateManyOrderInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => VoucherDetailWhereUniqueInputSchema), z.lazy(() => VoucherDetailWhereUniqueInputSchema).array() ]).optional(),
+});
+
+export const OrderStatusHistoryUncheckedCreateNestedManyWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedCreateNestedManyWithoutOrderInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryCreateWithoutOrderInputSchema).array(), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutOrderInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderStatusHistoryCreateManyOrderInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
 });
 
 export const EnumOrderStatusFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumOrderStatusFieldUpdateOperationsInput> = z.strictObject({
@@ -4779,6 +5938,20 @@ export const VoucherDetailUpdateManyWithoutOrderNestedInputSchema: z.ZodType<Pri
   deleteMany: z.union([ z.lazy(() => VoucherDetailScalarWhereInputSchema), z.lazy(() => VoucherDetailScalarWhereInputSchema).array() ]).optional(),
 });
 
+export const OrderStatusHistoryUpdateManyWithoutOrderNestedInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateManyWithoutOrderNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryCreateWithoutOrderInputSchema).array(), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutOrderInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => OrderStatusHistoryUpsertWithWhereUniqueWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUpsertWithWhereUniqueWithoutOrderInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderStatusHistoryCreateManyOrderInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => OrderStatusHistoryUpdateWithWhereUniqueWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUpdateWithWhereUniqueWithoutOrderInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => OrderStatusHistoryUpdateManyWithWhereWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUpdateManyWithWhereWithoutOrderInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => OrderStatusHistoryScalarWhereInputSchema), z.lazy(() => OrderStatusHistoryScalarWhereInputSchema).array() ]).optional(),
+});
+
 export const OrderDetailUncheckedUpdateManyWithoutOrderNestedInputSchema: z.ZodType<Prisma.OrderDetailUncheckedUpdateManyWithoutOrderNestedInput> = z.strictObject({
   create: z.union([ z.lazy(() => OrderDetailCreateWithoutOrderInputSchema), z.lazy(() => OrderDetailCreateWithoutOrderInputSchema).array(), z.lazy(() => OrderDetailUncheckedCreateWithoutOrderInputSchema), z.lazy(() => OrderDetailUncheckedCreateWithoutOrderInputSchema).array() ]).optional(),
   connectOrCreate: z.union([ z.lazy(() => OrderDetailCreateOrConnectWithoutOrderInputSchema), z.lazy(() => OrderDetailCreateOrConnectWithoutOrderInputSchema).array() ]).optional(),
@@ -4815,6 +5988,20 @@ export const VoucherDetailUncheckedUpdateManyWithoutOrderNestedInputSchema: z.Zo
   update: z.union([ z.lazy(() => VoucherDetailUpdateWithWhereUniqueWithoutOrderInputSchema), z.lazy(() => VoucherDetailUpdateWithWhereUniqueWithoutOrderInputSchema).array() ]).optional(),
   updateMany: z.union([ z.lazy(() => VoucherDetailUpdateManyWithWhereWithoutOrderInputSchema), z.lazy(() => VoucherDetailUpdateManyWithWhereWithoutOrderInputSchema).array() ]).optional(),
   deleteMany: z.union([ z.lazy(() => VoucherDetailScalarWhereInputSchema), z.lazy(() => VoucherDetailScalarWhereInputSchema).array() ]).optional(),
+});
+
+export const OrderStatusHistoryUncheckedUpdateManyWithoutOrderNestedInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedUpdateManyWithoutOrderNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryCreateWithoutOrderInputSchema).array(), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryCreateOrConnectWithoutOrderInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => OrderStatusHistoryUpsertWithWhereUniqueWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUpsertWithWhereUniqueWithoutOrderInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderStatusHistoryCreateManyOrderInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema), z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => OrderStatusHistoryUpdateWithWhereUniqueWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUpdateWithWhereUniqueWithoutOrderInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => OrderStatusHistoryUpdateManyWithWhereWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUpdateManyWithWhereWithoutOrderInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => OrderStatusHistoryScalarWhereInputSchema), z.lazy(() => OrderStatusHistoryScalarWhereInputSchema).array() ]).optional(),
 });
 
 export const OrderCreateNestedOneWithoutDetailsInputSchema: z.ZodType<Prisma.OrderCreateNestedOneWithoutDetailsInput> = z.strictObject({
@@ -4887,12 +6074,50 @@ export const EnumPaymentMethodFieldUpdateOperationsInputSchema: z.ZodType<Prisma
   set: z.lazy(() => PaymentMethodSchema).optional(),
 });
 
+export const EnumPaymentStatusFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumPaymentStatusFieldUpdateOperationsInput> = z.strictObject({
+  set: z.lazy(() => PaymentStatusSchema).optional(),
+});
+
 export const OrderUpdateOneRequiredWithoutPaymentNestedInputSchema: z.ZodType<Prisma.OrderUpdateOneRequiredWithoutPaymentNestedInput> = z.strictObject({
   create: z.union([ z.lazy(() => OrderCreateWithoutPaymentInputSchema), z.lazy(() => OrderUncheckedCreateWithoutPaymentInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => OrderCreateOrConnectWithoutPaymentInputSchema).optional(),
   upsert: z.lazy(() => OrderUpsertWithoutPaymentInputSchema).optional(),
   connect: z.lazy(() => OrderWhereUniqueInputSchema).optional(),
   update: z.union([ z.lazy(() => OrderUpdateToOneWithWhereWithoutPaymentInputSchema), z.lazy(() => OrderUpdateWithoutPaymentInputSchema), z.lazy(() => OrderUncheckedUpdateWithoutPaymentInputSchema) ]).optional(),
+});
+
+export const OrderCreateNestedOneWithoutStatusHistoryInputSchema: z.ZodType<Prisma.OrderCreateNestedOneWithoutStatusHistoryInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderCreateWithoutStatusHistoryInputSchema), z.lazy(() => OrderUncheckedCreateWithoutStatusHistoryInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => OrderCreateOrConnectWithoutStatusHistoryInputSchema).optional(),
+  connect: z.lazy(() => OrderWhereUniqueInputSchema).optional(),
+});
+
+export const UserCreateNestedOneWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.UserCreateNestedOneWithoutOrderStatusHistoriesInput> = z.strictObject({
+  create: z.union([ z.lazy(() => UserCreateWithoutOrderStatusHistoriesInputSchema), z.lazy(() => UserUncheckedCreateWithoutOrderStatusHistoriesInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => UserCreateOrConnectWithoutOrderStatusHistoriesInputSchema).optional(),
+  connect: z.lazy(() => UserWhereUniqueInputSchema).optional(),
+});
+
+export const NullableEnumOrderStatusFieldUpdateOperationsInputSchema: z.ZodType<Prisma.NullableEnumOrderStatusFieldUpdateOperationsInput> = z.strictObject({
+  set: z.lazy(() => OrderStatusSchema).optional().nullable(),
+});
+
+export const OrderUpdateOneRequiredWithoutStatusHistoryNestedInputSchema: z.ZodType<Prisma.OrderUpdateOneRequiredWithoutStatusHistoryNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderCreateWithoutStatusHistoryInputSchema), z.lazy(() => OrderUncheckedCreateWithoutStatusHistoryInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => OrderCreateOrConnectWithoutStatusHistoryInputSchema).optional(),
+  upsert: z.lazy(() => OrderUpsertWithoutStatusHistoryInputSchema).optional(),
+  connect: z.lazy(() => OrderWhereUniqueInputSchema).optional(),
+  update: z.union([ z.lazy(() => OrderUpdateToOneWithWhereWithoutStatusHistoryInputSchema), z.lazy(() => OrderUpdateWithoutStatusHistoryInputSchema), z.lazy(() => OrderUncheckedUpdateWithoutStatusHistoryInputSchema) ]).optional(),
+});
+
+export const UserUpdateOneWithoutOrderStatusHistoriesNestedInputSchema: z.ZodType<Prisma.UserUpdateOneWithoutOrderStatusHistoriesNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => UserCreateWithoutOrderStatusHistoriesInputSchema), z.lazy(() => UserUncheckedCreateWithoutOrderStatusHistoriesInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => UserCreateOrConnectWithoutOrderStatusHistoriesInputSchema).optional(),
+  upsert: z.lazy(() => UserUpsertWithoutOrderStatusHistoriesInputSchema).optional(),
+  disconnect: z.union([ z.boolean(),z.lazy(() => UserWhereInputSchema) ]).optional(),
+  delete: z.union([ z.boolean(),z.lazy(() => UserWhereInputSchema) ]).optional(),
+  connect: z.lazy(() => UserWhereUniqueInputSchema).optional(),
+  update: z.union([ z.lazy(() => UserUpdateToOneWithWhereWithoutOrderStatusHistoriesInputSchema), z.lazy(() => UserUpdateWithoutOrderStatusHistoriesInputSchema), z.lazy(() => UserUncheckedUpdateWithoutOrderStatusHistoriesInputSchema) ]).optional(),
 });
 
 export const NestedUuidFilterSchema: z.ZodType<Prisma.NestedUuidFilter> = z.strictObject({
@@ -5088,6 +6313,13 @@ export const NestedDateTimeNullableWithAggregatesFilterSchema: z.ZodType<Prisma.
   _max: z.lazy(() => NestedDateTimeNullableFilterSchema).optional(),
 });
 
+export const NestedEnumVoucherScopeFilterSchema: z.ZodType<Prisma.NestedEnumVoucherScopeFilter> = z.strictObject({
+  equals: z.lazy(() => VoucherScopeSchema).optional(),
+  in: z.lazy(() => VoucherScopeSchema).array().optional(),
+  notIn: z.lazy(() => VoucherScopeSchema).array().optional(),
+  not: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => NestedEnumVoucherScopeFilterSchema) ]).optional(),
+});
+
 export const NestedEnumDiscountTypeFilterSchema: z.ZodType<Prisma.NestedEnumDiscountTypeFilter> = z.strictObject({
   equals: z.lazy(() => DiscountTypeSchema).optional(),
   in: z.lazy(() => DiscountTypeSchema).array().optional(),
@@ -5122,6 +6354,16 @@ export const NestedEnumVoucherStatusFilterSchema: z.ZodType<Prisma.NestedEnumVou
   in: z.lazy(() => VoucherStatusSchema).array().optional(),
   notIn: z.lazy(() => VoucherStatusSchema).array().optional(),
   not: z.union([ z.lazy(() => VoucherStatusSchema), z.lazy(() => NestedEnumVoucherStatusFilterSchema) ]).optional(),
+});
+
+export const NestedEnumVoucherScopeWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumVoucherScopeWithAggregatesFilter> = z.strictObject({
+  equals: z.lazy(() => VoucherScopeSchema).optional(),
+  in: z.lazy(() => VoucherScopeSchema).array().optional(),
+  notIn: z.lazy(() => VoucherScopeSchema).array().optional(),
+  not: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => NestedEnumVoucherScopeWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumVoucherScopeFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumVoucherScopeFilterSchema).optional(),
 });
 
 export const NestedEnumDiscountTypeWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumDiscountTypeWithAggregatesFilter> = z.strictObject({
@@ -5228,6 +6470,33 @@ export const NestedUuidNullableWithAggregatesFilterSchema: z.ZodType<Prisma.Nest
   _max: z.lazy(() => NestedStringNullableFilterSchema).optional(),
 });
 
+export const NestedIntNullableWithAggregatesFilterSchema: z.ZodType<Prisma.NestedIntNullableWithAggregatesFilter> = z.strictObject({
+  equals: z.number().optional().nullable(),
+  in: z.number().array().optional().nullable(),
+  notIn: z.number().array().optional().nullable(),
+  lt: z.number().optional(),
+  lte: z.number().optional(),
+  gt: z.number().optional(),
+  gte: z.number().optional(),
+  not: z.union([ z.number(),z.lazy(() => NestedIntNullableWithAggregatesFilterSchema) ]).optional().nullable(),
+  _count: z.lazy(() => NestedIntNullableFilterSchema).optional(),
+  _avg: z.lazy(() => NestedFloatNullableFilterSchema).optional(),
+  _sum: z.lazy(() => NestedIntNullableFilterSchema).optional(),
+  _min: z.lazy(() => NestedIntNullableFilterSchema).optional(),
+  _max: z.lazy(() => NestedIntNullableFilterSchema).optional(),
+});
+
+export const NestedFloatNullableFilterSchema: z.ZodType<Prisma.NestedFloatNullableFilter> = z.strictObject({
+  equals: z.number().optional().nullable(),
+  in: z.number().array().optional().nullable(),
+  notIn: z.number().array().optional().nullable(),
+  lt: z.number().optional(),
+  lte: z.number().optional(),
+  gt: z.number().optional(),
+  gte: z.number().optional(),
+  not: z.union([ z.number(),z.lazy(() => NestedFloatNullableFilterSchema) ]).optional().nullable(),
+});
+
 export const NestedEnumProductStatusFilterSchema: z.ZodType<Prisma.NestedEnumProductStatusFilter> = z.strictObject({
   equals: z.lazy(() => ProductStatusSchema).optional(),
   in: z.lazy(() => ProductStatusSchema).array().optional(),
@@ -5269,6 +6538,13 @@ export const NestedEnumPaymentMethodFilterSchema: z.ZodType<Prisma.NestedEnumPay
   not: z.union([ z.lazy(() => PaymentMethodSchema), z.lazy(() => NestedEnumPaymentMethodFilterSchema) ]).optional(),
 });
 
+export const NestedEnumPaymentStatusFilterSchema: z.ZodType<Prisma.NestedEnumPaymentStatusFilter> = z.strictObject({
+  equals: z.lazy(() => PaymentStatusSchema).optional(),
+  in: z.lazy(() => PaymentStatusSchema).array().optional(),
+  notIn: z.lazy(() => PaymentStatusSchema).array().optional(),
+  not: z.union([ z.lazy(() => PaymentStatusSchema), z.lazy(() => NestedEnumPaymentStatusFilterSchema) ]).optional(),
+});
+
 export const NestedEnumPaymentMethodWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumPaymentMethodWithAggregatesFilter> = z.strictObject({
   equals: z.lazy(() => PaymentMethodSchema).optional(),
   in: z.lazy(() => PaymentMethodSchema).array().optional(),
@@ -5279,21 +6555,68 @@ export const NestedEnumPaymentMethodWithAggregatesFilterSchema: z.ZodType<Prisma
   _max: z.lazy(() => NestedEnumPaymentMethodFilterSchema).optional(),
 });
 
+export const NestedEnumPaymentStatusWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumPaymentStatusWithAggregatesFilter> = z.strictObject({
+  equals: z.lazy(() => PaymentStatusSchema).optional(),
+  in: z.lazy(() => PaymentStatusSchema).array().optional(),
+  notIn: z.lazy(() => PaymentStatusSchema).array().optional(),
+  not: z.union([ z.lazy(() => PaymentStatusSchema), z.lazy(() => NestedEnumPaymentStatusWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumPaymentStatusFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumPaymentStatusFilterSchema).optional(),
+});
+
+export const NestedJsonNullableFilterSchema: z.ZodType<Prisma.NestedJsonNullableFilter> = z.strictObject({
+  equals: InputJsonValueSchema.optional(),
+  path: z.string().array().optional(),
+  mode: z.lazy(() => QueryModeSchema).optional(),
+  string_contains: z.string().optional(),
+  string_starts_with: z.string().optional(),
+  string_ends_with: z.string().optional(),
+  array_starts_with: InputJsonValueSchema.optional().nullable(),
+  array_ends_with: InputJsonValueSchema.optional().nullable(),
+  array_contains: InputJsonValueSchema.optional().nullable(),
+  lt: InputJsonValueSchema.optional(),
+  lte: InputJsonValueSchema.optional(),
+  gt: InputJsonValueSchema.optional(),
+  gte: InputJsonValueSchema.optional(),
+  not: InputJsonValueSchema.optional(),
+});
+
+export const NestedEnumOrderStatusNullableFilterSchema: z.ZodType<Prisma.NestedEnumOrderStatusNullableFilter> = z.strictObject({
+  equals: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  in: z.lazy(() => OrderStatusSchema).array().optional().nullable(),
+  notIn: z.lazy(() => OrderStatusSchema).array().optional().nullable(),
+  not: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NestedEnumOrderStatusNullableFilterSchema) ]).optional().nullable(),
+});
+
+export const NestedEnumOrderStatusNullableWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumOrderStatusNullableWithAggregatesFilter> = z.strictObject({
+  equals: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  in: z.lazy(() => OrderStatusSchema).array().optional().nullable(),
+  notIn: z.lazy(() => OrderStatusSchema).array().optional().nullable(),
+  not: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NestedEnumOrderStatusNullableWithAggregatesFilterSchema) ]).optional().nullable(),
+  _count: z.lazy(() => NestedIntNullableFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumOrderStatusNullableFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumOrderStatusNullableFilterSchema).optional(),
+});
+
 export const VoucherCreateWithoutUserInputSchema: z.ZodType<Prisma.VoucherCreateWithoutUserInput> = z.strictObject({
   id: z.uuid().optional(),
   code: z.string(),
   name: z.string(),
+  scope: z.lazy(() => VoucherScopeSchema),
   discountType: z.lazy(() => DiscountTypeSchema),
   discountValue: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   minOrderAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   maxDiscountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   quantity: z.number().int(),
   usedQuantity: z.number().int().optional(),
+  perUserLimit: z.number().int().optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   status: z.lazy(() => VoucherStatusSchema).optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   details: z.lazy(() => VoucherDetailCreateNestedManyWithoutVoucherInputSchema).optional(),
 });
 
@@ -5301,17 +6624,20 @@ export const VoucherUncheckedCreateWithoutUserInputSchema: z.ZodType<Prisma.Vouc
   id: z.uuid().optional(),
   code: z.string(),
   name: z.string(),
+  scope: z.lazy(() => VoucherScopeSchema),
   discountType: z.lazy(() => DiscountTypeSchema),
   discountValue: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   minOrderAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   maxDiscountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   quantity: z.number().int(),
   usedQuantity: z.number().int().optional(),
+  perUserLimit: z.number().int().optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   status: z.lazy(() => VoucherStatusSchema).optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   details: z.lazy(() => VoucherDetailUncheckedCreateNestedManyWithoutVoucherInputSchema).optional(),
 });
 
@@ -5331,6 +6657,7 @@ export const ReviewCreateWithoutUserInputSchema: z.ZodType<Prisma.ReviewCreateWi
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   product: z.lazy(() => ProductCreateNestedOneWithoutReviewsInputSchema),
   orderDetail: z.lazy(() => OrderDetailCreateNestedOneWithoutReviewInputSchema),
 });
@@ -5343,6 +6670,7 @@ export const ReviewUncheckedCreateWithoutUserInputSchema: z.ZodType<Prisma.Revie
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ReviewCreateOrConnectWithoutUserInputSchema: z.ZodType<Prisma.ReviewCreateOrConnectWithoutUserInput> = z.strictObject({
@@ -5378,24 +6706,44 @@ export const CartCreateOrConnectWithoutUserInputSchema: z.ZodType<Prisma.CartCre
 
 export const OrderCreateWithoutUserInputSchema: z.ZodType<Prisma.OrderCreateWithoutUserInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
 });
 
 export const OrderUncheckedCreateWithoutUserInputSchema: z.ZodType<Prisma.OrderUncheckedCreateWithoutUserInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
   details: z.lazy(() => OrderDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentUncheckedCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
 });
 
 export const OrderCreateOrConnectWithoutUserInputSchema: z.ZodType<Prisma.OrderCreateOrConnectWithoutUserInput> = z.strictObject({
@@ -5448,6 +6796,34 @@ export const ProductCreateManyVendorInputEnvelopeSchema: z.ZodType<Prisma.Produc
   skipDuplicates: z.boolean().optional(),
 });
 
+export const OrderStatusHistoryCreateWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryCreateWithoutActorInput> = z.strictObject({
+  id: z.uuid().optional(),
+  fromStatus: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  toStatus: z.lazy(() => OrderStatusSchema),
+  note: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  order: z.lazy(() => OrderCreateNestedOneWithoutStatusHistoryInputSchema),
+});
+
+export const OrderStatusHistoryUncheckedCreateWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedCreateWithoutActorInput> = z.strictObject({
+  id: z.uuid().optional(),
+  orderId: z.string(),
+  fromStatus: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  toStatus: z.lazy(() => OrderStatusSchema),
+  note: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+});
+
+export const OrderStatusHistoryCreateOrConnectWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryCreateOrConnectWithoutActorInput> = z.strictObject({
+  where: z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutActorInputSchema) ]),
+});
+
+export const OrderStatusHistoryCreateManyActorInputEnvelopeSchema: z.ZodType<Prisma.OrderStatusHistoryCreateManyActorInputEnvelope> = z.strictObject({
+  data: z.union([ z.lazy(() => OrderStatusHistoryCreateManyActorInputSchema), z.lazy(() => OrderStatusHistoryCreateManyActorInputSchema).array() ]),
+  skipDuplicates: z.boolean().optional(),
+});
+
 export const VoucherUpsertWithWhereUniqueWithoutUserInputSchema: z.ZodType<Prisma.VoucherUpsertWithWhereUniqueWithoutUserInput> = z.strictObject({
   where: z.lazy(() => VoucherWhereUniqueInputSchema),
   update: z.union([ z.lazy(() => VoucherUpdateWithoutUserInputSchema), z.lazy(() => VoucherUncheckedUpdateWithoutUserInputSchema) ]),
@@ -5472,17 +6848,20 @@ export const VoucherScalarWhereInputSchema: z.ZodType<Prisma.VoucherScalarWhereI
   userId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   code: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   name: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  scope: z.union([ z.lazy(() => EnumVoucherScopeFilterSchema), z.lazy(() => VoucherScopeSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => EnumDiscountTypeFilterSchema), z.lazy(() => DiscountTypeSchema) ]).optional(),
   discountValue: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   minOrderAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   usedQuantity: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  perUserLimit: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   startDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   endDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   status: z.union([ z.lazy(() => EnumVoucherStatusFilterSchema), z.lazy(() => VoucherStatusSchema) ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const ReviewUpsertWithWhereUniqueWithoutUserInputSchema: z.ZodType<Prisma.ReviewUpsertWithWhereUniqueWithoutUserInput> = z.strictObject({
@@ -5513,6 +6892,7 @@ export const ReviewScalarWhereInputSchema: z.ZodType<Prisma.ReviewScalarWhereInp
   rating: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const CartUpsertWithoutUserInputSchema: z.ZodType<Prisma.CartUpsertWithoutUserInput> = z.strictObject({
@@ -5563,11 +6943,20 @@ export const OrderScalarWhereInputSchema: z.ZodType<Prisma.OrderScalarWhereInput
   OR: z.lazy(() => OrderScalarWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => OrderScalarWhereInputSchema), z.lazy(() => OrderScalarWhereInputSchema).array() ]).optional(),
   id: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  orderCode: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   userId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  subtotalAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  discountAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  shippingFee: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   totalAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
   status: z.union([ z.lazy(() => EnumOrderStatusFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional(),
   notes: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  receiverName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  receiverPhone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  shippingAddress: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  cancelledAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const ProductUpsertWithWhereUniqueWithoutVendorInputSchema: z.ZodType<Prisma.ProductUpsertWithWhereUniqueWithoutVendorInput> = z.strictObject({
@@ -5602,6 +6991,35 @@ export const ProductScalarWhereInputSchema: z.ZodType<Prisma.ProductScalarWhereI
   deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
+export const OrderStatusHistoryUpsertWithWhereUniqueWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpsertWithWhereUniqueWithoutActorInput> = z.strictObject({
+  where: z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema),
+  update: z.union([ z.lazy(() => OrderStatusHistoryUpdateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUncheckedUpdateWithoutActorInputSchema) ]),
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutActorInputSchema) ]),
+});
+
+export const OrderStatusHistoryUpdateWithWhereUniqueWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateWithWhereUniqueWithoutActorInput> = z.strictObject({
+  where: z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema),
+  data: z.union([ z.lazy(() => OrderStatusHistoryUpdateWithoutActorInputSchema), z.lazy(() => OrderStatusHistoryUncheckedUpdateWithoutActorInputSchema) ]),
+});
+
+export const OrderStatusHistoryUpdateManyWithWhereWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateManyWithWhereWithoutActorInput> = z.strictObject({
+  where: z.lazy(() => OrderStatusHistoryScalarWhereInputSchema),
+  data: z.union([ z.lazy(() => OrderStatusHistoryUpdateManyMutationInputSchema), z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutActorInputSchema) ]),
+});
+
+export const OrderStatusHistoryScalarWhereInputSchema: z.ZodType<Prisma.OrderStatusHistoryScalarWhereInput> = z.strictObject({
+  AND: z.union([ z.lazy(() => OrderStatusHistoryScalarWhereInputSchema), z.lazy(() => OrderStatusHistoryScalarWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => OrderStatusHistoryScalarWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => OrderStatusHistoryScalarWhereInputSchema), z.lazy(() => OrderStatusHistoryScalarWhereInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  orderId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  actorId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
+  fromStatus: z.union([ z.lazy(() => EnumOrderStatusNullableFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => EnumOrderStatusFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional(),
+  note: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+});
+
 export const UserCreateWithoutVouchersInputSchema: z.ZodType<Prisma.UserCreateWithoutVouchersInput> = z.strictObject({
   id: z.uuid().optional(),
   fullName: z.string(),
@@ -5619,6 +7037,7 @@ export const UserCreateWithoutVouchersInputSchema: z.ZodType<Prisma.UserCreateWi
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderCreateNestedManyWithoutUserInputSchema).optional(),
   products: z.lazy(() => ProductCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserUncheckedCreateWithoutVouchersInputSchema: z.ZodType<Prisma.UserUncheckedCreateWithoutVouchersInput> = z.strictObject({
@@ -5638,6 +7057,7 @@ export const UserUncheckedCreateWithoutVouchersInputSchema: z.ZodType<Prisma.Use
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   products: z.lazy(() => ProductUncheckedCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserCreateOrConnectWithoutVouchersInputSchema: z.ZodType<Prisma.UserCreateOrConnectWithoutVouchersInput> = z.strictObject({
@@ -5647,7 +7067,11 @@ export const UserCreateOrConnectWithoutVouchersInputSchema: z.ZodType<Prisma.Use
 
 export const VoucherDetailCreateWithoutVoucherInputSchema: z.ZodType<Prisma.VoucherDetailCreateWithoutVoucherInput> = z.strictObject({
   id: z.uuid().optional(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
   product: z.lazy(() => ProductCreateNestedOneWithoutVoucherDetailsInputSchema).optional(),
   order: z.lazy(() => OrderCreateNestedOneWithoutVoucherDetailsInputSchema).optional(),
 });
@@ -5656,7 +7080,11 @@ export const VoucherDetailUncheckedCreateWithoutVoucherInputSchema: z.ZodType<Pr
   id: z.uuid().optional(),
   productId: z.string().optional().nullable(),
   orderId: z.string().optional().nullable(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
 });
 
 export const VoucherDetailCreateOrConnectWithoutVoucherInputSchema: z.ZodType<Prisma.VoucherDetailCreateOrConnectWithoutVoucherInput> = z.strictObject({
@@ -5697,6 +7125,7 @@ export const UserUpdateWithoutVouchersInputSchema: z.ZodType<Prisma.UserUpdateWi
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUpdateManyWithoutUserNestedInputSchema).optional(),
   products: z.lazy(() => ProductUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const UserUncheckedUpdateWithoutVouchersInputSchema: z.ZodType<Prisma.UserUncheckedUpdateWithoutVouchersInput> = z.strictObject({
@@ -5716,6 +7145,7 @@ export const UserUncheckedUpdateWithoutVouchersInputSchema: z.ZodType<Prisma.Use
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   products: z.lazy(() => ProductUncheckedUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const VoucherDetailUpsertWithWhereUniqueWithoutVoucherInputSchema: z.ZodType<Prisma.VoucherDetailUpsertWithWhereUniqueWithoutVoucherInput> = z.strictObject({
@@ -5742,24 +7172,31 @@ export const VoucherDetailScalarWhereInputSchema: z.ZodType<Prisma.VoucherDetail
   voucherId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   productId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   orderId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
+  eligibleAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
+  discountAmount: z.union([ z.lazy(() => DecimalNullableFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional().nullable(),
+  sequence: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  reversedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const VoucherCreateWithoutDetailsInputSchema: z.ZodType<Prisma.VoucherCreateWithoutDetailsInput> = z.strictObject({
   id: z.uuid().optional(),
   code: z.string(),
   name: z.string(),
+  scope: z.lazy(() => VoucherScopeSchema),
   discountType: z.lazy(() => DiscountTypeSchema),
   discountValue: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   minOrderAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   maxDiscountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   quantity: z.number().int(),
   usedQuantity: z.number().int().optional(),
+  perUserLimit: z.number().int().optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   status: z.lazy(() => VoucherStatusSchema).optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutVouchersInputSchema),
 });
 
@@ -5768,17 +7205,20 @@ export const VoucherUncheckedCreateWithoutDetailsInputSchema: z.ZodType<Prisma.V
   userId: z.string(),
   code: z.string(),
   name: z.string(),
+  scope: z.lazy(() => VoucherScopeSchema),
   discountType: z.lazy(() => DiscountTypeSchema),
   discountValue: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   minOrderAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   maxDiscountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   quantity: z.number().int(),
   usedQuantity: z.number().int().optional(),
+  perUserLimit: z.number().int().optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   status: z.lazy(() => VoucherStatusSchema).optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const VoucherCreateOrConnectWithoutDetailsInputSchema: z.ZodType<Prisma.VoucherCreateOrConnectWithoutDetailsInput> = z.strictObject({
@@ -5823,24 +7263,44 @@ export const ProductCreateOrConnectWithoutVoucherDetailsInputSchema: z.ZodType<P
 
 export const OrderCreateWithoutVoucherDetailsInputSchema: z.ZodType<Prisma.OrderCreateWithoutVoucherDetailsInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutOrdersInputSchema),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
 });
 
 export const OrderUncheckedCreateWithoutVoucherDetailsInputSchema: z.ZodType<Prisma.OrderUncheckedCreateWithoutVoucherDetailsInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
   userId: z.string(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
   details: z.lazy(() => OrderDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentUncheckedCreateNestedOneWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
 });
 
 export const OrderCreateOrConnectWithoutVoucherDetailsInputSchema: z.ZodType<Prisma.OrderCreateOrConnectWithoutVoucherDetailsInput> = z.strictObject({
@@ -5863,17 +7323,20 @@ export const VoucherUpdateWithoutDetailsInputSchema: z.ZodType<Prisma.VoucherUpd
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   code: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  scope: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => EnumVoucherScopeFieldUpdateOperationsInputSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => DiscountTypeSchema), z.lazy(() => EnumDiscountTypeFieldUpdateOperationsInputSchema) ]).optional(),
   discountValue: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   minOrderAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   usedQuantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  perUserLimit: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => VoucherStatusSchema), z.lazy(() => EnumVoucherStatusFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneRequiredWithoutVouchersNestedInputSchema).optional(),
 });
 
@@ -5882,17 +7345,20 @@ export const VoucherUncheckedUpdateWithoutDetailsInputSchema: z.ZodType<Prisma.V
   userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   code: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  scope: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => EnumVoucherScopeFieldUpdateOperationsInputSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => DiscountTypeSchema), z.lazy(() => EnumDiscountTypeFieldUpdateOperationsInputSchema) ]).optional(),
   discountValue: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   minOrderAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   usedQuantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  perUserLimit: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => VoucherStatusSchema), z.lazy(() => EnumVoucherStatusFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ProductUpsertWithoutVoucherDetailsInputSchema: z.ZodType<Prisma.ProductUpsertWithoutVoucherDetailsInput> = z.strictObject({
@@ -5949,24 +7415,44 @@ export const OrderUpdateToOneWithWhereWithoutVoucherDetailsInputSchema: z.ZodTyp
 
 export const OrderUpdateWithoutVoucherDetailsInputSchema: z.ZodType<Prisma.OrderUpdateWithoutVoucherDetailsInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
 });
 
 export const OrderUncheckedUpdateWithoutVoucherDetailsInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateWithoutVoucherDetailsInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   details: z.lazy(() => OrderDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUncheckedUpdateOneWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
 });
 
 export const ProductCreateWithoutCategoryInputSchema: z.ZodType<Prisma.ProductCreateWithoutCategoryInput> = z.strictObject({
@@ -6065,6 +7551,7 @@ export const UserCreateWithoutProductsInputSchema: z.ZodType<Prisma.UserCreateWi
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderCreateNestedManyWithoutUserInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserUncheckedCreateWithoutProductsInputSchema: z.ZodType<Prisma.UserUncheckedCreateWithoutProductsInput> = z.strictObject({
@@ -6084,6 +7571,7 @@ export const UserUncheckedCreateWithoutProductsInputSchema: z.ZodType<Prisma.Use
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserCreateOrConnectWithoutProductsInputSchema: z.ZodType<Prisma.UserCreateOrConnectWithoutProductsInput> = z.strictObject({
@@ -6127,6 +7615,7 @@ export const ReviewCreateWithoutProductInputSchema: z.ZodType<Prisma.ReviewCreat
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutReviewsInputSchema),
   orderDetail: z.lazy(() => OrderDetailCreateNestedOneWithoutReviewInputSchema),
 });
@@ -6139,6 +7628,7 @@ export const ReviewUncheckedCreateWithoutProductInputSchema: z.ZodType<Prisma.Re
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ReviewCreateOrConnectWithoutProductInputSchema: z.ZodType<Prisma.ReviewCreateOrConnectWithoutProductInput> = z.strictObject({
@@ -6153,7 +7643,11 @@ export const ReviewCreateManyProductInputEnvelopeSchema: z.ZodType<Prisma.Review
 
 export const VoucherDetailCreateWithoutProductInputSchema: z.ZodType<Prisma.VoucherDetailCreateWithoutProductInput> = z.strictObject({
   id: z.uuid().optional(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
   voucher: z.lazy(() => VoucherCreateNestedOneWithoutDetailsInputSchema),
   order: z.lazy(() => OrderCreateNestedOneWithoutVoucherDetailsInputSchema).optional(),
 });
@@ -6162,7 +7656,11 @@ export const VoucherDetailUncheckedCreateWithoutProductInputSchema: z.ZodType<Pr
   id: z.uuid().optional(),
   voucherId: z.string(),
   orderId: z.string().optional().nullable(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
 });
 
 export const VoucherDetailCreateOrConnectWithoutProductInputSchema: z.ZodType<Prisma.VoucherDetailCreateOrConnectWithoutProductInput> = z.strictObject({
@@ -6232,6 +7730,7 @@ export const UserUpdateWithoutProductsInputSchema: z.ZodType<Prisma.UserUpdateWi
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUpdateManyWithoutUserNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const UserUncheckedUpdateWithoutProductsInputSchema: z.ZodType<Prisma.UserUncheckedUpdateWithoutProductsInput> = z.strictObject({
@@ -6251,6 +7750,7 @@ export const UserUncheckedUpdateWithoutProductsInputSchema: z.ZodType<Prisma.Use
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const ProductColorUpsertWithWhereUniqueWithoutProductInputSchema: z.ZodType<Prisma.ProductColorUpsertWithWhereUniqueWithoutProductInput> = z.strictObject({
@@ -6482,6 +7982,8 @@ export const ProductColorCreateOrConnectWithoutVariantsInputSchema: z.ZodType<Pr
 export const CartItemCreateWithoutProductVariantInputSchema: z.ZodType<Prisma.CartItemCreateWithoutProductVariantInput> = z.strictObject({
   id: z.uuid().optional(),
   quantity: z.number().int().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutItemsInputSchema),
 });
 
@@ -6489,6 +7991,8 @@ export const CartItemUncheckedCreateWithoutProductVariantInputSchema: z.ZodType<
   id: z.uuid().optional(),
   cartId: z.string(),
   quantity: z.number().int().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export const CartItemCreateOrConnectWithoutProductVariantInputSchema: z.ZodType<Prisma.CartItemCreateOrConnectWithoutProductVariantInput> = z.strictObject({
@@ -6505,6 +8009,10 @@ export const OrderDetailCreateWithoutProductVariantInputSchema: z.ZodType<Prisma
   id: z.uuid().optional(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   order: z.lazy(() => OrderCreateNestedOneWithoutDetailsInputSchema),
   review: z.lazy(() => ReviewCreateNestedOneWithoutOrderDetailInputSchema).optional(),
 });
@@ -6514,6 +8022,10 @@ export const OrderDetailUncheckedCreateWithoutProductVariantInputSchema: z.ZodTy
   orderId: z.string(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   review: z.lazy(() => ReviewUncheckedCreateNestedOneWithoutOrderDetailInputSchema).optional(),
 });
 
@@ -6582,6 +8094,8 @@ export const CartItemScalarWhereInputSchema: z.ZodType<Prisma.CartItemScalarWher
   productVariantId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   cartId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
 });
 
 export const OrderDetailUpsertWithWhereUniqueWithoutProductVariantInputSchema: z.ZodType<Prisma.OrderDetailUpsertWithWhereUniqueWithoutProductVariantInput> = z.strictObject({
@@ -6609,6 +8123,10 @@ export const OrderDetailScalarWhereInputSchema: z.ZodType<Prisma.OrderDetailScal
   productVariantId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   price: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  productName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  colorName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  sizeName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  imageUrl: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
 });
 
 export const UserCreateWithoutReviewsInputSchema: z.ZodType<Prisma.UserCreateWithoutReviewsInput> = z.strictObject({
@@ -6628,6 +8146,7 @@ export const UserCreateWithoutReviewsInputSchema: z.ZodType<Prisma.UserCreateWit
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderCreateNestedManyWithoutUserInputSchema).optional(),
   products: z.lazy(() => ProductCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserUncheckedCreateWithoutReviewsInputSchema: z.ZodType<Prisma.UserUncheckedCreateWithoutReviewsInput> = z.strictObject({
@@ -6647,6 +8166,7 @@ export const UserUncheckedCreateWithoutReviewsInputSchema: z.ZodType<Prisma.User
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   products: z.lazy(() => ProductUncheckedCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserCreateOrConnectWithoutReviewsInputSchema: z.ZodType<Prisma.UserCreateOrConnectWithoutReviewsInput> = z.strictObject({
@@ -6693,6 +8213,10 @@ export const OrderDetailCreateWithoutReviewInputSchema: z.ZodType<Prisma.OrderDe
   id: z.uuid().optional(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   order: z.lazy(() => OrderCreateNestedOneWithoutDetailsInputSchema),
   productVariant: z.lazy(() => ProductVariantCreateNestedOneWithoutOrderDetailsInputSchema),
 });
@@ -6703,6 +8227,10 @@ export const OrderDetailUncheckedCreateWithoutReviewInputSchema: z.ZodType<Prism
   productVariantId: z.string(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
 });
 
 export const OrderDetailCreateOrConnectWithoutReviewInputSchema: z.ZodType<Prisma.OrderDetailCreateOrConnectWithoutReviewInput> = z.strictObject({
@@ -6738,6 +8266,7 @@ export const UserUpdateWithoutReviewsInputSchema: z.ZodType<Prisma.UserUpdateWit
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUpdateManyWithoutUserNestedInputSchema).optional(),
   products: z.lazy(() => ProductUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const UserUncheckedUpdateWithoutReviewsInputSchema: z.ZodType<Prisma.UserUncheckedUpdateWithoutReviewsInput> = z.strictObject({
@@ -6757,6 +8286,7 @@ export const UserUncheckedUpdateWithoutReviewsInputSchema: z.ZodType<Prisma.User
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   products: z.lazy(() => ProductUncheckedUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const ProductUpsertWithoutReviewsInputSchema: z.ZodType<Prisma.ProductUpsertWithoutReviewsInput> = z.strictObject({
@@ -6815,6 +8345,10 @@ export const OrderDetailUpdateWithoutReviewInputSchema: z.ZodType<Prisma.OrderDe
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   order: z.lazy(() => OrderUpdateOneRequiredWithoutDetailsNestedInputSchema).optional(),
   productVariant: z.lazy(() => ProductVariantUpdateOneRequiredWithoutOrderDetailsNestedInputSchema).optional(),
 });
@@ -6825,6 +8359,10 @@ export const OrderDetailUncheckedUpdateWithoutReviewInputSchema: z.ZodType<Prism
   productVariantId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const UserCreateWithoutCartInputSchema: z.ZodType<Prisma.UserCreateWithoutCartInput> = z.strictObject({
@@ -6844,6 +8382,7 @@ export const UserCreateWithoutCartInputSchema: z.ZodType<Prisma.UserCreateWithou
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderCreateNestedManyWithoutUserInputSchema).optional(),
   products: z.lazy(() => ProductCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserUncheckedCreateWithoutCartInputSchema: z.ZodType<Prisma.UserUncheckedCreateWithoutCartInput> = z.strictObject({
@@ -6863,6 +8402,7 @@ export const UserUncheckedCreateWithoutCartInputSchema: z.ZodType<Prisma.UserUnc
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   products: z.lazy(() => ProductUncheckedCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserCreateOrConnectWithoutCartInputSchema: z.ZodType<Prisma.UserCreateOrConnectWithoutCartInput> = z.strictObject({
@@ -6873,6 +8413,8 @@ export const UserCreateOrConnectWithoutCartInputSchema: z.ZodType<Prisma.UserCre
 export const CartItemCreateWithoutCartInputSchema: z.ZodType<Prisma.CartItemCreateWithoutCartInput> = z.strictObject({
   id: z.uuid().optional(),
   quantity: z.number().int().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
   productVariant: z.lazy(() => ProductVariantCreateNestedOneWithoutCartItemsInputSchema),
 });
 
@@ -6880,6 +8422,8 @@ export const CartItemUncheckedCreateWithoutCartInputSchema: z.ZodType<Prisma.Car
   id: z.uuid().optional(),
   productVariantId: z.string(),
   quantity: z.number().int().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export const CartItemCreateOrConnectWithoutCartInputSchema: z.ZodType<Prisma.CartItemCreateOrConnectWithoutCartInput> = z.strictObject({
@@ -6920,6 +8464,7 @@ export const UserUpdateWithoutCartInputSchema: z.ZodType<Prisma.UserUpdateWithou
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUpdateManyWithoutUserNestedInputSchema).optional(),
   products: z.lazy(() => ProductUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const UserUncheckedUpdateWithoutCartInputSchema: z.ZodType<Prisma.UserUncheckedUpdateWithoutCartInput> = z.strictObject({
@@ -6939,6 +8484,7 @@ export const UserUncheckedUpdateWithoutCartInputSchema: z.ZodType<Prisma.UserUnc
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   products: z.lazy(() => ProductUncheckedUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const CartItemUpsertWithWhereUniqueWithoutCartInputSchema: z.ZodType<Prisma.CartItemUpsertWithWhereUniqueWithoutCartInput> = z.strictObject({
@@ -7086,6 +8632,7 @@ export const UserCreateWithoutOrdersInputSchema: z.ZodType<Prisma.UserCreateWith
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
   products: z.lazy(() => ProductCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserUncheckedCreateWithoutOrdersInputSchema: z.ZodType<Prisma.UserUncheckedCreateWithoutOrdersInput> = z.strictObject({
@@ -7105,6 +8652,7 @@ export const UserUncheckedCreateWithoutOrdersInputSchema: z.ZodType<Prisma.UserU
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
   products: z.lazy(() => ProductUncheckedCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutActorInputSchema).optional(),
 });
 
 export const UserCreateOrConnectWithoutOrdersInputSchema: z.ZodType<Prisma.UserCreateOrConnectWithoutOrdersInput> = z.strictObject({
@@ -7116,6 +8664,10 @@ export const OrderDetailCreateWithoutOrderInputSchema: z.ZodType<Prisma.OrderDet
   id: z.uuid().optional(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   productVariant: z.lazy(() => ProductVariantCreateNestedOneWithoutOrderDetailsInputSchema),
   review: z.lazy(() => ReviewCreateNestedOneWithoutOrderDetailInputSchema).optional(),
 });
@@ -7125,6 +8677,10 @@ export const OrderDetailUncheckedCreateWithoutOrderInputSchema: z.ZodType<Prisma
   productVariantId: z.string(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   review: z.lazy(() => ReviewUncheckedCreateNestedOneWithoutOrderDetailInputSchema).optional(),
 });
 
@@ -7141,11 +8697,29 @@ export const OrderDetailCreateManyOrderInputEnvelopeSchema: z.ZodType<Prisma.Ord
 export const PaymentCreateWithoutOrderInputSchema: z.ZodType<Prisma.PaymentCreateWithoutOrderInput> = z.strictObject({
   id: z.uuid().optional(),
   method: z.lazy(() => PaymentMethodSchema),
+  amount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  status: z.lazy(() => PaymentStatusSchema).optional(),
+  transactionCode: z.string().optional().nullable(),
+  gateway: z.string().optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.coerce.date().optional().nullable(),
+  failedAt: z.coerce.date().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export const PaymentUncheckedCreateWithoutOrderInputSchema: z.ZodType<Prisma.PaymentUncheckedCreateWithoutOrderInput> = z.strictObject({
   id: z.uuid().optional(),
   method: z.lazy(() => PaymentMethodSchema),
+  amount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  status: z.lazy(() => PaymentStatusSchema).optional(),
+  transactionCode: z.string().optional().nullable(),
+  gateway: z.string().optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.coerce.date().optional().nullable(),
+  failedAt: z.coerce.date().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export const PaymentCreateOrConnectWithoutOrderInputSchema: z.ZodType<Prisma.PaymentCreateOrConnectWithoutOrderInput> = z.strictObject({
@@ -7155,7 +8729,11 @@ export const PaymentCreateOrConnectWithoutOrderInputSchema: z.ZodType<Prisma.Pay
 
 export const VoucherDetailCreateWithoutOrderInputSchema: z.ZodType<Prisma.VoucherDetailCreateWithoutOrderInput> = z.strictObject({
   id: z.uuid().optional(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
   voucher: z.lazy(() => VoucherCreateNestedOneWithoutDetailsInputSchema),
   product: z.lazy(() => ProductCreateNestedOneWithoutVoucherDetailsInputSchema).optional(),
 });
@@ -7164,7 +8742,11 @@ export const VoucherDetailUncheckedCreateWithoutOrderInputSchema: z.ZodType<Pris
   id: z.uuid().optional(),
   voucherId: z.string(),
   productId: z.string().optional().nullable(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
 });
 
 export const VoucherDetailCreateOrConnectWithoutOrderInputSchema: z.ZodType<Prisma.VoucherDetailCreateOrConnectWithoutOrderInput> = z.strictObject({
@@ -7174,6 +8756,34 @@ export const VoucherDetailCreateOrConnectWithoutOrderInputSchema: z.ZodType<Pris
 
 export const VoucherDetailCreateManyOrderInputEnvelopeSchema: z.ZodType<Prisma.VoucherDetailCreateManyOrderInputEnvelope> = z.strictObject({
   data: z.union([ z.lazy(() => VoucherDetailCreateManyOrderInputSchema), z.lazy(() => VoucherDetailCreateManyOrderInputSchema).array() ]),
+  skipDuplicates: z.boolean().optional(),
+});
+
+export const OrderStatusHistoryCreateWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryCreateWithoutOrderInput> = z.strictObject({
+  id: z.uuid().optional(),
+  fromStatus: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  toStatus: z.lazy(() => OrderStatusSchema),
+  note: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  actor: z.lazy(() => UserCreateNestedOneWithoutOrderStatusHistoriesInputSchema).optional(),
+});
+
+export const OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedCreateWithoutOrderInput> = z.strictObject({
+  id: z.uuid().optional(),
+  actorId: z.string().optional().nullable(),
+  fromStatus: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  toStatus: z.lazy(() => OrderStatusSchema),
+  note: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+});
+
+export const OrderStatusHistoryCreateOrConnectWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryCreateOrConnectWithoutOrderInput> = z.strictObject({
+  where: z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema) ]),
+});
+
+export const OrderStatusHistoryCreateManyOrderInputEnvelopeSchema: z.ZodType<Prisma.OrderStatusHistoryCreateManyOrderInputEnvelope> = z.strictObject({
+  data: z.union([ z.lazy(() => OrderStatusHistoryCreateManyOrderInputSchema), z.lazy(() => OrderStatusHistoryCreateManyOrderInputSchema).array() ]),
   skipDuplicates: z.boolean().optional(),
 });
 
@@ -7205,6 +8815,7 @@ export const UserUpdateWithoutOrdersInputSchema: z.ZodType<Prisma.UserUpdateWith
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
   products: z.lazy(() => ProductUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const UserUncheckedUpdateWithoutOrdersInputSchema: z.ZodType<Prisma.UserUncheckedUpdateWithoutOrdersInput> = z.strictObject({
@@ -7224,6 +8835,7 @@ export const UserUncheckedUpdateWithoutOrdersInputSchema: z.ZodType<Prisma.UserU
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
   products: z.lazy(() => ProductUncheckedUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const OrderDetailUpsertWithWhereUniqueWithoutOrderInputSchema: z.ZodType<Prisma.OrderDetailUpsertWithWhereUniqueWithoutOrderInput> = z.strictObject({
@@ -7256,11 +8868,29 @@ export const PaymentUpdateToOneWithWhereWithoutOrderInputSchema: z.ZodType<Prism
 export const PaymentUpdateWithoutOrderInputSchema: z.ZodType<Prisma.PaymentUpdateWithoutOrderInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   method: z.union([ z.lazy(() => PaymentMethodSchema), z.lazy(() => EnumPaymentMethodFieldUpdateOperationsInputSchema) ]).optional(),
+  amount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => PaymentStatusSchema), z.lazy(() => EnumPaymentStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  transactionCode: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gateway: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  failedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const PaymentUncheckedUpdateWithoutOrderInputSchema: z.ZodType<Prisma.PaymentUncheckedUpdateWithoutOrderInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   method: z.union([ z.lazy(() => PaymentMethodSchema), z.lazy(() => EnumPaymentMethodFieldUpdateOperationsInputSchema) ]).optional(),
+  amount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => PaymentStatusSchema), z.lazy(() => EnumPaymentStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  transactionCode: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gateway: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gatewayResponse: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  paidAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  failedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const VoucherDetailUpsertWithWhereUniqueWithoutOrderInputSchema: z.ZodType<Prisma.VoucherDetailUpsertWithWhereUniqueWithoutOrderInput> = z.strictObject({
@@ -7279,26 +8909,62 @@ export const VoucherDetailUpdateManyWithWhereWithoutOrderInputSchema: z.ZodType<
   data: z.union([ z.lazy(() => VoucherDetailUpdateManyMutationInputSchema), z.lazy(() => VoucherDetailUncheckedUpdateManyWithoutOrderInputSchema) ]),
 });
 
+export const OrderStatusHistoryUpsertWithWhereUniqueWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpsertWithWhereUniqueWithoutOrderInput> = z.strictObject({
+  where: z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema),
+  update: z.union([ z.lazy(() => OrderStatusHistoryUpdateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUncheckedUpdateWithoutOrderInputSchema) ]),
+  create: z.union([ z.lazy(() => OrderStatusHistoryCreateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUncheckedCreateWithoutOrderInputSchema) ]),
+});
+
+export const OrderStatusHistoryUpdateWithWhereUniqueWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateWithWhereUniqueWithoutOrderInput> = z.strictObject({
+  where: z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema),
+  data: z.union([ z.lazy(() => OrderStatusHistoryUpdateWithoutOrderInputSchema), z.lazy(() => OrderStatusHistoryUncheckedUpdateWithoutOrderInputSchema) ]),
+});
+
+export const OrderStatusHistoryUpdateManyWithWhereWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateManyWithWhereWithoutOrderInput> = z.strictObject({
+  where: z.lazy(() => OrderStatusHistoryScalarWhereInputSchema),
+  data: z.union([ z.lazy(() => OrderStatusHistoryUpdateManyMutationInputSchema), z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutOrderInputSchema) ]),
+});
+
 export const OrderCreateWithoutDetailsInputSchema: z.ZodType<Prisma.OrderCreateWithoutDetailsInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutOrdersInputSchema),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
 });
 
 export const OrderUncheckedCreateWithoutDetailsInputSchema: z.ZodType<Prisma.OrderUncheckedCreateWithoutDetailsInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
   userId: z.string(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
   payment: z.lazy(() => PaymentUncheckedCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
 });
 
 export const OrderCreateOrConnectWithoutDetailsInputSchema: z.ZodType<Prisma.OrderCreateOrConnectWithoutDetailsInput> = z.strictObject({
@@ -7341,6 +9007,7 @@ export const ReviewCreateWithoutOrderDetailInputSchema: z.ZodType<Prisma.ReviewC
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutReviewsInputSchema),
   product: z.lazy(() => ProductCreateNestedOneWithoutReviewsInputSchema),
 });
@@ -7353,6 +9020,7 @@ export const ReviewUncheckedCreateWithoutOrderDetailInputSchema: z.ZodType<Prism
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ReviewCreateOrConnectWithoutOrderDetailInputSchema: z.ZodType<Prisma.ReviewCreateOrConnectWithoutOrderDetailInput> = z.strictObject({
@@ -7373,24 +9041,44 @@ export const OrderUpdateToOneWithWhereWithoutDetailsInputSchema: z.ZodType<Prism
 
 export const OrderUpdateWithoutDetailsInputSchema: z.ZodType<Prisma.OrderUpdateWithoutDetailsInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
 });
 
 export const OrderUncheckedUpdateWithoutDetailsInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateWithoutDetailsInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   payment: z.lazy(() => PaymentUncheckedUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
 });
 
 export const ProductVariantUpsertWithoutOrderDetailsInputSchema: z.ZodType<Prisma.ProductVariantUpsertWithoutOrderDetailsInput> = z.strictObject({
@@ -7445,6 +9133,7 @@ export const ReviewUpdateWithoutOrderDetailInputSchema: z.ZodType<Prisma.ReviewU
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneRequiredWithoutReviewsNestedInputSchema).optional(),
   product: z.lazy(() => ProductUpdateOneRequiredWithoutReviewsNestedInputSchema).optional(),
 });
@@ -7457,28 +9146,49 @@ export const ReviewUncheckedUpdateWithoutOrderDetailInputSchema: z.ZodType<Prism
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const OrderCreateWithoutPaymentInputSchema: z.ZodType<Prisma.OrderCreateWithoutPaymentInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
   user: z.lazy(() => UserCreateNestedOneWithoutOrdersInputSchema),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
 });
 
 export const OrderUncheckedCreateWithoutPaymentInputSchema: z.ZodType<Prisma.OrderUncheckedCreateWithoutPaymentInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
   userId: z.string(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
   details: z.lazy(() => OrderDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
 });
 
 export const OrderCreateOrConnectWithoutPaymentInputSchema: z.ZodType<Prisma.OrderCreateOrConnectWithoutPaymentInput> = z.strictObject({
@@ -7499,41 +9209,260 @@ export const OrderUpdateToOneWithWhereWithoutPaymentInputSchema: z.ZodType<Prism
 
 export const OrderUpdateWithoutPaymentInputSchema: z.ZodType<Prisma.OrderUpdateWithoutPaymentInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
 });
 
 export const OrderUncheckedUpdateWithoutPaymentInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateWithoutPaymentInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   details: z.lazy(() => OrderDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+});
+
+export const OrderCreateWithoutStatusHistoryInputSchema: z.ZodType<Prisma.OrderCreateWithoutStatusHistoryInput> = z.strictObject({
+  id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  status: z.lazy(() => OrderStatusSchema).optional(),
+  notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
+  user: z.lazy(() => UserCreateNestedOneWithoutOrdersInputSchema),
+  details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
+  payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
+  voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
+});
+
+export const OrderUncheckedCreateWithoutStatusHistoryInputSchema: z.ZodType<Prisma.OrderUncheckedCreateWithoutStatusHistoryInput> = z.strictObject({
+  id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  userId: z.string(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  status: z.lazy(() => OrderStatusSchema).optional(),
+  notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
+  details: z.lazy(() => OrderDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+  payment: z.lazy(() => PaymentUncheckedCreateNestedOneWithoutOrderInputSchema).optional(),
+  voucherDetails: z.lazy(() => VoucherDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+});
+
+export const OrderCreateOrConnectWithoutStatusHistoryInputSchema: z.ZodType<Prisma.OrderCreateOrConnectWithoutStatusHistoryInput> = z.strictObject({
+  where: z.lazy(() => OrderWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => OrderCreateWithoutStatusHistoryInputSchema), z.lazy(() => OrderUncheckedCreateWithoutStatusHistoryInputSchema) ]),
+});
+
+export const UserCreateWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.UserCreateWithoutOrderStatusHistoriesInput> = z.strictObject({
+  id: z.uuid().optional(),
+  fullName: z.string(),
+  email: z.string(),
+  password: z.string(),
+  address: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  role: z.lazy(() => UserRoleSchema).optional(),
+  status: z.lazy(() => UserStatusSchema).optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+  createdBy: z.string().optional().nullable(),
+  vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
+  reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
+  cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
+  orders: z.lazy(() => OrderCreateNestedManyWithoutUserInputSchema).optional(),
+  products: z.lazy(() => ProductCreateNestedManyWithoutVendorInputSchema).optional(),
+});
+
+export const UserUncheckedCreateWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.UserUncheckedCreateWithoutOrderStatusHistoriesInput> = z.strictObject({
+  id: z.uuid().optional(),
+  fullName: z.string(),
+  email: z.string(),
+  password: z.string(),
+  address: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  role: z.lazy(() => UserRoleSchema).optional(),
+  status: z.lazy(() => UserStatusSchema).optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+  createdBy: z.string().optional().nullable(),
+  vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
+  orders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  products: z.lazy(() => ProductUncheckedCreateNestedManyWithoutVendorInputSchema).optional(),
+});
+
+export const UserCreateOrConnectWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.UserCreateOrConnectWithoutOrderStatusHistoriesInput> = z.strictObject({
+  where: z.lazy(() => UserWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => UserCreateWithoutOrderStatusHistoriesInputSchema), z.lazy(() => UserUncheckedCreateWithoutOrderStatusHistoriesInputSchema) ]),
+});
+
+export const OrderUpsertWithoutStatusHistoryInputSchema: z.ZodType<Prisma.OrderUpsertWithoutStatusHistoryInput> = z.strictObject({
+  update: z.union([ z.lazy(() => OrderUpdateWithoutStatusHistoryInputSchema), z.lazy(() => OrderUncheckedUpdateWithoutStatusHistoryInputSchema) ]),
+  create: z.union([ z.lazy(() => OrderCreateWithoutStatusHistoryInputSchema), z.lazy(() => OrderUncheckedCreateWithoutStatusHistoryInputSchema) ]),
+  where: z.lazy(() => OrderWhereInputSchema).optional(),
+});
+
+export const OrderUpdateToOneWithWhereWithoutStatusHistoryInputSchema: z.ZodType<Prisma.OrderUpdateToOneWithWhereWithoutStatusHistoryInput> = z.strictObject({
+  where: z.lazy(() => OrderWhereInputSchema).optional(),
+  data: z.union([ z.lazy(() => OrderUpdateWithoutStatusHistoryInputSchema), z.lazy(() => OrderUncheckedUpdateWithoutStatusHistoryInputSchema) ]),
+});
+
+export const OrderUpdateWithoutStatusHistoryInputSchema: z.ZodType<Prisma.OrderUpdateWithoutStatusHistoryInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  user: z.lazy(() => UserUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
+  payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
+  voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
+});
+
+export const OrderUncheckedUpdateWithoutStatusHistoryInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateWithoutStatusHistoryInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  details: z.lazy(() => OrderDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+  payment: z.lazy(() => PaymentUncheckedUpdateOneWithoutOrderNestedInputSchema).optional(),
+  voucherDetails: z.lazy(() => VoucherDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+});
+
+export const UserUpsertWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.UserUpsertWithoutOrderStatusHistoriesInput> = z.strictObject({
+  update: z.union([ z.lazy(() => UserUpdateWithoutOrderStatusHistoriesInputSchema), z.lazy(() => UserUncheckedUpdateWithoutOrderStatusHistoriesInputSchema) ]),
+  create: z.union([ z.lazy(() => UserCreateWithoutOrderStatusHistoriesInputSchema), z.lazy(() => UserUncheckedCreateWithoutOrderStatusHistoriesInputSchema) ]),
+  where: z.lazy(() => UserWhereInputSchema).optional(),
+});
+
+export const UserUpdateToOneWithWhereWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.UserUpdateToOneWithWhereWithoutOrderStatusHistoriesInput> = z.strictObject({
+  where: z.lazy(() => UserWhereInputSchema).optional(),
+  data: z.union([ z.lazy(() => UserUpdateWithoutOrderStatusHistoriesInputSchema), z.lazy(() => UserUncheckedUpdateWithoutOrderStatusHistoriesInputSchema) ]),
+});
+
+export const UserUpdateWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.UserUpdateWithoutOrderStatusHistoriesInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fullName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  password: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  address: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  role: z.union([ z.lazy(() => UserRoleSchema), z.lazy(() => EnumUserRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => UserStatusSchema), z.lazy(() => EnumUserStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdBy: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
+  reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
+  cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
+  orders: z.lazy(() => OrderUpdateManyWithoutUserNestedInputSchema).optional(),
+  products: z.lazy(() => ProductUpdateManyWithoutVendorNestedInputSchema).optional(),
+});
+
+export const UserUncheckedUpdateWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.UserUncheckedUpdateWithoutOrderStatusHistoriesInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fullName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  password: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  address: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  role: z.union([ z.lazy(() => UserRoleSchema), z.lazy(() => EnumUserRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => UserStatusSchema), z.lazy(() => EnumUserStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdBy: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
+  orders: z.lazy(() => OrderUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  products: z.lazy(() => ProductUncheckedUpdateManyWithoutVendorNestedInputSchema).optional(),
 });
 
 export const VoucherCreateManyUserInputSchema: z.ZodType<Prisma.VoucherCreateManyUserInput> = z.strictObject({
   id: z.uuid().optional(),
   code: z.string(),
   name: z.string(),
+  scope: z.lazy(() => VoucherScopeSchema),
   discountType: z.lazy(() => DiscountTypeSchema),
   discountValue: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   minOrderAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   maxDiscountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
   quantity: z.number().int(),
   usedQuantity: z.number().int().optional(),
+  perUserLimit: z.number().int().optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
   status: z.lazy(() => VoucherStatusSchema).optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ReviewCreateManyUserInputSchema: z.ZodType<Prisma.ReviewCreateManyUserInput> = z.strictObject({
@@ -7544,14 +9473,24 @@ export const ReviewCreateManyUserInputSchema: z.ZodType<Prisma.ReviewCreateManyU
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const OrderCreateManyUserInputSchema: z.ZodType<Prisma.OrderCreateManyUserInput> = z.strictObject({
   id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
   totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
   status: z.lazy(() => OrderStatusSchema).optional(),
   notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
 });
 
 export const ProductCreateManyVendorInputSchema: z.ZodType<Prisma.ProductCreateManyVendorInput> = z.strictObject({
@@ -7566,21 +9505,33 @@ export const ProductCreateManyVendorInputSchema: z.ZodType<Prisma.ProductCreateM
   deletedAt: z.coerce.date().optional().nullable(),
 });
 
+export const OrderStatusHistoryCreateManyActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryCreateManyActorInput> = z.strictObject({
+  id: z.uuid().optional(),
+  orderId: z.string(),
+  fromStatus: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  toStatus: z.lazy(() => OrderStatusSchema),
+  note: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+});
+
 export const VoucherUpdateWithoutUserInputSchema: z.ZodType<Prisma.VoucherUpdateWithoutUserInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   code: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  scope: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => EnumVoucherScopeFieldUpdateOperationsInputSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => DiscountTypeSchema), z.lazy(() => EnumDiscountTypeFieldUpdateOperationsInputSchema) ]).optional(),
   discountValue: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   minOrderAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   usedQuantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  perUserLimit: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => VoucherStatusSchema), z.lazy(() => EnumVoucherStatusFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   details: z.lazy(() => VoucherDetailUpdateManyWithoutVoucherNestedInputSchema).optional(),
 });
 
@@ -7588,17 +9539,20 @@ export const VoucherUncheckedUpdateWithoutUserInputSchema: z.ZodType<Prisma.Vouc
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   code: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  scope: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => EnumVoucherScopeFieldUpdateOperationsInputSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => DiscountTypeSchema), z.lazy(() => EnumDiscountTypeFieldUpdateOperationsInputSchema) ]).optional(),
   discountValue: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   minOrderAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   usedQuantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  perUserLimit: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => VoucherStatusSchema), z.lazy(() => EnumVoucherStatusFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   details: z.lazy(() => VoucherDetailUncheckedUpdateManyWithoutVoucherNestedInputSchema).optional(),
 });
 
@@ -7606,17 +9560,20 @@ export const VoucherUncheckedUpdateManyWithoutUserInputSchema: z.ZodType<Prisma.
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   code: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   name: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  scope: z.union([ z.lazy(() => VoucherScopeSchema), z.lazy(() => EnumVoucherScopeFieldUpdateOperationsInputSchema) ]).optional(),
   discountType: z.union([ z.lazy(() => DiscountTypeSchema), z.lazy(() => EnumDiscountTypeFieldUpdateOperationsInputSchema) ]).optional(),
   discountValue: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   minOrderAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   maxDiscountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   usedQuantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  perUserLimit: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   startDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   endDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => VoucherStatusSchema), z.lazy(() => EnumVoucherStatusFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ReviewUpdateWithoutUserInputSchema: z.ZodType<Prisma.ReviewUpdateWithoutUserInput> = z.strictObject({
@@ -7625,6 +9582,7 @@ export const ReviewUpdateWithoutUserInputSchema: z.ZodType<Prisma.ReviewUpdateWi
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   product: z.lazy(() => ProductUpdateOneRequiredWithoutReviewsNestedInputSchema).optional(),
   orderDetail: z.lazy(() => OrderDetailUpdateOneRequiredWithoutReviewNestedInputSchema).optional(),
 });
@@ -7637,6 +9595,7 @@ export const ReviewUncheckedUpdateWithoutUserInputSchema: z.ZodType<Prisma.Revie
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ReviewUncheckedUpdateManyWithoutUserInputSchema: z.ZodType<Prisma.ReviewUncheckedUpdateManyWithoutUserInput> = z.strictObject({
@@ -7647,36 +9606,66 @@ export const ReviewUncheckedUpdateManyWithoutUserInputSchema: z.ZodType<Prisma.R
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const OrderUpdateWithoutUserInputSchema: z.ZodType<Prisma.OrderUpdateWithoutUserInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
 });
 
 export const OrderUncheckedUpdateWithoutUserInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateWithoutUserInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   details: z.lazy(() => OrderDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUncheckedUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
 });
 
 export const OrderUncheckedUpdateManyWithoutUserInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateManyWithoutUserInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
   status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
   notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ProductUpdateWithoutVendorInputSchema: z.ZodType<Prisma.ProductUpdateWithoutVendorInput> = z.strictObject({
@@ -7721,16 +9710,51 @@ export const ProductUncheckedUpdateManyWithoutVendorInputSchema: z.ZodType<Prism
   deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
+export const OrderStatusHistoryUpdateWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateWithoutActorInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fromStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NullableEnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  note: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  order: z.lazy(() => OrderUpdateOneRequiredWithoutStatusHistoryNestedInputSchema).optional(),
+});
+
+export const OrderStatusHistoryUncheckedUpdateWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedUpdateWithoutActorInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fromStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NullableEnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  note: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+});
+
+export const OrderStatusHistoryUncheckedUpdateManyWithoutActorInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedUpdateManyWithoutActorInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fromStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NullableEnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  note: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+});
+
 export const VoucherDetailCreateManyVoucherInputSchema: z.ZodType<Prisma.VoucherDetailCreateManyVoucherInput> = z.strictObject({
   id: z.uuid().optional(),
   productId: z.string().optional().nullable(),
   orderId: z.string().optional().nullable(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
 });
 
 export const VoucherDetailUpdateWithoutVoucherInputSchema: z.ZodType<Prisma.VoucherDetailUpdateWithoutVoucherInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   product: z.lazy(() => ProductUpdateOneWithoutVoucherDetailsNestedInputSchema).optional(),
   order: z.lazy(() => OrderUpdateOneWithoutVoucherDetailsNestedInputSchema).optional(),
 });
@@ -7739,14 +9763,22 @@ export const VoucherDetailUncheckedUpdateWithoutVoucherInputSchema: z.ZodType<Pr
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   orderId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const VoucherDetailUncheckedUpdateManyWithoutVoucherInputSchema: z.ZodType<Prisma.VoucherDetailUncheckedUpdateManyWithoutVoucherInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   orderId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ProductCreateManyCategoryInputSchema: z.ZodType<Prisma.ProductCreateManyCategoryInput> = z.strictObject({
@@ -7820,13 +9852,18 @@ export const ReviewCreateManyProductInputSchema: z.ZodType<Prisma.ReviewCreateMa
   rating: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const VoucherDetailCreateManyProductInputSchema: z.ZodType<Prisma.VoucherDetailCreateManyProductInput> = z.strictObject({
   id: z.uuid().optional(),
   voucherId: z.string(),
   orderId: z.string().optional().nullable(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
   createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ProductColorUpdateWithoutProductInputSchema: z.ZodType<Prisma.ProductColorUpdateWithoutProductInput> = z.strictObject({
@@ -7864,6 +9901,7 @@ export const ReviewUpdateWithoutProductInputSchema: z.ZodType<Prisma.ReviewUpdat
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   user: z.lazy(() => UserUpdateOneRequiredWithoutReviewsNestedInputSchema).optional(),
   orderDetail: z.lazy(() => OrderDetailUpdateOneRequiredWithoutReviewNestedInputSchema).optional(),
 });
@@ -7876,6 +9914,7 @@ export const ReviewUncheckedUpdateWithoutProductInputSchema: z.ZodType<Prisma.Re
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ReviewUncheckedUpdateManyWithoutProductInputSchema: z.ZodType<Prisma.ReviewUncheckedUpdateManyWithoutProductInput> = z.strictObject({
@@ -7886,11 +9925,16 @@ export const ReviewUncheckedUpdateManyWithoutProductInputSchema: z.ZodType<Prism
   rating: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const VoucherDetailUpdateWithoutProductInputSchema: z.ZodType<Prisma.VoucherDetailUpdateWithoutProductInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   voucher: z.lazy(() => VoucherUpdateOneRequiredWithoutDetailsNestedInputSchema).optional(),
   order: z.lazy(() => OrderUpdateOneWithoutVoucherDetailsNestedInputSchema).optional(),
 });
@@ -7899,14 +9943,22 @@ export const VoucherDetailUncheckedUpdateWithoutProductInputSchema: z.ZodType<Pr
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   voucherId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   orderId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const VoucherDetailUncheckedUpdateManyWithoutProductInputSchema: z.ZodType<Prisma.VoucherDetailUncheckedUpdateManyWithoutProductInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   voucherId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   orderId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ProductVariantCreateManyProductColorInputSchema: z.ZodType<Prisma.ProductVariantCreateManyProductColorInput> = z.strictObject({
@@ -7957,6 +10009,8 @@ export const CartItemCreateManyProductVariantInputSchema: z.ZodType<Prisma.CartI
   id: z.uuid().optional(),
   cartId: z.string(),
   quantity: z.number().int().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export const OrderDetailCreateManyProductVariantInputSchema: z.ZodType<Prisma.OrderDetailCreateManyProductVariantInput> = z.strictObject({
@@ -7964,11 +10018,17 @@ export const OrderDetailCreateManyProductVariantInputSchema: z.ZodType<Prisma.Or
   orderId: z.string(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
 });
 
 export const CartItemUpdateWithoutProductVariantInputSchema: z.ZodType<Prisma.CartItemUpdateWithoutProductVariantInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cart: z.lazy(() => CartUpdateOneRequiredWithoutItemsNestedInputSchema).optional(),
 });
 
@@ -7976,18 +10036,26 @@ export const CartItemUncheckedUpdateWithoutProductVariantInputSchema: z.ZodType<
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   cartId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const CartItemUncheckedUpdateManyWithoutProductVariantInputSchema: z.ZodType<Prisma.CartItemUncheckedUpdateManyWithoutProductVariantInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   cartId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const OrderDetailUpdateWithoutProductVariantInputSchema: z.ZodType<Prisma.OrderDetailUpdateWithoutProductVariantInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   order: z.lazy(() => OrderUpdateOneRequiredWithoutDetailsNestedInputSchema).optional(),
   review: z.lazy(() => ReviewUpdateOneWithoutOrderDetailNestedInputSchema).optional(),
 });
@@ -7997,6 +10065,10 @@ export const OrderDetailUncheckedUpdateWithoutProductVariantInputSchema: z.ZodTy
   orderId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   review: z.lazy(() => ReviewUncheckedUpdateOneWithoutOrderDetailNestedInputSchema).optional(),
 });
 
@@ -8005,17 +10077,25 @@ export const OrderDetailUncheckedUpdateManyWithoutProductVariantInputSchema: z.Z
   orderId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const CartItemCreateManyCartInputSchema: z.ZodType<Prisma.CartItemCreateManyCartInput> = z.strictObject({
   id: z.uuid().optional(),
   productVariantId: z.string(),
   quantity: z.number().int().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
 });
 
 export const CartItemUpdateWithoutCartInputSchema: z.ZodType<Prisma.CartItemUpdateWithoutCartInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   productVariant: z.lazy(() => ProductVariantUpdateOneRequiredWithoutCartItemsNestedInputSchema).optional(),
 });
 
@@ -8023,12 +10103,16 @@ export const CartItemUncheckedUpdateWithoutCartInputSchema: z.ZodType<Prisma.Car
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productVariantId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const CartItemUncheckedUpdateManyWithoutCartInputSchema: z.ZodType<Prisma.CartItemUncheckedUpdateManyWithoutCartInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productVariantId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
 export const OrderDetailCreateManyOrderInputSchema: z.ZodType<Prisma.OrderDetailCreateManyOrderInput> = z.strictObject({
@@ -8036,12 +10120,29 @@ export const OrderDetailCreateManyOrderInputSchema: z.ZodType<Prisma.OrderDetail
   productVariantId: z.string(),
   quantity: z.number().int(),
   price: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  productName: z.string().optional().nullable(),
+  colorName: z.string().optional().nullable(),
+  sizeName: z.string().optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
 });
 
 export const VoucherDetailCreateManyOrderInputSchema: z.ZodType<Prisma.VoucherDetailCreateManyOrderInput> = z.strictObject({
   id: z.uuid().optional(),
   voucherId: z.string(),
   productId: z.string().optional().nullable(),
+  eligibleAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  sequence: z.number().int().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  reversedAt: z.coerce.date().optional().nullable(),
+});
+
+export const OrderStatusHistoryCreateManyOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryCreateManyOrderInput> = z.strictObject({
+  id: z.uuid().optional(),
+  actorId: z.string().optional().nullable(),
+  fromStatus: z.lazy(() => OrderStatusSchema).optional().nullable(),
+  toStatus: z.lazy(() => OrderStatusSchema),
+  note: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
 });
 
@@ -8049,6 +10150,10 @@ export const OrderDetailUpdateWithoutOrderInputSchema: z.ZodType<Prisma.OrderDet
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   productVariant: z.lazy(() => ProductVariantUpdateOneRequiredWithoutOrderDetailsNestedInputSchema).optional(),
   review: z.lazy(() => ReviewUpdateOneWithoutOrderDetailNestedInputSchema).optional(),
 });
@@ -8058,6 +10163,10 @@ export const OrderDetailUncheckedUpdateWithoutOrderInputSchema: z.ZodType<Prisma
   productVariantId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   review: z.lazy(() => ReviewUncheckedUpdateOneWithoutOrderDetailNestedInputSchema).optional(),
 });
 
@@ -8066,11 +10175,19 @@ export const OrderDetailUncheckedUpdateManyWithoutOrderInputSchema: z.ZodType<Pr
   productVariantId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   price: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  productName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  colorName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sizeName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  imageUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const VoucherDetailUpdateWithoutOrderInputSchema: z.ZodType<Prisma.VoucherDetailUpdateWithoutOrderInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   voucher: z.lazy(() => VoucherUpdateOneRequiredWithoutDetailsNestedInputSchema).optional(),
   product: z.lazy(() => ProductUpdateOneWithoutVoucherDetailsNestedInputSchema).optional(),
 });
@@ -8079,13 +10196,48 @@ export const VoucherDetailUncheckedUpdateWithoutOrderInputSchema: z.ZodType<Pris
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   voucherId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const VoucherDetailUncheckedUpdateManyWithoutOrderInputSchema: z.ZodType<Prisma.VoucherDetailUncheckedUpdateManyWithoutOrderInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   voucherId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  eligibleAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  sequence: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  reversedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+});
+
+export const OrderStatusHistoryUpdateWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateWithoutOrderInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fromStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NullableEnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  note: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  actor: z.lazy(() => UserUpdateOneWithoutOrderStatusHistoriesNestedInputSchema).optional(),
+});
+
+export const OrderStatusHistoryUncheckedUpdateWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedUpdateWithoutOrderInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  actorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  fromStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NullableEnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  note: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+});
+
+export const OrderStatusHistoryUncheckedUpdateManyWithoutOrderInputSchema: z.ZodType<Prisma.OrderStatusHistoryUncheckedUpdateManyWithoutOrderInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  actorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  fromStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NullableEnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  toStatus: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  note: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
@@ -8899,6 +11051,68 @@ export const PaymentFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.PaymentFindUni
   where: PaymentWhereUniqueInputSchema, 
 }).strict();
 
+export const OrderStatusHistoryFindFirstArgsSchema: z.ZodType<Prisma.OrderStatusHistoryFindFirstArgs> = z.object({
+  select: OrderStatusHistorySelectSchema.optional(),
+  include: OrderStatusHistoryIncludeSchema.optional(),
+  where: OrderStatusHistoryWhereInputSchema.optional(), 
+  orderBy: z.union([ OrderStatusHistoryOrderByWithRelationInputSchema.array(), OrderStatusHistoryOrderByWithRelationInputSchema ]).optional(),
+  cursor: OrderStatusHistoryWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ OrderStatusHistoryScalarFieldEnumSchema, OrderStatusHistoryScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const OrderStatusHistoryFindFirstOrThrowArgsSchema: z.ZodType<Prisma.OrderStatusHistoryFindFirstOrThrowArgs> = z.object({
+  select: OrderStatusHistorySelectSchema.optional(),
+  include: OrderStatusHistoryIncludeSchema.optional(),
+  where: OrderStatusHistoryWhereInputSchema.optional(), 
+  orderBy: z.union([ OrderStatusHistoryOrderByWithRelationInputSchema.array(), OrderStatusHistoryOrderByWithRelationInputSchema ]).optional(),
+  cursor: OrderStatusHistoryWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ OrderStatusHistoryScalarFieldEnumSchema, OrderStatusHistoryScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const OrderStatusHistoryFindManyArgsSchema: z.ZodType<Prisma.OrderStatusHistoryFindManyArgs> = z.object({
+  select: OrderStatusHistorySelectSchema.optional(),
+  include: OrderStatusHistoryIncludeSchema.optional(),
+  where: OrderStatusHistoryWhereInputSchema.optional(), 
+  orderBy: z.union([ OrderStatusHistoryOrderByWithRelationInputSchema.array(), OrderStatusHistoryOrderByWithRelationInputSchema ]).optional(),
+  cursor: OrderStatusHistoryWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ OrderStatusHistoryScalarFieldEnumSchema, OrderStatusHistoryScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const OrderStatusHistoryAggregateArgsSchema: z.ZodType<Prisma.OrderStatusHistoryAggregateArgs> = z.object({
+  where: OrderStatusHistoryWhereInputSchema.optional(), 
+  orderBy: z.union([ OrderStatusHistoryOrderByWithRelationInputSchema.array(), OrderStatusHistoryOrderByWithRelationInputSchema ]).optional(),
+  cursor: OrderStatusHistoryWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+}).strict();
+
+export const OrderStatusHistoryGroupByArgsSchema: z.ZodType<Prisma.OrderStatusHistoryGroupByArgs> = z.object({
+  where: OrderStatusHistoryWhereInputSchema.optional(), 
+  orderBy: z.union([ OrderStatusHistoryOrderByWithAggregationInputSchema.array(), OrderStatusHistoryOrderByWithAggregationInputSchema ]).optional(),
+  by: OrderStatusHistoryScalarFieldEnumSchema.array(), 
+  having: OrderStatusHistoryScalarWhereWithAggregatesInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+}).strict();
+
+export const OrderStatusHistoryFindUniqueArgsSchema: z.ZodType<Prisma.OrderStatusHistoryFindUniqueArgs> = z.object({
+  select: OrderStatusHistorySelectSchema.optional(),
+  include: OrderStatusHistoryIncludeSchema.optional(),
+  where: OrderStatusHistoryWhereUniqueInputSchema, 
+}).strict();
+
+export const OrderStatusHistoryFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.OrderStatusHistoryFindUniqueOrThrowArgs> = z.object({
+  select: OrderStatusHistorySelectSchema.optional(),
+  include: OrderStatusHistoryIncludeSchema.optional(),
+  where: OrderStatusHistoryWhereUniqueInputSchema, 
+}).strict();
+
 export const UserCreateArgsSchema: z.ZodType<Prisma.UserCreateArgs> = z.object({
   select: UserSelectSchema.optional(),
   include: UserIncludeSchema.optional(),
@@ -9598,5 +11812,59 @@ export const PaymentUpdateManyAndReturnArgsSchema: z.ZodType<Prisma.PaymentUpdat
 
 export const PaymentDeleteManyArgsSchema: z.ZodType<Prisma.PaymentDeleteManyArgs> = z.object({
   where: PaymentWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const OrderStatusHistoryCreateArgsSchema: z.ZodType<Prisma.OrderStatusHistoryCreateArgs> = z.object({
+  select: OrderStatusHistorySelectSchema.optional(),
+  include: OrderStatusHistoryIncludeSchema.optional(),
+  data: z.union([ OrderStatusHistoryCreateInputSchema, OrderStatusHistoryUncheckedCreateInputSchema ]),
+}).strict();
+
+export const OrderStatusHistoryUpsertArgsSchema: z.ZodType<Prisma.OrderStatusHistoryUpsertArgs> = z.object({
+  select: OrderStatusHistorySelectSchema.optional(),
+  include: OrderStatusHistoryIncludeSchema.optional(),
+  where: OrderStatusHistoryWhereUniqueInputSchema, 
+  create: z.union([ OrderStatusHistoryCreateInputSchema, OrderStatusHistoryUncheckedCreateInputSchema ]),
+  update: z.union([ OrderStatusHistoryUpdateInputSchema, OrderStatusHistoryUncheckedUpdateInputSchema ]),
+}).strict();
+
+export const OrderStatusHistoryCreateManyArgsSchema: z.ZodType<Prisma.OrderStatusHistoryCreateManyArgs> = z.object({
+  data: z.union([ OrderStatusHistoryCreateManyInputSchema, OrderStatusHistoryCreateManyInputSchema.array() ]),
+  skipDuplicates: z.boolean().optional(),
+}).strict();
+
+export const OrderStatusHistoryCreateManyAndReturnArgsSchema: z.ZodType<Prisma.OrderStatusHistoryCreateManyAndReturnArgs> = z.object({
+  data: z.union([ OrderStatusHistoryCreateManyInputSchema, OrderStatusHistoryCreateManyInputSchema.array() ]),
+  skipDuplicates: z.boolean().optional(),
+}).strict();
+
+export const OrderStatusHistoryDeleteArgsSchema: z.ZodType<Prisma.OrderStatusHistoryDeleteArgs> = z.object({
+  select: OrderStatusHistorySelectSchema.optional(),
+  include: OrderStatusHistoryIncludeSchema.optional(),
+  where: OrderStatusHistoryWhereUniqueInputSchema, 
+}).strict();
+
+export const OrderStatusHistoryUpdateArgsSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateArgs> = z.object({
+  select: OrderStatusHistorySelectSchema.optional(),
+  include: OrderStatusHistoryIncludeSchema.optional(),
+  data: z.union([ OrderStatusHistoryUpdateInputSchema, OrderStatusHistoryUncheckedUpdateInputSchema ]),
+  where: OrderStatusHistoryWhereUniqueInputSchema, 
+}).strict();
+
+export const OrderStatusHistoryUpdateManyArgsSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateManyArgs> = z.object({
+  data: z.union([ OrderStatusHistoryUpdateManyMutationInputSchema, OrderStatusHistoryUncheckedUpdateManyInputSchema ]),
+  where: OrderStatusHistoryWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const OrderStatusHistoryUpdateManyAndReturnArgsSchema: z.ZodType<Prisma.OrderStatusHistoryUpdateManyAndReturnArgs> = z.object({
+  data: z.union([ OrderStatusHistoryUpdateManyMutationInputSchema, OrderStatusHistoryUncheckedUpdateManyInputSchema ]),
+  where: OrderStatusHistoryWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const OrderStatusHistoryDeleteManyArgsSchema: z.ZodType<Prisma.OrderStatusHistoryDeleteManyArgs> = z.object({
+  where: OrderStatusHistoryWhereInputSchema.optional(), 
   limit: z.number().optional(),
 }).strict();

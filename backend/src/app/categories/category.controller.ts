@@ -13,13 +13,11 @@ import { UserRole } from '@prisma/client';
 
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 
-import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
-
 import { CategoryService } from './category.service';
 
 import { CreateCategoryDto } from './dto/create-category.dto';
 
-import type { GetCategoriesPaginationDto } from './dto/get-category.dto';
+import { GetCategoriesPaginationDto } from './dto/get-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { SkipAuth } from 'src/app/auth/auth.decorator';
 
@@ -34,10 +32,7 @@ export class CategoryController {
    */
   @Get()
   @SkipAuth()
-  getCategories(
-    @Query(ParseParamsPaginationPipe)
-    query: GetCategoriesPaginationDto,
-  ) {
+  getCategories(@Query() query: GetCategoriesPaginationDto) {
     return this.categoryService.getCategories(query);
   }
 

@@ -9,8 +9,11 @@ import { PaginationUtilService } from 'src/common/utils/paginaton-util/pagintion
 import { QueryUtilService } from 'src/common/utils/query-util/query-util.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { StringUtilService } from 'src/common/utils/string-util/string-util.service';
-import { GetProductsPaginationDto } from './dto/get-product.dto';
-import { Prisma } from '@prisma/client';
+import {
+  GetProductsPaginationDto,
+  GetVendorProductsPaginationDto,
+} from './dto/get-product.dto';
+import { Prisma, ProductStatus } from '@prisma/client';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 const productRelations = {
@@ -28,6 +31,10 @@ const productRelations = {
     },
   },
 } satisfies Prisma.ProductInclude;
+
+type ProductWithRelations = Prisma.ProductGetPayload<{
+  include: typeof productRelations;
+}>;
 
 @Injectable()
 export class ProductService extends PrismaBaseService<'product'> {
@@ -65,19 +72,40 @@ export class ProductService extends PrismaBaseService<'product'> {
     });
   }
   async getProducts(query: GetProductsPaginationDto) {
-    return this.findProducts(query);
+    return this.findProducts(query, {
+      status: ProductStatus.active,
+      category: { deletedAt: null },
+    });
   }
 
   async getProductsByCategory(
     categorySlug: string,
     query: GetProductsPaginationDto,
   ) {
-    return this.findProducts(query, categorySlug);
+    return this.findProducts(query, {
+      status: ProductStatus.active,
+      category: { slug: categorySlug, deletedAt: null },
+    });
+  }
+
+  async getVendorProducts(
+    { status, ...query }: GetVendorProductsPaginationDto,
+    vendorId: string,
+  ) {
+    return this.findProducts(query, {
+      vendorId,
+      ...(status ? { status } : {}),
+    });
   }
 
   async getProductById(id: string) {
     const product = await this.extended.findFirst({
-      where: { id, deletedAt: null },
+      where: {
+        id,
+        deletedAt: null,
+        status: ProductStatus.active,
+        category: { deletedAt: null },
+      },
       include: productRelations,
     });
 
@@ -85,12 +113,12 @@ export class ProductService extends PrismaBaseService<'product'> {
       throw new NotFoundException('Sản phẩm không tồn tại');
     }
 
-    return product;
+    return this.toCatalogProduct(product);
   }
 
   private async findProducts(
-    { page = 1, itemPerPage = 10, search, status }: GetProductsPaginationDto,
-    categorySlug?: string,
+    { page = 1, itemPerPage = 10, search }: GetProductsPaginationDto,
+    scope: Prisma.ProductWhereInput,
   ) {
     const searchCondition = this.queryUtil.createStringSearchCondition(search, [
       'name',
@@ -100,10 +128,7 @@ export class ProductService extends PrismaBaseService<'product'> {
 
     const where: Prisma.ProductWhereInput = {
       deletedAt: null,
-      ...(status ? { status } : {}),
-      ...(categorySlug
-        ? { category: { slug: categorySlug, deletedAt: null } }
-        : {}),
+      ...scope,
       ...searchCondition,
     };
 
@@ -127,7 +152,32 @@ export class ProductService extends PrismaBaseService<'product'> {
       include: productRelations,
     });
 
-    return paging.format(list);
+    return paging.format(list.map((product) => this.toCatalogProduct(product)));
+  }
+
+  private toCatalogProduct(product: ProductWithRelations) {
+    const variants = product.colors.flatMap((color) => color.variants);
+    let minPrice: Prisma.Decimal | null = null;
+    let maxPrice: Prisma.Decimal | null = null;
+
+    for (const variant of variants) {
+      if (minPrice === null || variant.price.lessThan(minPrice)) {
+        minPrice = variant.price;
+      }
+      if (maxPrice === null || variant.price.greaterThan(maxPrice)) {
+        maxPrice = variant.price;
+      }
+    }
+
+    return {
+      ...product,
+      thumbnail:
+        product.colors.find((color) => color.imageUrls.length > 0)
+          ?.imageUrls[0] ?? null,
+      minPrice: minPrice?.toString() ?? null,
+      maxPrice: maxPrice?.toString() ?? null,
+      totalStock: variants.reduce((total, variant) => total + variant.stock, 0),
+    };
   }
   async updateProduct(id: string, data: UpdateProductDto, vendorId: string) {
     await this.getOwnedProduct(id, vendorId);

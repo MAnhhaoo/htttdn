@@ -39,7 +39,10 @@ describe('Public catalog (HTTP integration)', () => {
   beforeAll(async () => {
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
-      .useValue({ extended: {} })
+      .useValue({
+        extended: {},
+        $queryRaw: jest.fn().mockResolvedValue([{ result: 1 }]),
+      })
       .overrideProvider(ProductService)
       .useValue(productService)
       .overrideProvider(CategoryService)
@@ -66,6 +69,19 @@ describe('Public catalog (HTTP integration)', () => {
     const response = await request(server()).get('/api/categories').expect(200);
 
     expect(response.body.list[0].slug).toBe('shoes');
+  });
+
+  it('rejects unsupported public catalog filters', async () => {
+    await request(server()).get('/api/products?status=inactive').expect(400);
+    await request(server()).get('/api/products?page=0').expect(400);
+    await request(server()).get('/api/categories?itemPerPage=101').expect(400);
+  });
+
+  it('exposes health and Swagger without authentication', async () => {
+    const health = await request(server()).get('/api/health').expect(200);
+
+    expect(health.body).toMatchObject({ status: 'ok', database: 'up' });
+    await request(server()).get('/docs').expect(200);
   });
 
   it('still protects catalog write operations', async () => {
