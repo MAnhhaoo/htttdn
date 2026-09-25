@@ -1,15 +1,28 @@
-import { IntersectionType, PartialType } from '@nestjs/mapped-types';
-import { Prisma } from '@prisma/client';
-import { Pagination } from '../../../common/utils/paginaton-util/pagination-util.interface';
-import { Product } from '../entities/product.entity';
+import { Prisma, ProductStatus } from '@prisma/client';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+import { PaginationQuerySchema } from '../../../common/utils/paginaton-util/pagination-util.interface';
 
-class GetProductsPaginationDto extends IntersectionType(
-  Pagination,
-  PartialType(Product),
+const GetProductsPaginationSchema = PaginationQuerySchema.strict();
+
+const GetVendorProductsPaginationSchema = PaginationQuerySchema.extend({
+  status: z.enum(ProductStatus).optional(),
+}).strict();
+
+class GetProductsPaginationDto extends createZodDto(
+  GetProductsPaginationSchema,
+) {}
+
+class GetVendorProductsPaginationDto extends createZodDto(
+  GetVendorProductsPaginationSchema,
 ) {}
 
 class ExportProductsDto {
   ids: NonNullable<Prisma.ProductWhereUniqueInput['id']>[];
 }
 
-export { GetProductsPaginationDto, ExportProductsDto };
+export {
+  GetProductsPaginationDto,
+  GetVendorProductsPaginationDto,
+  ExportProductsDto,
+};

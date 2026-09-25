@@ -10,7 +10,7 @@ export enum Actions {
 
 export const ROLE_ACTION: Record<UserRole, Actions[]> = {
   [UserRole.admin]: [Actions.MANAGE],
-  [UserRole.seller]: [
+  [UserRole.vendor]: [
     Actions.CREATE,
     Actions.READ,
     Actions.DELETE,

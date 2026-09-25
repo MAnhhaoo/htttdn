@@ -18,6 +18,13 @@ import { CategoryModule } from './categories/category.module';
 import { StringUtilModule } from 'src/common/utils/string-util/string-util.module';
 import { ProductsModule } from './products/products.module';
 import { ProductColorModule } from './product-colors/productColor.module';
+import { ProductVariantModule } from './product-variants/productVariant.module';
+import { VouchersModule } from './vouchers/vouchers.module';
+import { CartModule } from './cart/cart.module';
+import { RealtimeModule } from './realtime/realtime.module';
+import { OrdersModule } from './orders/orders.module';
+import { PaymentsModule } from './payments/payments.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -34,6 +41,13 @@ import { ProductColorModule } from './product-colors/productColor.module';
     StringUtilModule,
     ProductsModule,
     ProductColorModule,
+    ProductVariantModule,
+    VouchersModule,
+    CartModule,
+    RealtimeModule,
+    OrdersModule,
+    PaymentsModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [

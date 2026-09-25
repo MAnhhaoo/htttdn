@@ -101,7 +101,7 @@ export class PrismaService
           findMany: ({ args, query, model }) => {
             if (!this.JUNCTION_TABLES.includes(model)) {
               args.where = { ...args.where, deletedAt: null };
-              args.orderBy = [{ updatedAt: 'desc' }, { createdAt: 'desc' }];
+              args.orderBy ??= [{ updatedAt: 'desc' }, { createdAt: 'desc' }];
             }
             return query(args);
           },

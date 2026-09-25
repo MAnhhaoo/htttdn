@@ -29,6 +29,15 @@ export class AuthController {
   }
 
   /**
+   * Đăng ký tài khoản vendor.
+   */
+  @Post('sign-up/vendor')
+  @SkipAuth()
+  signUpVendor(@Body() signUpDto: SignUpDto) {
+    return this.authService.signUpVendor(signUpDto);
+  }
+
+  /**
    * Đăng nhập và lưu token vào cookie.
    */
   @Post('sign-in')

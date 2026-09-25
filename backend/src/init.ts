@@ -14,7 +14,7 @@ const initOpenAPI = (app: INestApplication) => {
       .build(),
   );
 
-  SwaggerModule.setup('api', app, cleanupOpenApiDoc(openApiDoc));
+  SwaggerModule.setup('docs', app, cleanupOpenApiDoc(openApiDoc));
 };
 
 const initApp = (app: INestApplication) => {

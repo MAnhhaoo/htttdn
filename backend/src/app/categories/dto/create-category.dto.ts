@@ -6,8 +6,6 @@ export class CreateCategoryDto implements Omit<
 > {
   name: string;
 
-  description?: string | null | undefined;
-
   createdAt?: string | Date | undefined;
 
   updatedAt?: string | Date | undefined;

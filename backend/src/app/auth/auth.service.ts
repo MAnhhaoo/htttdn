@@ -29,13 +29,19 @@ export class AuthService {
   ) {}
 
   async createToken(payload: TokenPayload) {
-    const accessToken = await this.jwtService.signAsync(payload, {
-      expiresIn: JWTToken.ACCESS_TOKEN_EXPIRE_IN,
-    });
+    const accessToken = await this.jwtService.signAsync(
+      { ...payload, tokenType: 'access' },
+      {
+        expiresIn: JWTToken.ACCESS_TOKEN_EXPIRE_IN,
+      },
+    );
 
-    const refreshToken = await this.jwtService.signAsync(payload, {
-      expiresIn: JWTToken.REFRESH_TOKEN_EXPIRE_IN,
-    });
+    const refreshToken = await this.jwtService.signAsync(
+      { ...payload, tokenType: 'refresh' },
+      {
+        expiresIn: JWTToken.REFRESH_TOKEN_EXPIRE_IN,
+      },
+    );
 
     return {
       [TokenKeys.ACCESS_TOKEN_KEY]: accessToken,
@@ -44,15 +50,32 @@ export class AuthService {
     };
   }
 
-  async verifyToken(token: string): Promise<TokenPayload> {
+  async verifyToken(
+    token: string,
+    tokenType: 'access' | 'refresh' = 'access',
+  ): Promise<TokenPayload> {
     try {
-      return await this.jwtService.verifyAsync<TokenPayload>(token);
+      const payload = await this.jwtService.verifyAsync<
+        TokenPayload & { tokenType: string }
+      >(token);
+      if (payload.tokenType !== tokenType || !payload.userID) {
+        throw new UnauthorizedException();
+      }
+      return payload;
     } catch {
       throw new UnauthorizedException('Token không hợp lệ hoặc đã hết hạn');
     }
   }
 
   async signUp(signUpDto: SignUpDto) {
+    return this.register(signUpDto, UserRole.customer);
+  }
+
+  async signUpVendor(signUpDto: SignUpDto) {
+    return this.register(signUpDto, UserRole.vendor);
+  }
+
+  private async register(signUpDto: SignUpDto, role: UserRole) {
     const { email, password, ...otherInformation } = signUpDto;
 
     const existingUser = await this.usersService.getUserByEmail(email);
@@ -67,7 +90,9 @@ export class AuthService {
       ...otherInformation,
       email,
       password: passwordHashed,
-      role: otherInformation.role || UserRole.customer,
+
+      role,
+
     });
 
     const { password: _password, ...userResponse } = userCreated;
@@ -80,7 +105,7 @@ export class AuthService {
 
     const user = await this.usersService.getUserByEmail(email);
 
-    if (!user) {
+    if (!user || user.status !== 'active' || user.deletedAt) {
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
 
@@ -110,14 +135,20 @@ export class AuthService {
     if (!refreshToken) {
       throw new UnauthorizedException('Không tìm thấy refresh token');
     }
-    const payload = await this.verifyToken(refreshToken);
+    const payload = await this.verifyToken(refreshToken, 'refresh');
+    const user = await this.usersService
+      .getUser({ id: payload.userID })
+      .catch(() => null);
+    if (!user || user.status !== 'active' || user.deletedAt) {
+      throw new UnauthorizedException('Tài khoản không còn hoạt động');
+    }
     const tokens = await this.createToken({
-      userID: payload.userID,
-      userEmail: payload.userEmail,
-      fullName: payload.fullName,
-      phone: payload.phone,
-      address: payload.address,
-      role: payload.role,
+      userID: user.id,
+      userEmail: user.email,
+      fullName: user.fullName,
+      phone: user.phone,
+      address: user.address,
+      role: user.role,
     });
     return {
       data: tokens,

@@ -25,7 +25,7 @@ import type { GetOptionsParams } from '../../common/query/options.interface';
 
 import { UsersService } from './users.service';
 
-import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateProfileDto, UpdateUserDto } from './dto/update-user.dto';
 
 import type { GetUsersPaginationDto } from './dto/get-user.dto';
 
@@ -87,12 +87,13 @@ export class UsersController {
    * đang đăng nhập.
    */
   @Patch('profile')
+  @Roles(UserRole.customer, UserRole.vendor, UserRole.admin)
   updateProfile(
     @CurrentUser()
     user: UserInfo,
 
     @Body()
-    updateUserDto: UpdateUserDto,
+    updateUserDto: UpdateProfileDto,
   ) {
     return this.usersService.updateUser({
       where: {

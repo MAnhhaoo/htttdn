@@ -45,18 +45,18 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
    *
    * Nếu màu đã bị xóa mềm thì khôi phục lại bản ghi cũ.
    */
-  async createProductColor(dto: CreateProductColorDto) {
-    const { productId, imageUrls = [], ...data } = dto;
+  async createProductColor(dto: CreateProductColorDto, vendorId: string) {
+    const { productId, color, imageUrls = [] } = dto;
 
     const uniqueImageUrls = this.removeDuplicateImageUrls(imageUrls);
 
     this.validateImageLimit(uniqueImageUrls);
 
     // Kiểm tra sản phẩm có tồn tại và chưa bị xóa.
-    const product = await this.prismaDb.product.findFirst({
+    const product = await this.prismaDb.extended.product.findFirst({
       where: {
         id: productId,
-        deletedAt: null,
+        vendorId,
       },
       select: {
         id: true,
@@ -91,7 +91,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
           id: existingColor.id,
         },
         data: {
-          ...data,
+          color,
           deletedAt: null,
 
           // Có ảnh mới thì thay ảnh cũ.
@@ -106,7 +106,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     // Màu chưa từng tồn tại thì tạo mới.
     return this.extended.create({
       data: {
-        ...data,
+        color,
         imageUrls: uniqueImageUrls,
 
         product: {
@@ -170,20 +170,15 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
    * Cập nhật tên màu hoặc thay toàn bộ danh sách ảnh.
    */
   async updateProductColor(params: {
-    where: Prisma.ProductColorWhereUniqueInput;
+    id: string;
     data: UpdateProductColorDto;
+    vendorId: string;
   }) {
-    const { where, data: updateDto } = params;
+    const { id, data: updateDto, vendorId } = params;
 
-    const currentColor = await this.extended.findUnique({
-      where,
-    });
+    const currentColor = await this.getOwnedActiveColor(id, vendorId);
 
-    if (!currentColor || currentColor.deletedAt) {
-      throw new NotFoundException('Màu sản phẩm không tồn tại');
-    }
-
-    const { color, imageUrls, ...remainingData } = updateDto;
+    const { color, imageUrls } = updateDto;
 
     // Nếu đổi tên màu thì kiểm tra trùng.
     if (color && color !== currentColor.color) {
@@ -217,10 +212,8 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     }
 
     return this.extended.update({
-      where,
+      where: { id, productId: currentColor.productId, deletedAt: null },
       data: {
-        ...remainingData,
-
         // Chỉ cập nhật tên màu nếu client gửi color.
         ...(color !== undefined && {
           color,
@@ -237,23 +230,14 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
   /**
    * Thêm ảnh mới và giữ nguyên ảnh cũ.
    */
-  async addImages(id: string, newImageUrls: string[]) {
+  async addImages(id: string, newImageUrls: string[], vendorId: string) {
     const cleanedNewImageUrls = this.removeDuplicateImageUrls(newImageUrls);
 
     if (!cleanedNewImageUrls.length) {
       throw new BadRequestException('Bạn chưa chọn ảnh');
     }
 
-    const productColor = await this.extended.findFirst({
-      where: {
-        id,
-        deletedAt: null,
-      },
-    });
-
-    if (!productColor) {
-      throw new NotFoundException('Màu sản phẩm không tồn tại');
-    }
+    const productColor = await this.getOwnedActiveColor(id, vendorId);
 
     // Kết hợp ảnh cũ với ảnh mới.
     const combinedImageUrls = [
@@ -267,9 +251,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     this.validateImageLimit(uniqueImageUrls);
 
     return this.extended.update({
-      where: {
-        id,
-      },
+      where: { id, productId: productColor.productId, deletedAt: null },
       data: {
         imageUrls: uniqueImageUrls,
       },
@@ -282,17 +264,11 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
    * Chỉ cập nhật deletedAt.
    * imageUrls vẫn được giữ nguyên trong database.
    */
-  async deleteProductColor(where: Prisma.ProductColorWhereUniqueInput) {
-    const productColor = await this.extended.findUnique({
-      where,
-    });
-
-    if (!productColor || productColor.deletedAt) {
-      throw new NotFoundException('Màu sản phẩm không tồn tại hoặc đã bị xóa');
-    }
+  async deleteProductColor(id: string, vendorId: string) {
+    const productColor = await this.getOwnedActiveColor(id, vendorId);
 
     return this.extended.update({
-      where,
+      where: { id, productId: productColor.productId, deletedAt: null },
       data: {
         deletedAt: new Date(),
       },
@@ -304,9 +280,9 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
    *
    * Ảnh cũ trong imageUrls vẫn được giữ nguyên.
    */
-  async restoreProductColor(where: Prisma.ProductColorWhereUniqueInput) {
-    const productColor = await this.extended.findUnique({
-      where,
+  async restoreProductColor(id: string, vendorId: string) {
+    const productColor = await this.prismaDb.productColor.findFirst({
+      where: { id, product: { vendorId, deletedAt: null } },
     });
 
     if (!productColor) {
@@ -318,10 +294,25 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     }
 
     return this.extended.update({
-      where,
+      where: { id, productId: productColor.productId },
       data: {
         deletedAt: null,
       },
     });
+  }
+
+  private async getOwnedActiveColor(id: string, vendorId: string) {
+    const productColor = await this.extended.findFirst({
+      where: {
+        id,
+        product: { vendorId, deletedAt: null },
+      },
+    });
+
+    if (!productColor) {
+      throw new NotFoundException('Màu sản phẩm không tồn tại');
+    }
+
+    return productColor;
   }
 }

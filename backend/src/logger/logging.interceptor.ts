@@ -13,23 +13,23 @@ export class LoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const http = context.switchToHttp();
     const req = http.getRequest<Request>();
-    const { body, params, query } = req;
+    const startedAt = Date.now();
     const logContext = `${context.getClass().name} > ${context.getHandler().name}`;
     Logger.log({
       context: logContext,
-      payload: { body, params, query },
+      method: req.method,
     });
 
     return next.handle().pipe(
       map((value) => {
-        Logger.log({ context: logContext, response: value });
+        Logger.log({ context: logContext, durationMs: Date.now() - startedAt });
         return value;
       }),
       catchError((err) => {
         Logger.error({
           context: logContext,
-          message: err.message,
-          stack: err.stack,
+          durationMs: Date.now() - startedAt,
+          errorType: err instanceof Error ? err.name : 'UnknownError',
         });
         return throwError(() => err);
       }),

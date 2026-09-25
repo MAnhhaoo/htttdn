@@ -37,7 +37,7 @@ export class AccessControlGuard implements CanActivate {
   ): Promise<boolean> {
     const user = await this.usersService.getUserRole(userID);
 
-    if (!user) {
+    if (!user || user.status !== 'active' || user.deletedAt) {
       return false;
     }
 
@@ -99,6 +99,17 @@ export class AccessControlGuard implements CanActivate {
     );
 
     if (requiredRoles?.length) {
+      const currentUser = await this.usersService.getUserRole(
+        authenticatedUser.userID,
+      );
+      if (
+        !currentUser ||
+        currentUser.status !== 'active' ||
+        currentUser.deletedAt
+      ) {
+        throw new UnauthorizedException('Tài khoản không còn hoạt động');
+      }
+      authenticatedUser.role = currentUser.role;
       if (
         !authenticatedUser.role ||
         !requiredRoles.includes(authenticatedUser.role)

@@ -7,23 +7,21 @@ import {
   Patch,
   Post,
   Query,
-  UsePipes,
 } from '@nestjs/common';
 
 import { UserRole } from '@prisma/client';
 
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 
-import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
-
 import { CategoryService } from './category.service';
 
 import { CreateCategoryDto } from './dto/create-category.dto';
 
-import { SkipAuth } from 'src/app/auth/auth.decorator';
 
-import type { GetCategoriesPaginationDto } from './dto/get-category.dto';
+import { GetCategoriesPaginationDto } from './dto/get-category.dto';
+
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { SkipAuth } from 'src/app/auth/auth.decorator';
 
 @Controller('categories')
 export class CategoryController {
@@ -36,11 +34,9 @@ export class CategoryController {
    */
   @Get()
   @SkipAuth()
-  @UsePipes(ParseParamsPaginationPipe)
-  getCategories(
-    @Query()
-    query: GetCategoriesPaginationDto,
-  ) {
+
+  getCategories(@Query() query: GetCategoriesPaginationDto) {
+
     return this.categoryService.getCategories(query);
   }
 
