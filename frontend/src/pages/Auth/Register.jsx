@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { loginSuccess } from '../../store/authSlice';
+import { useMutation } from '@tanstack/react-query';
+import { authService } from '../../services/auth.service';
 import Button from '../../components/common/Button/Button';
 import Input from '../../components/common/Input/Input';
 
@@ -9,27 +9,27 @@ export default function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const dispatch = useDispatch();
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [role, setRole] = useState('customer');
   const navigate = useNavigate();
+
+  const registerMutation = useMutation({
+    mutationFn: (userData) => authService.register(userData),
+    onSuccess: () => {
+      alert('Registration successful! Please login.');
+      navigate('/login');
+    },
+    onError: (error) => {
+      alert(error.response?.data?.message || 'Registration failed');
+    }
+  });
 
   const handleRegister = (e) => {
     e.preventDefault();
-    setIsLoading(true);
-    
-    // Simulate API delay
-    setTimeout(() => {
-      // Mock user login
-      dispatch(loginSuccess({
-        id: Date.now(),
-        name: name,
-        email: email,
-        avatar: null
-      }));
-      setIsLoading(false);
-      navigate('/');
-    }, 1000);
+    registerMutation.mutate({ email, password, fullName: name, address, phone, role });
   };
+
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -67,9 +67,36 @@ export default function Register() {
             onChange={(e) => setPassword(e.target.value)}
             required 
           />
+          <Input 
+            label="Address" 
+            type="text" 
+            placeholder="Enter your address" 
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+          <Input 
+            label="Phone Number" 
+            type="tel" 
+            placeholder="Enter your phone number" 
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
 
-          <Button type="submit" variant="primary" className="w-full py-3 mt-4" disabled={isLoading}>
-            {isLoading ? 'Creating account...' : 'Sign Up'}
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-light-text dark:text-dark-text">Account Type</label>
+            <select 
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-light-border dark:border-dark-border bg-white dark:bg-dark-background text-light-text dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+            >
+              <option value="customer">Customer</option>
+              <option value="seller">Vendor / Seller</option>
+              <option value="admin">Administrator</option>
+            </select>
+          </div>
+
+          <Button type="submit" variant="primary" className="w-full py-3 mt-4" disabled={registerMutation.isPending}>
+            {registerMutation.isPending ? 'Creating account...' : 'Sign Up'}
           </Button>
         </form>
 

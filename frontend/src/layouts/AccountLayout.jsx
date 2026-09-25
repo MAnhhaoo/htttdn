@@ -1,7 +1,7 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { User, Package, Heart, LogOut } from 'lucide-react';
-import { logout } from '../store/authSlice';
+import { logoutAsync } from '../store/authSlice';
 
 export default function AccountLayout() {
   const { user } = useSelector(state => state.auth);
@@ -9,7 +9,7 @@ export default function AccountLayout() {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    dispatch(logout());
+    dispatch(logoutAsync());
     navigate('/login');
   };
 
@@ -30,11 +30,11 @@ export default function AccountLayout() {
             {/* User Info Header */}
             <div className="flex items-center gap-4 mb-8 pb-8 border-b border-light-border dark:border-dark-border">
               <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-lg">
-                {user?.name?.charAt(0) || 'U'}
+                {user?.fullName?.charAt(0) || 'U'}
               </div>
               <div className="overflow-hidden">
-                <h3 className="font-bold text-light-text dark:text-dark-text truncate">{user?.name || 'User'}</h3>
-                <p className="text-sm text-light-muted dark:text-dark-muted truncate">{user?.email || 'user@example.com'}</p>
+                <h3 className="font-bold text-light-text dark:text-dark-text truncate">{user?.fullName || 'User'}</h3>
+                <p className="text-sm text-light-muted dark:text-dark-muted truncate">{user?.userEmail || user?.email || ''}</p>
               </div>
             </div>
 

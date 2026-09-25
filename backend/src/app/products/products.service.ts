@@ -149,7 +149,9 @@ export class ProductService extends PrismaBaseService<'product'> {
       orderBy: {
         createdAt: 'desc',
       },
+
       include: productRelations,
+
     });
 
     return paging.format(list.map((product) => this.toCatalogProduct(product)));
