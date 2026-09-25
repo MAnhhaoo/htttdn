@@ -207,6 +207,7 @@ model ProductColor {
 model ProductVariant {
   id             String    @id @default(uuid()) @db.Uuid
   productColorId String    @db.Uuid
+  size           String    @db.VarChar(50)
   stock          Int       @default(0)
   price          Decimal   @db.Decimal(12, 2)
   createdAt      DateTime  @default(now())

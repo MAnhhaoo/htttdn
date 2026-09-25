@@ -14,6 +14,7 @@ import { Roles } from 'src/common/guards/access-control/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
+import { SkipAuth } from 'src/app/auth/auth.decorator';
 import { GetProductsPaginationDto } from './dto/get-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
@@ -27,6 +28,7 @@ export class ProductsController {
     return this.productService.createProduct(createProductDto);
   }
   @Get()
+  @SkipAuth()
   @UsePipes(ParseParamsPaginationPipe)
   getProducts(
     @Query()

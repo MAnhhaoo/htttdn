@@ -18,15 +18,22 @@ const initOpenAPI = (app: INestApplication) => {
 };
 
 const initApp = (app: INestApplication) => {
-  const { APP_PREFIX = '/api', FE_URL } = process.env;
+  const { APP_PREFIX = '/api', FE_URL, NODE_ENV } = process.env;
   app.setGlobalPrefix(APP_PREFIX);
-  if (FE_URL) {
-    // white list
-    app.enableCors({
-      origin: FE_URL,
-      credentials: true,
-    });
-  }
+
+  // Cho phép tất cả localhost trong development, hoặc FE_URL cụ thể trong production
+  const allowedOrigins = NODE_ENV === 'development'
+    ? [/^http:\/\/localhost:\d+$/]  // cho phép mọi port localhost
+    : FE_URL
+      ? FE_URL.split(',').map(u => u.trim())
+      : [];
+
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  });
   // app.enableVersioning({
   //   type: VersioningType.HEADER,
   //   header: 'x-api-version',

@@ -1,34 +1,44 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import { loginSuccess } from '../../store/authSlice';
+import { useMutation } from '@tanstack/react-query';
+import { loginSuccess, loginFailure } from '../../store/authSlice';
+import { authService } from '../../services/auth.service';
 import Button from '../../components/common/Button/Button';
 import Input from '../../components/common/Input/Input';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
+  const loginMutation = useMutation({
+    mutationFn: (credentials) => authService.login(credentials),
+    onSuccess: (data) => {
+      dispatch(loginSuccess({ user: data.user, token: data.token }));
+      
+      // Điều hướng theo role
+      const role = data.user?.role;
+      if (role === 'admin') {
+        navigate('/admin');
+      } else if (role === 'seller') {
+        navigate('/vendor');
+      } else {
+        navigate('/');
+      }
+    },
+    onError: (error) => {
+      dispatch(loginFailure(error.response?.data?.message || 'Login failed'));
+      alert(error.response?.data?.message || 'Email hoặc mật khẩu không đúng');
+    }
+  });
+
   const handleLogin = (e) => {
     e.preventDefault();
-    setIsLoading(true);
-    
-    // Simulate API delay
-    setTimeout(() => {
-      // Mock user login
-      dispatch(loginSuccess({
-        id: 1,
-        name: 'John Doe',
-        email: email,
-        avatar: null
-      }));
-      setIsLoading(false);
-      navigate('/');
-    }, 1000);
+    loginMutation.mutate({ email, password });
   };
+
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -69,8 +79,8 @@ export default function Login() {
             </a>
           </div>
 
-          <Button type="submit" variant="primary" className="w-full py-3 mt-4" disabled={isLoading}>
-            {isLoading ? 'Signing in...' : 'Sign In'}
+          <Button type="submit" variant="primary" className="w-full py-3 mt-4" disabled={loginMutation.isPending}>
+            {loginMutation.isPending ? 'Signing in...' : 'Sign In'}
           </Button>
         </form>
 

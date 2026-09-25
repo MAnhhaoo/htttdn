@@ -67,7 +67,7 @@ export class AuthService {
       ...otherInformation,
       email,
       password: passwordHashed,
-      role: UserRole.customer,
+      role: otherInformation.role || UserRole.customer,
     });
 
     const { password: _password, ...userResponse } = userCreated;

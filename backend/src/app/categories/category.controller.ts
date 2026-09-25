@@ -20,6 +20,8 @@ import { CategoryService } from './category.service';
 
 import { CreateCategoryDto } from './dto/create-category.dto';
 
+import { SkipAuth } from 'src/app/auth/auth.decorator';
+
 import type { GetCategoriesPaginationDto } from './dto/get-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
@@ -33,6 +35,7 @@ export class CategoryController {
    * - tìm kiếm
    */
   @Get()
+  @SkipAuth()
   @UsePipes(ParseParamsPaginationPipe)
   getCategories(
     @Query()

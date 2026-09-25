@@ -7,7 +7,7 @@ import { TokenKeys } from '../consts/jwt.const';
 const SignInSchema = UserSchema.pick({ email: true, password: true });
 
 const SignUpSchema = SignInSchema.merge(
-  UserSchema.pick({ fullName: true, address: true }),
+  UserSchema.pick({ fullName: true, address: true, phone: true, role: true }).partial({ role: true }),
 );
 
 // HOC / HOF: nhận một hàm kahcs làm tham so

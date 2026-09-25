@@ -145,6 +145,9 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
       orderBy: {
         createdAt: 'asc',
       },
+      include: {
+        variants: true,
+      }
     });
   }
 

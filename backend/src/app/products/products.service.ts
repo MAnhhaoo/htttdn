@@ -80,6 +80,9 @@ export class ProductService extends PrismaBaseService<'product'> {
       orderBy: {
         createdAt: 'desc',
       },
+      include: {
+        colors: true,
+      },
     });
 
     return paging.format(list);

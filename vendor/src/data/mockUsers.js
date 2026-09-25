@@ -1,0 +1,13 @@
+
+export const mockUsers = [
+  { id: 1, fullName: "Admin System", email: "admin@example.com", password: "mock-password", address: "Hanoi", role: "admin", status: "active", createdAt: "2026-01-01T08:00:00", updatedAt: "2026-01-01T08:00:00", deletedAt: null, phone: "0900000001", createdBy: null },
+  { id: 2, fullName: "Manager", email: "manager@example.com", password: "mock-password", address: "Hanoi", role: "admin", status: "active", createdAt: "2026-01-02T08:00:00", updatedAt: "2026-01-02T08:00:00", deletedAt: null, phone: "0900000002", createdBy: null },
+  { id: 3, fullName: "Nike Official", email: "nike@vendor.com", password: "mock-password", address: "HCM", role: "seller", status: "active", createdAt: "2026-02-01T08:00:00", updatedAt: "2026-02-01T08:00:00", deletedAt: null, phone: "0911111111", createdBy: null },
+  { id: 4, fullName: "Adidas Store", email: "adidas@vendor.com", password: "mock-password", address: "Da Nang", role: "seller", status: "active", createdAt: "2026-02-05T08:00:00", updatedAt: "2026-02-05T08:00:00", deletedAt: null, phone: "0922222222", createdBy: null },
+  { id: 5, fullName: "Puma Vietnam", email: "puma@vendor.com", password: "mock-password", address: "Hanoi", role: "seller", status: "active", createdAt: "2026-02-10T08:00:00", updatedAt: "2026-02-10T08:00:00", deletedAt: null, phone: "0933333333", createdBy: null },
+  { id: 6, fullName: "John Doe", email: "john@example.com", password: "mock-password", address: "Hanoi", role: "customer", status: "active", createdAt: "2026-03-01T08:00:00", updatedAt: "2026-03-01T08:00:00", deletedAt: null, phone: "0988888881", createdBy: null },
+  { id: 7, fullName: "Jane Smith", email: "jane@example.com", password: "mock-password", address: "HCM", role: "customer", status: "active", createdAt: "2026-03-02T08:00:00", updatedAt: "2026-03-02T08:00:00", deletedAt: null, phone: "0988888882", createdBy: null },
+  { id: 8, fullName: "Alice Johnson", email: "alice@example.com", password: "mock-password", address: "Da Nang", role: "customer", status: "active", createdAt: "2026-03-03T08:00:00", updatedAt: "2026-03-03T08:00:00", deletedAt: null, phone: "0988888883", createdBy: null },
+  { id: 9, fullName: "Bob Brown", email: "bob@example.com", password: "mock-password", address: "Can Tho", role: "customer", status: "inactive", createdAt: "2026-03-04T08:00:00", updatedAt: "2026-03-04T08:00:00", deletedAt: null, phone: "0988888884", createdBy: null },
+  { id: 10, fullName: "Charlie Davis", email: "charlie@example.com", password: "mock-password", address: "Hai Phong", role: "customer", status: "active", createdAt: "2026-03-05T08:00:00", updatedAt: "2026-03-05T08:00:00", deletedAt: null, phone: "0988888885", createdBy: null }
+];

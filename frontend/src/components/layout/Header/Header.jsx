@@ -91,9 +91,9 @@ export default function Header() {
           {isAuthenticated ? (
             <Link to="/account/profile" className="flex items-center gap-2 text-light-text dark:text-dark-text hover:text-primary transition-colors">
               <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
-                {user?.name?.charAt(0) || 'U'}
+                {user?.fullName?.charAt(0) || 'U'}
               </div>
-              <span className="text-sm font-semibold hidden lg:block">{user?.name || 'Account'}</span>
+              <span className="text-sm font-semibold hidden lg:block">{user?.fullName || 'Account'}</span>
             </Link>
           ) : (
             <Link to="/login" className="flex items-center gap-2 text-light-text dark:text-dark-text hover:text-primary transition-colors">
