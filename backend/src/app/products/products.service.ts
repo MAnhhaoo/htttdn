@@ -117,7 +117,7 @@ export class ProductService extends PrismaBaseService<'product'> {
   }
 
   private async findProducts(
-    { page = 1, itemPerPage = 10, search }: GetProductsPaginationDto,
+    { page = 1, itemPerPage = 10, search, createdAfter }: GetProductsPaginationDto & GetVendorProductsPaginationDto,
     scope: Prisma.ProductWhereInput,
   ) {
     const searchCondition = this.queryUtil.createStringSearchCondition(search, [
@@ -130,6 +130,7 @@ export class ProductService extends PrismaBaseService<'product'> {
       deletedAt: null,
       ...scope,
       ...searchCondition,
+      ...(createdAfter ? { createdAt: { gte: new Date(createdAfter) } } : {}),
     };
 
     const totalItems = await this.extended.count({
@@ -151,7 +152,6 @@ export class ProductService extends PrismaBaseService<'product'> {
       },
 
       include: productRelations,
-
     });
 
     return paging.format(list.map((product) => this.toCatalogProduct(product)));

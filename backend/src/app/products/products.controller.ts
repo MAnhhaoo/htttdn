@@ -42,7 +42,6 @@ export class ProductsController {
   getVendorProducts(
     @Query() query: GetVendorProductsPaginationDto,
     @CurrentUser() user: UserInfo,
-
   ) {
     return this.productService.getVendorProducts(query, user.userID);
   }

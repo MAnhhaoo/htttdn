@@ -4,6 +4,7 @@ import {
   Injectable,
   PipeTransform,
 } from '@nestjs/common';
+import { UserRole, UserStatus } from '@prisma/client';
 
 @Injectable()
 export class ParseParamsPaginationPipe implements PipeTransform {
@@ -15,6 +16,30 @@ export class ParseParamsPaginationPipe implements PipeTransform {
       10,
       'itemPerPage',
     );
+
+    // Validate enum role
+    if (value.role !== undefined && value.role !== '') {
+      const validRoles = Object.values(UserRole);
+      if (!validRoles.includes(value.role as UserRole)) {
+        throw new BadRequestException(
+          `role không hợp lệ. Giá trị hợp lệ: ${validRoles.join(', ')}`,
+        );
+      }
+    } else if (value.role === '') {
+      value.role = undefined;
+    }
+
+    // Validate enum status
+    if (value.status !== undefined && value.status !== '') {
+      const validStatuses = Object.values(UserStatus);
+      if (!validStatuses.includes(value.status as UserStatus)) {
+        throw new BadRequestException(
+          `status không hợp lệ. Giá trị hợp lệ: ${validStatuses.join(', ')}`,
+        );
+      }
+    } else if (value.status === '') {
+      value.status = undefined;
+    }
 
     return value;
   }

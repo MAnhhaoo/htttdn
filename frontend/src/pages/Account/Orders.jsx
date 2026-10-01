@@ -1,109 +1,100 @@
-import { Package } from 'lucide-react';
-import EmptyState from '../../components/common/EmptyState/EmptyState';
+import { Link } from 'react-router-dom';
+import { Package, ChevronRight } from 'lucide-react';
+import { useOrders } from '../../hooks/useOrders';
 import { formatPrice } from '../../utils/formatPrice';
-
-// Mock Orders
-const mockOrders = [
-  {
-    id: 'ORD-739218',
-    date: '2026-09-10',
-    status: 'Delivered',
-    total: 3500000,
-    items: [
-      { name: 'Premium Wireless Headphones', qty: 1, image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&q=80' }
-    ]
-  },
-  {
-    id: 'ORD-928374',
-    date: '2026-09-12',
-    status: 'Processing',
-    total: 1250000,
-    items: [
-      { name: 'Minimalist Watch', qty: 1, image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&q=80' },
-      { name: 'Leather Wallet', qty: 1, image: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&q=80' }
-    ]
-  }
-];
+import Loading from '../../components/common/Loading/Loading';
+import EmptyState from '../../components/common/EmptyState/EmptyState';
 
 export default function Orders() {
-  
-  if (mockOrders.length === 0) {
+  const { orders, isLoading } = useOrders();
+
+  if (isLoading) return <Loading text="Đang tải danh sách đơn hàng..." />;
+
+  if (orders.length === 0) {
     return (
-      <div className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl shadow-sm h-full flex flex-col">
-        <div className="p-6 md:p-8 border-b border-light-border dark:border-dark-border">
-          <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">My Orders</h2>
-        </div>
-        <div className="flex-1 flex items-center justify-center py-20">
-          <EmptyState 
-            icon={Package}
-            title="No orders yet"
-            description="Looks like you haven't made any purchases yet."
-            actionText="Start Shopping"
-          />
-        </div>
-      </div>
+      <EmptyState 
+        icon={Package}
+        title="Chưa có đơn hàng nào" 
+        description="Khi bạn đặt hàng, danh sách đơn hàng sẽ xuất hiện tại đây."
+        actionText="Bắt đầu mua sắm"
+        onAction={() => window.location.href = '/products'}
+      />
     );
   }
 
   const getStatusColor = (status) => {
-    switch (status.toLowerCase()) {
-      case 'delivered': return 'text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400';
-      case 'processing': return 'text-orange-600 bg-orange-100 dark:bg-orange-900/30 dark:text-orange-400';
-      case 'cancelled': return 'text-red-600 bg-red-100 dark:bg-red-900/30 dark:text-red-400';
-      default: return 'text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-400';
+    switch(status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-500 dark:border-yellow-700/50';
+      case 'processing': return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-500 dark:border-blue-700/50';
+      case 'shipping': return 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-500 dark:border-purple-700/50';
+      case 'completed': return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-500 dark:border-green-700/50';
+      case 'cancelled': return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-500 dark:border-red-700/50';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch(status) {
+      case 'pending': return 'Chờ xác nhận';
+      case 'processing': return 'Đang xử lý';
+      case 'shipping': return 'Đang giao';
+      case 'completed': return 'Đã giao';
+      case 'cancelled': return 'Đã hủy';
+      default: return status;
     }
   };
 
   return (
-    <div className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl p-6 md:p-8 shadow-sm">
-      <h2 className="text-2xl font-bold text-light-text dark:text-dark-text mb-2">My Orders</h2>
-      <p className="text-light-muted dark:text-dark-muted mb-8">View and track your recent orders.</p>
+    <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8 py-12">
+      <h1 className="text-2xl font-bold text-light-text dark:text-dark-text mb-8">Lịch sử đơn hàng</h1>
 
       <div className="space-y-6">
-        {mockOrders.map(order => (
-          <div key={order.id} className="border border-light-border dark:border-dark-border rounded-xl overflow-hidden">
-            
-            {/* Order Header */}
-            <div className="bg-gray-50 dark:bg-dark-bg/50 p-4 md:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-light-border dark:border-dark-border">
-              <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-                <div>
-                  <p className="text-light-muted dark:text-dark-muted mb-1">Order Number</p>
-                  <p className="font-bold text-light-text dark:text-dark-text">{order.id}</p>
-                </div>
-                <div>
-                  <p className="text-light-muted dark:text-dark-muted mb-1">Date Placed</p>
-                  <p className="font-semibold text-light-text dark:text-dark-text">{new Date(order.date).toLocaleDateString()}</p>
-                </div>
-                <div>
-                  <p className="text-light-muted dark:text-dark-muted mb-1">Total Amount</p>
-                  <p className="font-bold text-primary">{formatPrice(order.total)}</p>
-                </div>
+        {orders.map((order) => (
+          <div key={order.id} className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-light-border dark:border-dark-border flex flex-wrap items-center justify-between gap-4 bg-gray-50 dark:bg-dark-bg">
+              <div>
+                <p className="text-sm text-light-muted dark:text-dark-muted mb-1">Mã đơn #{order.id.slice(0, 8).toUpperCase()}</p>
+                <p className="font-semibold text-light-text dark:text-dark-text">
+                  {new Date(order.createdAt).toLocaleDateString('vi-VN', {
+                    year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                  })}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-light-muted dark:text-dark-muted mb-1">Tổng cộng</p>
+                <p className="font-bold text-primary">{formatPrice(order.totalAmount)}</p>
               </div>
               <div>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(order.status)}`}>
-                  {order.status}
+                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${getStatusColor(order.status)}`}>
+                  {getStatusText(order.status)}
                 </span>
               </div>
             </div>
 
-            {/* Order Items */}
-            <div className="p-4 md:p-6 divide-y divide-light-border dark:divide-dark-border">
-              {order.items.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
-                  <div className="w-16 h-16 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
-                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-semibold text-sm text-light-text dark:text-dark-text line-clamp-1">{item.name}</h4>
-                    <p className="text-sm text-light-muted dark:text-dark-muted mt-1">Qty: {item.qty}</p>
-                  </div>
-                  <button className="text-sm font-semibold text-primary hover:text-primary-dark transition-colors">
-                    View Product
-                  </button>
-                </div>
-              ))}
+            <div className="p-4 sm:p-6">
+              <ul className="divide-y divide-light-border dark:divide-dark-border">
+                {order.details?.map((item) => (
+                  <li key={item.id} className="py-4 flex gap-4">
+                    <div className="w-16 h-16 rounded-lg bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border overflow-hidden shrink-0">
+                      <img 
+                        src={item.imageUrl || 'https://placehold.co/100x100?text=No+Image'}
+                        alt={item.productName} 
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm line-clamp-1 text-light-text dark:text-dark-text">{item.productName}</p>
+                      <p className="text-xs text-light-muted dark:text-dark-muted mt-1">
+                        Màu sắc: {item.colorName} | Phân loại: {item.sizeName}
+                      </p>
+                      <p className="text-sm font-medium mt-1 text-light-text dark:text-dark-text">
+                        {item.quantity} × <span className="text-primary">{formatPrice(item.price)}</span>
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
-
           </div>
         ))}
       </div>

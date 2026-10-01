@@ -11,7 +11,6 @@ const EmailSchema = z
   .max(255, 'Email không được vượt quá 255 ký tự')
   .transform((email) => email.toLowerCase());
 
-
 const PasswordSchema = z
   .string({ error: 'Mật khẩu là bắt buộc và phải là chuỗi' })
   .min(1, 'Mật khẩu không được để trống')
@@ -50,7 +49,6 @@ const SignUpSchema = z
       .optional(),
   })
   .strict();
-
 
 // HOC / HOF: nhận schema dữ liệu và bọc bằng cấu trúc response chung.
 const SignInResponseSchema = withResponse(

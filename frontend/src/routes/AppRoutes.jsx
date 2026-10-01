@@ -1,35 +1,40 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
-import AccountLayout from '../layouts/AccountLayout';
+import AuthLayout from '../layouts/AuthLayout';
+import ProtectedRoute from './ProtectedRoute';
 import Home from '../pages/Home/Home';
-import Cart from '../pages/Cart/Cart';
-import Checkout from '../pages/Cart/Checkout';
 import ProductSearch from '../pages/Product/ProductSearch';
 import ProductDetail from '../pages/Product/ProductDetail';
 import Login from '../pages/Auth/Login';
 import Register from '../pages/Auth/Register';
 import Profile from '../pages/Account/Profile';
+import Cart from '../pages/Cart/Cart';
+import Checkout from '../pages/Cart/Checkout';
 import Orders from '../pages/Account/Orders';
-import Wishlist from '../pages/Account/Wishlist';
+import About from '../pages/About/About';
+import Contact from '../pages/Contact/Contact';
 
 export default function AppRoutes() {
   return (
     <Routes>
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+      </Route>
+      
       <Route element={<UserLayout />}>
         <Route path="/" element={<Home />} />
         <Route path="/products" element={<ProductSearch />} />
         <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/cart" element={<Cart />} />
-        <Route path="/checkout" element={<Checkout />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
         
-        {/* Account Routes */}
-        <Route path="/account" element={<AccountLayout />}>
-          <Route index element={<Navigate to="profile" replace />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="wishlist" element={<Wishlist />} />
+        {/* Protected Routes */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/orders" element={<Orders />} />
         </Route>
       </Route>
     </Routes>

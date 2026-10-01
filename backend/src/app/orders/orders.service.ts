@@ -19,6 +19,7 @@ import { RealtimeService } from 'src/app/realtime/realtime.service';
 import { VouchersService } from 'src/app/vouchers/vouchers.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { GetOrdersPaginationDto } from './dto/get-order.dto';
 
 const orderInclude = {
   details: {
@@ -200,11 +201,22 @@ export class OrdersService {
     });
   }
 
-  listAll() {
-    return this.prisma.order.findMany({
+  async listAll({ page = 1, itemPerPage = 10 }: GetOrdersPaginationDto) {
+    const totalItems = await this.prisma.order.count();
+    const list = await this.prisma.order.findMany({
       include: orderInclude,
       orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * itemPerPage,
+      take: itemPerPage,
     });
+    
+    return {
+      list,
+      page,
+      itemPerPage,
+      totalItems,
+      totalPages: Math.ceil(totalItems / itemPerPage) || 1,
+    };
   }
 
   async getById(id: string, user: UserInfo) {

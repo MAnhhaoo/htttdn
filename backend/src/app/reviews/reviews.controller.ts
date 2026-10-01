@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
@@ -14,8 +15,10 @@ import { SkipAuth } from 'src/app/auth/auth.decorator';
 import { User } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
+import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
+import { GetReviewsPaginationDto } from './dto/get-review.dto';
 import { ReviewsService } from './reviews.service';
 
 @Controller('reviews')
@@ -26,6 +29,14 @@ export class ReviewsController {
   @SkipAuth()
   list(@Param('productId', ParseUUIDPipe) productId: string) {
     return this.reviewsService.listByProduct(productId);
+  }
+
+  @Get('admin/all')
+  @Roles(UserRole.admin)
+  listAll(
+    @Query(new ParseParamsPaginationPipe()) query: GetReviewsPaginationDto,
+  ) {
+    return this.reviewsService.listAll(query);
   }
 
   @Post()

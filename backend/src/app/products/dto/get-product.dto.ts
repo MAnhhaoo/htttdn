@@ -3,10 +3,13 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { PaginationQuerySchema } from '../../../common/utils/paginaton-util/pagination-util.interface';
 
-const GetProductsPaginationSchema = PaginationQuerySchema.strict();
+const GetProductsPaginationSchema = PaginationQuerySchema.extend({
+  createdAfter: z.string().datetime().optional(),
+}).strict();
 
 const GetVendorProductsPaginationSchema = PaginationQuerySchema.extend({
   status: z.enum(ProductStatus).optional(),
+  createdAfter: z.string().datetime().optional(),
 }).strict();
 
 class GetProductsPaginationDto extends createZodDto(

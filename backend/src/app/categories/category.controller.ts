@@ -17,7 +17,6 @@ import { CategoryService } from './category.service';
 
 import { CreateCategoryDto } from './dto/create-category.dto';
 
-
 import { GetCategoriesPaginationDto } from './dto/get-category.dto';
 
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -34,9 +33,7 @@ export class CategoryController {
    */
   @Get()
   @SkipAuth()
-
   getCategories(@Query() query: GetCategoriesPaginationDto) {
-
     return this.categoryService.getCategories(query);
   }
 

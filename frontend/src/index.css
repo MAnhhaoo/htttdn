@@ -1,12 +1,80 @@
 @import "tailwindcss";
-@config "../tailwind.config.js";
+
+@theme {
+  /* ── Brand ── */
+  --color-primary: #C9A84C;
+  --color-primary-dark: #B08A2E;
+  --color-primary-light: #F5ECD7;
+
+  /* ── Light Mode ── */
+  --color-light-bg: #F7F7F5;
+  --color-light-surface: #F0EFEC;
+  --color-light-card: #FFFFFF;
+  --color-light-border: #E5E3DD;
+  --color-light-text: #1A1A1A;
+  --color-light-muted: #6B6B6B;
+
+  /* ── Dark Mode ── */
+  --color-dark-bg: #111113;
+  --color-dark-surface: #1C1C1F;
+  --color-dark-card: #1A1A1D;
+  --color-dark-border: #2C2C30;
+  --color-dark-text: #F0EDE6;
+  --color-dark-muted: #8E8E93;
+
+  /* ── Typography ── */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
+}
+
+/* Enable class-based dark mode */
+@custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
-  html, body {
-    @apply antialiased text-light-text bg-light-bg;
+  body {
+    @apply bg-light-bg text-light-text font-sans antialiased;
   }
-  
-  html.dark body {
-    @apply text-dark-text bg-dark-bg;
+  .dark body {
+    @apply bg-dark-bg text-dark-text;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif tracking-tight;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-light-border dark:bg-dark-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-white/70 dark:bg-dark-card/70 backdrop-blur-xl border border-light-border dark:border-dark-border;
+  }
+  .luxury-shadow {
+    box-shadow: 0 8px 30px -8px rgba(0, 0, 0, 0.08);
+  }
+  .dark .luxury-shadow {
+    box-shadow: 0 8px 30px -8px rgba(0, 0, 0, 0.5);
+  }
+  .card-surface {
+    @apply bg-white dark:bg-dark-card border border-light-border dark:border-dark-border;
+  }
+  .text-heading {
+    @apply text-light-text dark:text-dark-text;
+  }
+  .text-body {
+    @apply text-light-muted dark:text-dark-muted;
   }
 }

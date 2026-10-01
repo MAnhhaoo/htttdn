@@ -1,20 +1,34 @@
-import { forwardRef } from 'react';
+import React from 'react';
 
-const Input = forwardRef(({ label, error, className = '', ...props }, ref) => {
+const Input = React.forwardRef(({ 
+  label, 
+  error, 
+  className = '', 
+  containerClassName = '',
+  ...props 
+}, ref) => {
   return (
-    <div className="mb-4">
-      {label && <label className="block text-sm font-semibold text-light-text dark:text-dark-text mb-2">{label}</label>}
+    <div className={`flex flex-col gap-1.5 ${containerClassName}`}>
+      {label && (
+        <label className="text-sm font-semibold text-light-text dark:text-dark-text">
+          {label} {props.required && <span className="text-red-500">*</span>}
+        </label>
+      )}
       <input
         ref={ref}
-        className={`w-full px-4 py-3 bg-white dark:bg-dark-card border rounded-md text-sm transition-all outline-none 
-        text-light-text dark:text-dark-text placeholder-light-muted dark:placeholder-dark-muted
-        ${error 
-          ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-100' 
-          : 'border-light-border dark:border-dark-border focus:border-primary focus:ring-2 focus:ring-primary-light'} 
-        ${className}`}
+        className={`
+          w-full px-4 py-2.5 rounded-xl border bg-white dark:bg-dark-card
+          text-light-text dark:text-dark-text outline-none transition-all duration-200
+          placeholder:text-light-muted dark:placeholder:text-dark-muted
+          ${error 
+            ? 'border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500' 
+            : 'border-light-border dark:border-dark-border focus:border-primary focus:ring-1 focus:ring-primary'
+          }
+          ${className}
+        `}
         {...props}
       />
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {error && <span className="text-xs font-medium text-red-500 mt-1">{error}</span>}
     </div>
   );
 });

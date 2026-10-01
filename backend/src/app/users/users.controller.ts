@@ -44,9 +44,8 @@ export class UsersController {
    */
   @Get()
   @Roles(UserRole.admin)
-  @UsePipes(ParseParamsPaginationPipe)
   getUsers(
-    @Query()
+    @Query(new ParseParamsPaginationPipe())
     query: GetUsersPaginationDto,
   ) {
     return this.usersService.getUsers(query);

@@ -1,112 +1,89 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
-import { authService } from '../../services/auth.service';
-import Button from '../../components/common/Button/Button';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 import Input from '../../components/common/Input/Input';
+import Button from '../../components/common/Button/Button';
 
 export default function Register() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [address, setAddress] = useState('');
-  const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('customer');
-  const navigate = useNavigate();
-
-  const registerMutation = useMutation({
-    mutationFn: (userData) => authService.register(userData),
-    onSuccess: () => {
-      alert('Registration successful! Please login.');
-      navigate('/login');
-    },
-    onError: (error) => {
-      alert(error.response?.data?.message || 'Registration failed');
-    }
+  const { register, isRegistering, registerError } = useAuth();
+  const [formData, setFormData] = useState({ 
+    fullName: '',
+    email: '', 
+    password: '',
+    phone: '',
+    address: ''
   });
 
-  const handleRegister = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    registerMutation.mutate({ email, password, fullName: name, address, phone, role });
+    try {
+      await register(formData);
+    } catch (err) {
+      // Error handled by hook
+    }
   };
 
-
   return (
-    <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl shadow-luxury p-8">
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-block mb-4">
-            <span className="text-4xl font-black tracking-tighter text-primary">Miva</span>
-          </Link>
-          <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">Create an account</h2>
-          <p className="text-light-muted dark:text-dark-muted mt-2">Join Miva to get everything you need.</p>
-        </div>
-        
-        <form onSubmit={handleRegister} className="space-y-5">
-          <Input 
-            label="Full Name" 
-            type="text" 
-            placeholder="Enter your full name" 
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required 
-          />
-          <Input 
-            label="Email Address" 
-            type="email" 
-            placeholder="Enter your email" 
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required 
-          />
-          <Input 
-            label="Password" 
-            type="password" 
-            placeholder="Create a password" 
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required 
-          />
-          <Input 
-            label="Address" 
-            type="text" 
-            placeholder="Enter your address" 
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-          <Input 
-            label="Phone Number" 
-            type="tel" 
-            placeholder="Enter your phone number" 
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
+    <>
+      <h2 className="text-center text-2xl font-bold tracking-tight text-light-text dark:text-dark-text mb-8">
+        Create an account
+      </h2>
 
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-light-text dark:text-dark-text">Account Type</label>
-            <select 
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-light-border dark:border-dark-border bg-white dark:bg-dark-background text-light-text dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-            >
-              <option value="customer">Customer</option>
-              <option value="seller">Vendor / Seller</option>
-              <option value="admin">Administrator</option>
-            </select>
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        {registerError && (
+          <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm text-center font-medium">
+            {registerError.response?.data?.message || 'Registration failed. Please try again.'}
           </div>
+        )}
 
-          <Button type="submit" variant="primary" className="w-full py-3 mt-4" disabled={registerMutation.isPending}>
-            {registerMutation.isPending ? 'Creating account...' : 'Sign Up'}
-          </Button>
-        </form>
+        <Input
+          label="Full Name"
+          required
+          value={formData.fullName}
+          onChange={e => setFormData({...formData, fullName: e.target.value})}
+        />
 
-        <div className="mt-8 text-center text-sm text-light-muted dark:text-dark-muted">
-          Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-primary hover:text-primary-dark transition-colors">
-            Sign in
-          </Link>
-        </div>
-      </div>
-    </div>
+        <Input
+          label="Email address"
+          type="email"
+          required
+          value={formData.email}
+          onChange={e => setFormData({...formData, email: e.target.value})}
+        />
+
+        <Input
+          label="Password"
+          type="password"
+          required
+          value={formData.password}
+          onChange={e => setFormData({...formData, password: e.target.value})}
+        />
+
+        <Input
+          label="Phone Number"
+          required
+          value={formData.phone}
+          onChange={e => setFormData({...formData, phone: e.target.value})}
+        />
+
+        <Input
+          label="Address"
+          required
+          value={formData.address}
+          onChange={e => setFormData({...formData, address: e.target.value})}
+        />
+
+        <Button type="submit" className="w-full !mt-6" isLoading={isRegistering}>
+          Create Account
+        </Button>
+      </form>
+
+      <p className="mt-8 text-center text-sm text-light-muted dark:text-dark-muted">
+        Already have an account?{' '}
+        <Link to="/login" className="font-semibold text-primary hover:text-primary-dark">
+          Sign in
+        </Link>
+      </p>
+    </>
   );
 }

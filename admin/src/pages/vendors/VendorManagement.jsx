@@ -14,7 +14,7 @@ export default function VendorManagement() {
   const fetchVendors = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { page, itemPerPage: 10, role: 'seller' };
+      const params = { page, itemPerPage: 10, role: 'vendor' };
       if (search) params.search = search;
 
       const res = await usersApi.getUsers(params);

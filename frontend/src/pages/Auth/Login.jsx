@@ -1,96 +1,84 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
-import { useMutation } from '@tanstack/react-query';
-import { loginSuccess, loginFailure } from '../../store/authSlice';
-import { authService } from '../../services/auth.service';
-import Button from '../../components/common/Button/Button';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 import Input from '../../components/common/Input/Input';
+import Button from '../../components/common/Button/Button';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
+  const { login, isLoggingIn, loginError } = useAuth();
+  const [formData, setFormData] = useState({ email: '', password: '' });
 
-  const loginMutation = useMutation({
-    mutationFn: (credentials) => authService.login(credentials),
-    onSuccess: (data) => {
-      dispatch(loginSuccess({ user: data.user, token: data.token }));
-      
-      // Điều hướng theo role
-      const role = data.user?.role;
-      if (role === 'admin') {
-        navigate('/admin');
-      } else if (role === 'seller') {
-        navigate('/vendor');
-      } else {
-        navigate('/');
-      }
-    },
-    onError: (error) => {
-      dispatch(loginFailure(error.response?.data?.message || 'Login failed'));
-      alert(error.response?.data?.message || 'Email hoặc mật khẩu không đúng');
-    }
-  });
-
-  const handleLogin = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    loginMutation.mutate({ email, password });
+    try {
+      await login(formData);
+    } catch (err) {
+      // Error handled by hook
+    }
   };
 
-
   return (
-    <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl shadow-luxury p-8">
-        <div className="text-center mb-8">
-          <Link to="/" className="inline-block mb-4">
-            <span className="text-4xl font-black tracking-tighter text-primary">Miva</span>
-          </Link>
-          <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">Welcome back</h2>
-          <p className="text-light-muted dark:text-dark-muted mt-2">Please enter your details to sign in.</p>
-        </div>
-        
-        <form onSubmit={handleLogin} className="space-y-5">
-          <Input 
-            label="Email Address" 
-            type="email" 
-            placeholder="Enter your email" 
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required 
-          />
-          <Input 
-            label="Password" 
-            type="password" 
-            placeholder="••••••••" 
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required 
-          />
-          
-          <div className="flex items-center justify-between text-sm">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary accent-primary" />
-              <span className="text-light-muted dark:text-dark-muted">Remember me</span>
+    <>
+      <h2 className="text-center text-2xl font-bold tracking-tight text-light-text dark:text-dark-text mb-8">
+        Sign in to your account
+      </h2>
+
+      <form className="space-y-6" onSubmit={handleSubmit}>
+        {loginError && (
+          <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm text-center font-medium">
+            {loginError.response?.data?.message || 'Invalid email or password'}
+          </div>
+        )}
+
+        <Input
+          label="Email address"
+          type="email"
+          required
+          autoComplete="email"
+          value={formData.email}
+          onChange={e => setFormData({...formData, email: e.target.value})}
+        />
+
+        <Input
+          label="Password"
+          type="password"
+          required
+          autoComplete="current-password"
+          value={formData.password}
+          onChange={e => setFormData({...formData, password: e.target.value})}
+        />
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <input
+              id="remember-me"
+              name="remember-me"
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <label htmlFor="remember-me" className="ml-2 block text-sm text-light-muted dark:text-dark-muted">
+              Remember me
             </label>
-            <a href="#" className="font-semibold text-primary hover:text-primary-dark transition-colors">
+          </div>
+
+          <div className="text-sm">
+            <a href="#" className="font-semibold text-primary hover:text-primary-dark">
               Forgot password?
             </a>
           </div>
-
-          <Button type="submit" variant="primary" className="w-full py-3 mt-4" disabled={loginMutation.isPending}>
-            {loginMutation.isPending ? 'Signing in...' : 'Sign In'}
-          </Button>
-        </form>
-
-        <div className="mt-8 text-center text-sm text-light-muted dark:text-dark-muted">
-          Don't have an account?{' '}
-          <Link to="/register" className="font-semibold text-primary hover:text-primary-dark transition-colors">
-            Sign up
-          </Link>
         </div>
-      </div>
-    </div>
+
+        <Button type="submit" className="w-full" isLoading={isLoggingIn}>
+          Sign in
+        </Button>
+      </form>
+
+      <p className="mt-8 text-center text-sm text-light-muted dark:text-dark-muted">
+        Not a member?{' '}
+        <Link to="/register" className="font-semibold text-primary hover:text-primary-dark">
+          Create an account
+        </Link>
+      </p>
+    </>
   );
 }

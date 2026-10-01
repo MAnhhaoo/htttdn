@@ -1,0 +1,22 @@
+{
+  "name": "miva-dataset-generator",
+  "version": "1.0.0",
+  "description": "Realistic dataset generator for MIVA E-Commerce Marketplace",
+  "type": "module",
+  "scripts": {
+    "generate": "tsx scripts/generate.ts",
+    "preview-reset": "tsx scripts/previewReset.ts",
+    "validate-images": "tsx utils/validateImages.ts"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.0.0",
+    "@paralleldrive/cuid2": "^2.2.2",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
