@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
 
 import { PrismaBaseService } from '../../common/service/prisma-base.service';
 
@@ -52,6 +56,24 @@ export class UsersService
     status,
     role,
   }: GetUsersPaginationDto) {
+    // Safety net: validate enum values trước khi truyền vào Prisma
+    if (role !== undefined) {
+      const validRoles = Object.values(UserRole);
+      if (!validRoles.includes(role)) {
+        throw new BadRequestException(
+          `role không hợp lệ. Giá trị hợp lệ: ${validRoles.join(', ')}`,
+        );
+      }
+    }
+    if (status !== undefined) {
+      const validStatuses = Object.values(UserStatus);
+      if (!validStatuses.includes(status)) {
+        throw new BadRequestException(
+          `status không hợp lệ. Giá trị hợp lệ: ${validStatuses.join(', ')}`,
+        );
+      }
+    }
+
     const searchCondition = this.queryUtil.createStringSearchCondition(search, [
       'fullName',
       'email',

@@ -32,7 +32,7 @@ async function main() {
       email: 'nike@vendor.com',
       password: hashedPassword,
       fullName: 'Nike Official',
-      role: UserRole.seller,
+      role: UserRole.vendor,
       status: UserStatus.active,
       phone: '0911111111',
       address: 'HCM',

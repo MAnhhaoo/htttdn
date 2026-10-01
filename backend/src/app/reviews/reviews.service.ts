@@ -9,10 +9,34 @@ import { OrderStatus, ProductStatus } from '@prisma/client';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
+import { GetReviewsPaginationDto } from './dto/get-review.dto';
 
 @Injectable()
 export class ReviewsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async listAll({ page = 1, itemPerPage = 10 }: GetReviewsPaginationDto) {
+    const where = { deletedAt: null };
+    const totalItems = await this.prisma.review.count({ where });
+    const list = await this.prisma.review.findMany({
+      where,
+      skip: (page - 1) * itemPerPage,
+      take: itemPerPage,
+      include: {
+        user: { select: { id: true, fullName: true, email: true } },
+        product: { select: { id: true, name: true, slug: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    
+    return {
+      list,
+      page,
+      itemPerPage,
+      totalItems,
+      totalPages: Math.ceil(totalItems / itemPerPage) || 1,
+    };
+  }
 
   listByProduct(productId: string) {
     return this.prisma.review.findMany({

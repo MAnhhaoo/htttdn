@@ -49,3 +49,27 @@ export const productColorsApi = {
   }),
   delete: (id) => axiosClient.delete(`/productColors/${id}`),
 };
+
+// ==================== ORDERS ====================
+
+export const ordersApi = {
+  getOrders: (params = {}) => axiosClient.get('/orders/admin/all', { params }),
+  updateOrderStatus: (id, status) => axiosClient.patch(`/orders/${id}/status`, { status }),
+};
+
+// ==================== VOUCHERS ====================
+
+export const vouchersApi = {
+  getVouchers: (params = {}) => axiosClient.get('/vouchers/admin/all', { params }),
+  createVoucher: (data) => axiosClient.post('/vouchers', data),
+  updateVoucher: (id, data) => axiosClient.patch(`/vouchers/${id}`, data),
+  deleteVoucher: (id) => axiosClient.delete(`/vouchers/${id}`),
+};
+
+// ==================== REVIEWS ====================
+
+export const reviewsApi = {
+  getReviews: (params = {}) => axiosClient.get('/reviews/admin/all', { params }),
+  deleteReview: (id) => axiosClient.delete(`/reviews/admin/${id}`),
+};
+

@@ -52,7 +52,7 @@ export default function UserManagement() {
   const getRoleBadge = (role) => {
     const styles = {
       admin: 'bg-red-100 text-red-700',
-      seller: 'bg-purple-100 text-purple-700',
+      vendor: 'bg-purple-100 text-purple-700',
       customer: 'bg-blue-100 text-blue-700',
     };
     return styles[role] || 'bg-slate-100 text-slate-700 dark:text-slate-300';
@@ -128,7 +128,7 @@ export default function UserManagement() {
             options={[
               { value: '', label: 'All Roles' },
               { value: 'customer', label: 'Customer' },
-              { value: 'seller', label: 'Seller' },
+              { value: 'vendor', label: 'Vendor' },
               { value: 'admin', label: 'Admin' }
             ]}
             value={roleFilter}

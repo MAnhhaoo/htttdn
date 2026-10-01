@@ -1,4 +1,5 @@
 import { Prisma, UserRole, UserStatus } from '@prisma/client';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 import { User } from '../entities/user.entity';
 
@@ -14,7 +15,10 @@ class IsExistPermissionKeyDto {
 }
 
 class GetUsersPaginationDto extends Pagination {
+  @ApiPropertyOptional({ enum: UserStatus, enumName: 'UserStatus' })
   status?: UserStatus;
+
+  @ApiPropertyOptional({ enum: UserRole, enumName: 'UserRole' })
   role?: UserRole;
 }
 

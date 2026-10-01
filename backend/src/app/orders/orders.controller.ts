@@ -6,14 +6,17 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
 import { User } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
+import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
 import { CheckoutDto } from './dto/checkout.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { GetOrdersPaginationDto } from './dto/get-order.dto';
 import { OrdersService } from './orders.service';
 
 @Controller('orders')
@@ -40,8 +43,8 @@ export class OrdersController {
 
   @Get('admin/all')
   @Roles(UserRole.admin)
-  all() {
-    return this.ordersService.listAll();
+  all(@Query(new ParseParamsPaginationPipe()) query: GetOrdersPaginationDto) {
+    return this.ordersService.listAll(query);
   }
 
   @Get(':id')

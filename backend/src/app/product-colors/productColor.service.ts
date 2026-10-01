@@ -147,7 +147,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
       },
       include: {
         variants: true,
-      }
+      },
     });
   }
 

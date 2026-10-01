@@ -92,7 +92,6 @@ export class AuthService {
       password: passwordHashed,
 
       role,
-
     });
 
     const { password: _password, ...userResponse } = userCreated;
