@@ -25,6 +25,7 @@ import { generateOrders } from '../generators/orders.generator';
 import { generateOrderStatusHistory } from '../generators/orderStatusHistory.generator';
 import { generateOrderVoucherDetails } from '../generators/orderVoucherDetails.generator';
 import { generateReviews } from '../generators/reviews.generator';
+import { generateSurveys } from '../generators/surveys.generator';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -95,7 +96,14 @@ function main() {
   );
   console.log(`   ✅ ${orderVoucherDetails.length} order voucher details`);
 
-  // ── 12. Reviews ──
+  // ── 12. Surveys ──
+  console.log('\n📝 Generating surveys...');
+  const { surveys, surveyQuestions, surveyOptions, surveyResponses, surveyAnswers, sql: surveysSql } = generateSurveys(
+    admins, vendors, customers, orders, orderDetails, products, colors, variants
+  );
+  console.log(`   ✅ ${surveys.length} surveys, ${surveyResponses.length} responses, ${surveyAnswers.length} answers`);
+
+  // ── 13. Reviews ──
   console.log('\n⭐ Generating reviews...');
   const { data: reviewsRaw } = generateReviews(orders, orderDetails, colors);
 
@@ -148,6 +156,7 @@ function main() {
     statusHistorySql,
     orderVoucherDetailsSql,
     reviewsSql,
+    surveysSql,
   ]);
   writeFileSync(join(OUTPUT_DIR, 'seed.sql'), allSql, 'utf-8');
 
@@ -179,6 +188,8 @@ function main() {
   console.log(`   Payments:           ${payments.length}`);
   console.log(`   Status History:     ${statusHistory.length}`);
   console.log(`   Reviews:            ${resolvedReviews.length}`);
+  console.log(`   Surveys:            ${surveys.length}`);
+  console.log(`   Survey Responses:   ${surveyResponses.length}`);
 }
 
 main();

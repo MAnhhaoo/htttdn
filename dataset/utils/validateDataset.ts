@@ -75,7 +75,37 @@ SELECT COUNT(*) AS negative_stock FROM "ProductVariant" WHERE "stock" < 0;
 -- 19. Invalid prices (non-positive — should return 0)
 SELECT COUNT(*) AS bad_prices FROM "ProductVariant" WHERE "price" <= 0;
 
--- 20. Summary report
+-- 20. Surveys by creator role
+SELECT u."role", COUNT(s."id") AS surveys FROM "Survey" s JOIN "User" u ON u."id" = s."createdById" GROUP BY u."role";
+
+-- 21. Survey Questions by Type
+SELECT "type", COUNT(*) FROM "SurveyQuestion" GROUP BY "type";
+
+-- 22. Survey Responses
+SELECT COUNT(*) AS total_responses FROM "SurveyResponse";
+
+-- 23. Invalid Survey Responses (Customer has no completed/shipping order from Vendor)
+SELECT sr."id" AS response_id, sr."userId" AS customer_id, s."createdById" AS vendor_id
+FROM "SurveyResponse" sr
+JOIN "Survey" s ON s."id" = sr."surveyId"
+JOIN "User" u ON u."id" = s."createdById"
+WHERE u."role" = 'vendor'
+  AND NOT EXISTS (
+    SELECT 1 FROM "Order" o
+    JOIN "OrderDetail" od ON od."orderId" = o."id"
+    JOIN "ProductVariant" pv ON pv."id" = od."productVariantId"
+    JOIN "ProductColor" pc ON pc."id" = pv."productColorId"
+    JOIN "Product" p ON p."id" = pc."productId"
+    WHERE o."userId" = sr."userId" AND p."vendorId" = s."createdById" AND o."status" IN ('completed', 'shipping')
+  );
+
+-- 24. Invalid Survey Answers (Option doesn't belong to Question)
+SELECT sa."id"
+FROM "SurveyAnswer" sa
+JOIN "SurveyOption" so ON so."id" = sa."optionId"
+WHERE sa."optionId" IS NOT NULL AND so."questionId" != sa."questionId";
+
+-- 25. Summary report
 SELECT 'Users' AS entity, COUNT(*) AS count FROM "User"
 UNION ALL SELECT 'Categories', COUNT(*) FROM "Category"
 UNION ALL SELECT 'Products', COUNT(*) FROM "Product"
@@ -90,6 +120,11 @@ UNION ALL SELECT 'OrderDetails', COUNT(*) FROM "OrderDetail"
 UNION ALL SELECT 'Payments', COUNT(*) FROM "Payment"
 UNION ALL SELECT 'OrderStatusHistory', COUNT(*) FROM "OrderStatusHistory"
 UNION ALL SELECT 'Reviews', COUNT(*) FROM "Review"
+UNION ALL SELECT 'Surveys', COUNT(*) FROM "Survey"
+UNION ALL SELECT 'SurveyQuestions', COUNT(*) FROM "SurveyQuestion"
+UNION ALL SELECT 'SurveyOptions', COUNT(*) FROM "SurveyOption"
+UNION ALL SELECT 'SurveyResponses', COUNT(*) FROM "SurveyResponse"
+UNION ALL SELECT 'SurveyAnswers', COUNT(*) FROM "SurveyAnswer"
 ORDER BY entity;
 `;
 }
