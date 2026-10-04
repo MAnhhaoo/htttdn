@@ -1,4 +1,4 @@
-import { UserRole, UserStatus } from '@prisma/client';
+import { Gender, UserRole, UserStatus } from '@prisma/client';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -7,6 +7,8 @@ const ProfileSchema = z.object({
   email: z.email().max(255),
   phone: z.string().max(255).nullable(),
   address: z.string().max(500).nullable(),
+  dateOfBirth: z.iso.date().nullable(),
+  gender: z.enum(Gender).nullable(),
 });
 
 export class UpdateProfileDto extends createZodDto(

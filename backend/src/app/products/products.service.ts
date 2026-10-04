@@ -116,8 +116,59 @@ export class ProductService extends PrismaBaseService<'product'> {
     return this.toCatalogProduct(product);
   }
 
+  async addFavorite(productId: string, userId: string) {
+    await this.getProductById(productId);
+    const favorite = await this.prismaService.productFavorite.upsert({
+      where: { userId_productId: { userId, productId } },
+      create: { userId, productId },
+      update: {},
+      include: { product: { include: productRelations } },
+    });
+    return { ...favorite, favorited: true };
+  }
+
+  async removeFavorite(productId: string, userId: string) {
+    await this.prismaService.productFavorite.deleteMany({
+      where: { userId, productId },
+    });
+    return { productId, favorited: false };
+  }
+
+  async favoriteStatus(productId: string, userId: string) {
+    const favorite = await this.prismaService.productFavorite.findUnique({
+      where: { userId_productId: { userId, productId } },
+      select: { id: true },
+    });
+    return { productId, favorited: Boolean(favorite) };
+  }
+
+  async listFavorites(userId: string) {
+    const favorites = await this.prismaService.productFavorite.findMany({
+      where: {
+        userId,
+        product: {
+          deletedAt: null,
+          status: ProductStatus.active,
+          category: { deletedAt: null },
+        },
+      },
+      include: { product: { include: productRelations } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return favorites.map((favorite) => ({
+      id: favorite.id,
+      createdAt: favorite.createdAt,
+      product: this.toCatalogProduct(favorite.product),
+    }));
+  }
+
   private async findProducts(
-    { page = 1, itemPerPage = 10, search, createdAfter }: GetProductsPaginationDto & GetVendorProductsPaginationDto,
+    {
+      page = 1,
+      itemPerPage = 10,
+      search,
+      createdAfter,
+    }: GetProductsPaginationDto & GetVendorProductsPaginationDto,
     scope: Prisma.ProductWhereInput,
   ) {
     const searchCondition = this.queryUtil.createStringSearchCondition(search, [

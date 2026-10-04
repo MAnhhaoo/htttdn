@@ -59,6 +59,30 @@ export class ProductsController {
   ) {
     return this.productService.getProductsByCategory(categorySlug, query);
   }
+  @Get(':id/favorite-status')
+  @Roles(UserRole.customer)
+  favoriteStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserInfo,
+  ) {
+    return this.productService.favoriteStatus(id, user.userID);
+  }
+  @Post(':id/favorite')
+  @Roles(UserRole.customer)
+  addFavorite(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserInfo,
+  ) {
+    return this.productService.addFavorite(id, user.userID);
+  }
+  @Delete(':id/favorite')
+  @Roles(UserRole.customer)
+  removeFavorite(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserInfo,
+  ) {
+    return this.productService.removeFavorite(id, user.userID);
+  }
   @Get(':id')
   @SkipAuth()
   getProductById(@Param('id', ParseUUIDPipe) id: string) {

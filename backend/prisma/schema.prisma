@@ -29,6 +29,47 @@ enum SurveyStatus {
   closed
 }
 
+enum Gender {
+  male
+  female
+  other
+  prefer_not_to_say
+}
+
+enum SurveyScope {
+  platform
+  vendor
+}
+
+enum SurveyAudienceType {
+  all_users
+  all_vendors
+  all_system
+  selected_users
+  vendor_buyers
+  vendor_completed_buyers
+  vendor_product_buyers
+}
+
+enum SurveyTriggerType {
+  manual
+  after_checkout
+  after_order_completed
+}
+
+enum SurveyResponseStatus {
+  pending
+  submitted
+  skipped
+  expired
+}
+
+enum NotificationType {
+  survey_invitation
+  order_update
+  system
+}
+
 enum SurveyQuestionType {
   text
   single_choice
@@ -91,6 +132,8 @@ model User {
   password             String               @db.VarChar(255)
   address              String?              @db.VarChar(500)
   phone                String?              @db.VarChar(255)
+  dateOfBirth          DateTime?            @db.Date
+  gender               Gender?
   role                 UserRole             @default(customer)
   status               UserStatus           @default(active)
   createdAt            DateTime             @default(now())
@@ -99,6 +142,8 @@ model User {
   createdBy            String?              @db.VarChar(255)
   surveys              Survey[]             @relation("SurveyCreator")
   surveyResponses      SurveyResponse[]     @relation("SurveyRespondent")
+  notifications        Notification[]
+  productFavorites     ProductFavorite[]
   vouchers             Voucher[]
   reviews              Review[]
   cart                 Cart?
@@ -108,24 +153,28 @@ model User {
 }
 
 model Survey {
-  id          String       @id @default(uuid()) @db.Uuid
-  createdById String       @db.Uuid
-  title       String       @db.VarChar(255)
-  description String?      @db.Text
-  imageUrl    String?      @db.VarChar(1000)
-  status      SurveyStatus @default(draft)
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  deletedAt   DateTime?
+  id           String             @id @default(uuid()) @db.Uuid
+  createdById  String             @db.Uuid
+  title        String             @db.VarChar(255)
+  description  String?            @db.Text
+  imageUrl     String?            @db.VarChar(1000)
+  scope        SurveyScope        @default(platform)
+  audienceType SurveyAudienceType
+  triggerType  SurveyTriggerType  @default(manual)
+  status       SurveyStatus       @default(draft)
+  startDate    DateTime?
+  endDate      DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  deletedAt    DateTime?
 
-  createdBy   User             @relation("SurveyCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  questions   SurveyQuestion[]
-  responses   SurveyResponse[]
+  createdBy     User             @relation("SurveyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  questions     SurveyQuestion[]
+  responses     SurveyResponse[]
+  notifications Notification[]
 
   @@index([createdById])
-  @@index([status, startDate, endDate])
+  @@index([status, triggerType, startDate, endDate])
 }
 
 model SurveyQuestion {
@@ -142,6 +191,7 @@ model SurveyQuestion {
   options SurveyOption[]
   answers SurveyAnswer[]
 
+  @@unique([surveyId, position])
   @@index([surveyId])
 }
 
@@ -155,22 +205,56 @@ model SurveyOption {
   question SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
   answers  SurveyAnswer[]
 
+  @@unique([questionId, position])
   @@index([questionId])
 }
 
 model SurveyResponse {
-  id          String   @id @default(uuid()) @db.Uuid
-  surveyId    String   @db.Uuid
-  userId      String   @db.Uuid
-  submittedAt DateTime @default(now())
-  createdAt   DateTime @default(now())
+  id          String               @id @default(uuid()) @db.Uuid
+  surveyId    String               @db.Uuid
+  userId      String               @db.Uuid
+  orderId     String?              @db.Uuid
+  deliveryKey String               @unique @db.VarChar(255)
+  status      SurveyResponseStatus @default(pending)
+  notifiedAt  DateTime?
+  openedAt    DateTime?
+  submittedAt DateTime?
+  skippedAt   DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
-  survey  Survey         @relation(fields: [surveyId], references: [id], onDelete: Restrict)
-  user    User           @relation("SurveyRespondent", fields: [userId], references: [id], onDelete: Restrict)
-  answers SurveyAnswer[]
+  survey       Survey         @relation(fields: [surveyId], references: [id], onDelete: Restrict)
+  user         User           @relation("SurveyRespondent", fields: [userId], references: [id], onDelete: Restrict)
+  order        Order?         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  answers      SurveyAnswer[]
+  notification Notification?
 
-  @@unique([surveyId, userId])
-  @@index([userId])
+  @@index([surveyId, status])
+  @@index([userId, status, createdAt])
+  @@index([orderId, status])
+}
+
+model Notification {
+  id               String           @id @default(uuid()) @db.Uuid
+  userId           String           @db.Uuid
+  surveyId         String?          @db.Uuid
+  surveyResponseId String?          @unique @db.Uuid
+  type             NotificationType
+  title            String           @db.VarChar(255)
+  content          String?          @db.Text
+  data             Json?
+  isRead           Boolean          @default(false)
+  readAt           DateTime?
+  expiresAt        DateTime?
+  createdAt        DateTime         @default(now())
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  survey   Survey?         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  response SurveyResponse? @relation(fields: [surveyResponseId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([surveyId])
 }
 
 model SurveyAnswer {
@@ -182,9 +266,9 @@ model SurveyAnswer {
   ratingValue Int?
   createdAt   DateTime @default(now())
 
-  response SurveyResponse  @relation(fields: [responseId], references: [id], onDelete: Cascade)
-  question SurveyQuestion  @relation(fields: [questionId], references: [id], onDelete: Restrict)
-  option   SurveyOption?   @relation(fields: [optionId], references: [id], onDelete: Restrict)
+  response SurveyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  option   SurveyOption?  @relation(fields: [optionId], references: [id], onDelete: Restrict)
 
   @@index([responseId])
   @@index([questionId])
@@ -265,15 +349,30 @@ model Product {
   updatedAt   DateTime      @updatedAt
   deletedAt   DateTime?
 
-  category       Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  vendor         User?           @relation("VendorProducts", fields: [vendorId], references: [id], onDelete: Restrict)
+  category       Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  vendor         User?             @relation("VendorProducts", fields: [vendorId], references: [id], onDelete: Restrict)
   colors         ProductColor[]
   reviews        Review[]
   voucherDetails VoucherDetail[]
+  favorites      ProductFavorite[]
 
   @@index([categoryId])
   @@index([vendorId])
   @@index([status])
+}
+
+model ProductFavorite {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  productId String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId, createdAt])
+  @@index([productId])
 }
 
 model ProductColor {
@@ -306,6 +405,7 @@ model ProductVariant {
   cartItems    CartItem[]
   orderDetails OrderDetail[]
 
+  @@unique([productColorId, size])
   @@index([productColorId])
 }
 
@@ -371,11 +471,12 @@ model Order {
   updatedAt       DateTime    @updatedAt
   cancelledAt     DateTime?
 
-  user           User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
-  details        OrderDetail[]
-  payment        Payment?
-  voucherDetails VoucherDetail[]
-  statusHistory  OrderStatusHistory[]
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  details         OrderDetail[]
+  payment         Payment?
+  voucherDetails  VoucherDetail[]
+  statusHistory   OrderStatusHistory[]
+  surveyResponses SurveyResponse[]
 
   @@index([userId])
   @@index([status])

@@ -28,7 +28,7 @@ export class ReviewsService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    
+
     return {
       list,
       page,

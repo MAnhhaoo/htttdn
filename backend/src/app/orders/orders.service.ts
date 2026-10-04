@@ -10,12 +10,15 @@ import {
   PaymentMethod,
   PaymentStatus,
   Prisma,
+  SurveyResponseStatus,
+  SurveyTriggerType,
   UserRole,
 } from '@prisma/client';
 
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { RealtimeService } from 'src/app/realtime/realtime.service';
+import { SurveysService } from 'src/app/surveys/surveys.service';
 import { VouchersService } from 'src/app/vouchers/vouchers.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
@@ -39,6 +42,38 @@ const orderInclude = {
   statusHistory: { orderBy: { createdAt: 'asc' as const } },
 };
 
+const surveyPromptSelect = {
+  id: true,
+  orderId: true,
+  status: true,
+  createdAt: true,
+  survey: {
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      imageUrl: true,
+      startDate: true,
+      endDate: true,
+      createdBy: { select: { id: true, fullName: true, role: true } },
+      questions: {
+        orderBy: { position: 'asc' as const },
+        select: {
+          id: true,
+          question: true,
+          type: true,
+          required: true,
+          position: true,
+          options: {
+            orderBy: { position: 'asc' as const },
+            select: { id: true, content: true, position: true },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.SurveyResponseSelect;
+
 const transitions: Record<OrderStatus, OrderStatus[]> = {
   pending: [OrderStatus.confirmed, OrderStatus.cancelled],
   confirmed: [OrderStatus.processing, OrderStatus.cancelled],
@@ -54,6 +89,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly vouchersService: VouchersService,
     private readonly realtime: RealtimeService,
+    private readonly surveysService: SurveysService,
   ) {}
 
   async checkout(userId: string, dto: CheckoutDto) {
@@ -158,10 +194,30 @@ export class OrdersService {
           });
           await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
 
-          return tx.order.findUniqueOrThrow({
+          const surveyNotifications = await this.surveysService.deliverForOrder(
+            tx,
+            order.id,
+            SurveyTriggerType.after_checkout,
+          );
+
+          const createdOrder = await tx.order.findUniqueOrThrow({
             where: { id: order.id },
             include: orderInclude,
           });
+          const surveyPrompts = await tx.surveyResponse.findMany({
+            where: {
+              orderId: order.id,
+              userId,
+              status: SurveyResponseStatus.pending,
+            },
+            select: surveyPromptSelect,
+            orderBy: { createdAt: 'asc' },
+          });
+
+          return {
+            order: { ...createdOrder, surveyPrompts },
+            surveyNotifications,
+          };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       )
@@ -177,8 +233,9 @@ export class OrdersService {
         throw error;
       });
 
-    this.emitOrder(result, 'order:created');
-    return result;
+    this.emitOrder(result.order, 'order:created');
+    this.surveysService.emitNotifications(result.surveyNotifications);
+    return result.order;
   }
 
   listMine(userId: string) {
@@ -209,7 +266,7 @@ export class OrdersService {
       skip: (page - 1) * itemPerPage,
       take: itemPerPage,
     });
-    
+
     return {
       list,
       page,
@@ -259,7 +316,7 @@ export class OrdersService {
       );
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       if (dto.status === OrderStatus.cancelled) {
         for (const detail of current.details) {
           await tx.productVariant.update({
@@ -317,14 +374,24 @@ export class OrdersService {
           note: dto.note,
         },
       });
-      return tx.order.findUniqueOrThrow({
+      const updated = await tx.order.findUniqueOrThrow({
         where: { id },
         include: orderInclude,
       });
+      const surveyNotifications =
+        dto.status === OrderStatus.completed
+          ? await this.surveysService.deliverForOrder(
+              tx,
+              id,
+              SurveyTriggerType.after_order_completed,
+            )
+          : [];
+      return { updated, surveyNotifications };
     });
 
-    this.emitOrder(updated, 'order:updated');
-    return updated;
+    this.emitOrder(result.updated, 'order:updated');
+    this.surveysService.emitNotifications(result.surveyNotifications);
+    return result.updated;
   }
 
   private assertCanView(

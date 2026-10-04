@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 
-import { Prisma, UserRole, UserStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { PrismaBaseService } from '../../common/service/prisma-base.service';
 
@@ -42,38 +38,17 @@ export class UsersService
     super(prismaService, 'user');
   }
 
-  /**
-   * Lấy danh sách user:
-   * - phân trang
-   * - tìm kiếm
-   * - lọc trạng thái
-   * - lọc role
-   */
-  async getUsers({
-    page = 1,
-    itemPerPage = 10,
-    search,
-    status,
-    role,
-  }: GetUsersPaginationDto) {
-    // Safety net: validate enum values trước khi truyền vào Prisma
-    if (role !== undefined) {
-      const validRoles = Object.values(UserRole);
-      if (!validRoles.includes(role)) {
-        throw new BadRequestException(
-          `role không hợp lệ. Giá trị hợp lệ: ${validRoles.join(', ')}`,
-        );
-      }
-    }
-    if (status !== undefined) {
-      const validStatuses = Object.values(UserStatus);
-      if (!validStatuses.includes(status)) {
-        throw new BadRequestException(
-          `status không hợp lệ. Giá trị hợp lệ: ${validStatuses.join(', ')}`,
-        );
-      }
-    }
+  async getUsers({ status, role, ...query }: GetUsersPaginationDto) {
+    return this.findUsers(query, {
+      ...(status ? { status } : {}),
+      ...(role ? { role } : {}),
+    });
+  }
 
+  private async findUsers(
+    { page = 1, itemPerPage = 10, search }: GetUsersPaginationDto,
+    scope: Prisma.UserWhereInput,
+  ) {
     const searchCondition = this.queryUtil.createStringSearchCondition(search, [
       'fullName',
       'email',
@@ -83,8 +58,7 @@ export class UsersService
 
     const where: Prisma.UserWhereInput = {
       deletedAt: null,
-      status,
-      role,
+      ...scope,
       ...searchCondition,
     };
 

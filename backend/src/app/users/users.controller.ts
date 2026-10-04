@@ -17,8 +17,6 @@ import { User as CurrentUser } from '../../common/decorators/user.decorator';
 
 import type { UserInfo } from '../../common/decorators/user.decorator';
 
-import { ParseParamsPaginationPipe } from '../../common/pipes/parse-params-pagination.pipe';
-
 import { ParseParamsOptionPipe } from '../../common/pipes/parse-params-option.pipe';
 
 import type { GetOptionsParams } from '../../common/query/options.interface';
@@ -44,10 +42,7 @@ export class UsersController {
    */
   @Get()
   @Roles(UserRole.admin)
-  getUsers(
-    @Query(new ParseParamsPaginationPipe())
-    query: GetUsersPaginationDto,
-  ) {
+  getUsers(@Query() query: GetUsersPaginationDto) {
     return this.usersService.getUsers(query);
   }
 

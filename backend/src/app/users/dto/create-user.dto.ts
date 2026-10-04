@@ -1,4 +1,4 @@
-import { Prisma, UserRole, UserStatus } from '@prisma/client';
+import { Gender, Prisma, UserRole, UserStatus } from '@prisma/client';
 
 export class CreateUserDto implements Prisma.UserCreateInput {
   id?: string;
@@ -9,6 +9,8 @@ export class CreateUserDto implements Prisma.UserCreateInput {
 
   phone?: string | null;
   address?: string | null;
+  dateOfBirth?: string | Date | null;
+  gender?: Gender | null;
   status?: UserStatus;
   role?: UserRole;
   createdBy?: string | null;

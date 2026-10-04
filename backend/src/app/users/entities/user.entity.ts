@@ -1,4 +1,9 @@
-import { User as UserPrisma, UserRole, UserStatus } from '@prisma/client';
+import {
+  Gender,
+  User as UserPrisma,
+  UserRole,
+  UserStatus,
+} from '@prisma/client';
 
 export class User implements UserPrisma {
   id: string;
@@ -8,6 +13,8 @@ export class User implements UserPrisma {
 
   phone: string | null;
   address: string | null;
+  dateOfBirth: Date | null;
+  gender: Gender | null;
 
   role: UserRole;
   status: UserStatus;

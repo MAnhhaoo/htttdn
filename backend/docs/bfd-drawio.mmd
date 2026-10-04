@@ -1,0 +1,110 @@
+flowchart TB
+    ecommerce["0. Hệ thống thương mại điện tử"]
+
+    account["1. Quản lý tài khoản"]
+    catalog["2. Quản lý danh mục và sản phẩm"]
+    cartVoucher["3. Quản lý giỏ hàng và voucher"]
+    orderManagement["4. Quản lý đơn hàng"]
+    payment["5. Quản lý thanh toán"]
+    review["6. Quản lý đánh giá"]
+    realtime["7. Thông báo thời gian thực"]
+
+    accountRegister["1.1 Đăng ký tài khoản"]
+    accountLogin["1.2 Đăng nhập"]
+    accountSession["1.3 Làm mới và kết thúc phiên"]
+    accountProfile["1.4 Quản lý hồ sơ"]
+    accountAdmin["1.5 Quản trị người dùng"]
+
+    catalogCategory["2.1 Quản lý danh mục"]
+    catalogSearch["2.2 Tìm kiếm sản phẩm"]
+    catalogDetail["2.3 Xem chi tiết sản phẩm"]
+    catalogProduct["2.4 Quản lý sản phẩm"]
+    catalogColor["2.5 Quản lý màu và hình ảnh"]
+    catalogVariant["2.6 Quản lý giá, kích cỡ và tồn kho"]
+
+    cartView["3.1 Xem giỏ hàng"]
+    cartItem["3.2 Thêm, sửa và xóa mặt hàng"]
+    voucherManage["3.3 Quản lý voucher"]
+    voucherAvailable["3.4 Tra cứu voucher khả dụng"]
+    voucherPreview["3.5 Kiểm tra và tính giảm giá"]
+
+    orderCheckout["4.1 Checkout và tạo đơn"]
+    orderQuery["4.2 Tra cứu đơn theo vai trò"]
+    orderDetail["4.3 Xem chi tiết đơn"]
+    orderStatus["4.4 Cập nhật trạng thái đơn"]
+    orderCancel["4.5 Hủy đơn"]
+    orderResource["4.6 Đồng bộ tồn kho, giỏ và voucher"]
+    orderHistory["4.7 Lưu lịch sử trạng thái"]
+
+    paymentCreate["5.1 Khởi tạo thanh toán"]
+    paymentQuery["5.2 Tra cứu thanh toán theo đơn"]
+    paymentList["5.3 Tra cứu toàn bộ thanh toán"]
+    paymentStatus["5.4 Cập nhật trạng thái thanh toán"]
+
+    reviewView["6.1 Xem đánh giá sản phẩm"]
+    reviewCreate["6.2 Tạo đánh giá"]
+    reviewUpdate["6.3 Cập nhật đánh giá"]
+    reviewDelete["6.4 Xóa và kiểm duyệt đánh giá"]
+
+    realtimeAuth["7.1 Xác thực kết nối Socket.IO"]
+    realtimeRoom["7.2 Phân kênh theo người dùng và vai trò"]
+    realtimeOrder["7.3 Phát sự kiện đơn hàng"]
+    realtimePayment["7.4 Phát sự kiện thanh toán"]
+
+    ecommerce --> account
+    ecommerce --> catalog
+    ecommerce --> cartVoucher
+    ecommerce --> orderManagement
+    ecommerce --> payment
+    ecommerce --> review
+    ecommerce --> realtime
+
+    account --> accountRegister
+    account --> accountLogin
+    account --> accountSession
+    account --> accountProfile
+    account --> accountAdmin
+
+    catalog --> catalogCategory
+    catalog --> catalogSearch
+    catalog --> catalogDetail
+    catalog --> catalogProduct
+    catalog --> catalogColor
+    catalog --> catalogVariant
+
+    cartVoucher --> cartView
+    cartVoucher --> cartItem
+    cartVoucher --> voucherManage
+    cartVoucher --> voucherAvailable
+    cartVoucher --> voucherPreview
+
+    orderManagement --> orderCheckout
+    orderManagement --> orderQuery
+    orderManagement --> orderDetail
+    orderManagement --> orderStatus
+    orderManagement --> orderCancel
+    orderManagement --> orderResource
+    orderManagement --> orderHistory
+
+    payment --> paymentCreate
+    payment --> paymentQuery
+    payment --> paymentList
+    payment --> paymentStatus
+
+    review --> reviewView
+    review --> reviewCreate
+    review --> reviewUpdate
+    review --> reviewDelete
+
+    realtime --> realtimeAuth
+    realtime --> realtimeRoom
+    realtime --> realtimeOrder
+    realtime --> realtimePayment
+
+    classDef systemNode fill:#dae8fc,stroke:#6c8ebf
+    classDef groupNode fill:#fff2cc,stroke:#d6b656
+    classDef detailNode fill:#f5f5f5,stroke:#666666
+
+    class ecommerce systemNode
+    class account,catalog,cartVoucher,orderManagement,payment,review,realtime groupNode
+    class accountRegister,accountLogin,accountSession,accountProfile,accountAdmin,catalogCategory,catalogSearch,catalogDetail,catalogProduct,catalogColor,catalogVariant,cartView,cartItem,voucherManage,voucherAvailable,voucherPreview,orderCheckout,orderQuery,orderDetail,orderStatus,orderCancel,orderResource,orderHistory,paymentCreate,paymentQuery,paymentList,paymentStatus,reviewView,reviewCreate,reviewUpdate,reviewDelete,realtimeAuth,realtimeRoom,realtimeOrder,realtimePayment detailNode
