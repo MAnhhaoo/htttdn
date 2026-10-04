@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, ShoppingBag, User, Menu, X, ChevronRight, ChevronDown } from 'lucide-react';
+import { Search, ShoppingBag, User, Menu, X, ChevronRight, ChevronDown, ArrowRight, Bell, Heart } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useCart } from '../../../hooks/useCart';
 import { useCategories } from '../../../hooks/useCategories';
@@ -40,7 +40,15 @@ export default function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-white/90 dark:bg-dark-card/90 backdrop-blur-xl border-b border-light-border dark:border-dark-border shadow-sm transition-colors duration-500">
+      {/* ── Top Announcement Bar ── */}
+      <div className="bg-[#1A3A2C] text-white text-xs sm:text-sm font-medium py-2.5 text-center flex items-center justify-center gap-2">
+        <span className="opacity-90">Miễn phí vận chuyển cho đơn hàng từ 499K</span>
+        <Link to="/products" className="hover:underline flex items-center gap-1 font-bold">
+          Khám phá ngay <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      </div>
+
+      <header className="sticky top-0 z-40 bg-[#FAF7F2]/90 dark:bg-dark-card/90 backdrop-blur-xl border-b border-light-border dark:border-dark-border shadow-sm transition-colors duration-500">
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 h-16 md:h-20 flex items-center justify-between gap-4 md:gap-6">
 
           {/* Mobile Menu Button & Logo */}
@@ -52,7 +60,7 @@ export default function Header() {
               <Menu className="w-6 h-6" />
             </button>
             <Link to="/" className="flex items-center gap-2">
-              <span className="text-2xl md:text-3xl font-black tracking-tighter text-primary font-serif uppercase mt-1">Miva</span>
+              <span className="text-2xl md:text-3xl font-black tracking-[0.2em] text-[#1A3A2C] dark:text-white font-sans mt-1 uppercase">MIVA</span>
             </Link>
           </div>
 
@@ -75,35 +83,41 @@ export default function Header() {
           <div className="flex items-center gap-2 sm:gap-4">
             <ThemeToggle />
 
-            <Link to="/cart" className="relative p-2 text-light-muted dark:text-dark-muted hover:text-primary dark:hover:text-primary transition-colors">
-              <ShoppingBag className="w-5 h-5" />
-              {isAuthenticated && totalItems > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-dark-card">
-                  {totalItems > 99 ? '99+' : totalItems}
-                </span>
-              )}
+            <Link to="#" className="relative p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors">
+              <Bell className="w-5 h-5 text-[#1A3A2C] dark:text-white" strokeWidth={2.5} />
+              <span className="absolute 0 top-0.5 right-0.5 w-4 h-4 bg-[#c26d53] text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-[#FAF7F2] dark:border-dark-card">
+                3
+              </span>
             </Link>
 
-            <div className="h-6 w-[1px] bg-light-border dark:bg-dark-border hidden sm:block mx-1"></div>
+            <Link to="#" className="p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors">
+              <Heart className="w-5 h-5 text-[#1A3A2C] dark:text-white" strokeWidth={2.5} />
+            </Link>
 
             {isAuthenticated ? (
               <div className="flex items-center gap-4">
                 <Link to="/orders" className="text-sm font-medium text-light-muted hover:text-primary transition-colors hidden sm:block">
                   Đơn hàng
                 </Link>
-                <Link to="/profile" className="flex items-center gap-2 text-light-text dark:text-dark-text hover:text-primary transition-colors">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-                    {user?.fullName?.charAt(0) || <User className="w-4 h-4" />}
-                  </div>
+                <Link to="/profile" className="flex items-center gap-2 text-[#1A3A2C] dark:text-dark-text hover:text-primary transition-colors p-2">
+                  <User className="w-5 h-5" strokeWidth={2.5} />
                   <span className="text-sm font-medium hidden sm:block truncate max-w-[120px]">{user?.fullName?.split(' ').pop()}</span>
                 </Link>
               </div>
             ) : (
-              <Link to="/login" className="flex items-center gap-2 text-light-text dark:text-dark-text hover:text-primary transition-colors">
-                <User className="w-5 h-5" />
-                <span className="text-sm font-medium hidden sm:block">Đăng nhập</span>
+              <Link to="/login" className="flex items-center gap-2 text-[#1A3A2C] dark:text-dark-text hover:text-primary transition-colors p-2">
+                <User className="w-5 h-5" strokeWidth={2.5} />
               </Link>
             )}
+
+            <Link to="/cart" className="relative p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors">
+              <ShoppingBag className="w-5 h-5 text-[#1A3A2C] dark:text-white" strokeWidth={2.5} />
+              {isAuthenticated && totalItems > 0 && (
+                <span className="absolute 0 top-0.5 right-0.5 w-4 h-4 bg-[#1A3A2C] text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-[#FAF7F2] dark:border-dark-card">
+                  {totalItems > 99 ? '99+' : totalItems}
+                </span>
+              )}
+            </Link>
           </div>
         </div>
 

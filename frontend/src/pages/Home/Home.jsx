@@ -1,60 +1,77 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Sparkles, ShieldCheck, Truck, HeadphonesIcon, Gift } from 'lucide-react';
+import { ArrowRight, Sparkles, ShieldCheck, Truck, HeadphonesIcon, Gift, MoveRight } from 'lucide-react';
 import { useProducts } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
 import ProductCard from '../../components/product/ProductCard/ProductCard';
 import ProductCardSkeleton from '../../components/product/ProductCard/ProductCardSkeleton';
 
 export default function Home() {
-  const { products, isLoading: isLoadingProducts } = useProducts({ limit: 8 });
+  const { products, isLoading: isLoadingProducts } = useProducts({ limit: 4 });
   const { categories, isLoading: isLoadingCategories } = useCategories();
 
-  // Pick top 6 categories, or empty if loading
-  const displayCategories = categories?.slice(0, 6) || [];
+  // Pick top 4 categories
+  const displayCategories = categories?.slice(0, 4) || [];
+
+  const categoryBgColors = [
+    'bg-[#E2F2E9]', // Mint
+    'bg-[#E5EEF2]', // Blue
+    'bg-[#F5E6DA]', // Peach
+    'bg-[#F2EDCE]', // Yellow
+  ];
 
   return (
-    <div className="pb-16 bg-light-bg dark:bg-dark-bg transition-colors duration-500">
-
+    <div className="bg-[#FAF7F2] dark:bg-dark-bg transition-colors duration-500 w-full overflow-hidden">
       {/* ── Hero Banner ── */}
-      <section className="relative overflow-hidden pt-12 md:pt-20 pb-28 md:pb-32">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent dark:from-primary/10 dark:via-dark-bg dark:to-dark-bg z-0"></div>
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row items-center gap-10 lg:gap-16">
-
-          <div className="flex-1 space-y-8 text-center md:text-left pt-8 md:pt-0">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-primary/30 bg-primary/5 text-primary text-xs sm:text-sm font-semibold tracking-widest uppercase">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-              Bộ sưu tập mới 2026
+      <section className="relative w-full">
+        {/* Background shapes */}
+        <div className="absolute top-0 right-0 w-1/2 h-full bg-[#E2F2E9] rounded-bl-[100px] z-0 hidden md:block"></div>
+        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 relative z-10 flex flex-col md:flex-row items-center pt-16 pb-20 md:py-24">
+          
+          {/* Left Text */}
+          <div className="flex-1 space-y-6 text-center md:text-left pr-0 md:pr-10">
+            <div className="inline-flex items-center gap-2 text-[#2A5C4A] text-xs font-bold tracking-widest uppercase">
+              <Sparkles className="w-4 h-4" />
+              Lựa chọn mới cho mỗi ngày
             </div>
 
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-black text-light-text dark:text-dark-text leading-[1.15]">
-              Định hình <br className="hidden md:block" />
-              <span className="text-primary italic pr-2">Phong cách</span> sống
+            <h1 className="text-6xl md:text-7xl lg:text-8xl font-serif text-[#1A3A2C] dark:text-dark-text leading-tight tracking-tight">
+              Everything<br />
+              <span className="italic text-[#2A5C4A]">You Need.</span>
             </h1>
 
-            <p className="text-base sm:text-lg text-light-muted dark:text-dark-muted max-w-xl mx-auto md:mx-0 leading-relaxed font-light">
-              Khám phá hàng ngàn sản phẩm chất lượng cao từ các thương hiệu uy tín. Trải nghiệm mua sắm đẳng cấp và tiện lợi ngay tại Miva.
+            <p className="text-lg text-gray-600 dark:text-dark-muted max-w-md mx-auto md:mx-0 leading-relaxed pt-2 pb-4">
+              Từ những món đồ thiết yếu đến những điều bạn yêu thích — tất cả được tuyển chọn tại MIVA.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 pt-4 justify-center md:justify-start">
-              <Link to="/products" className="bg-primary hover:bg-primary-dark text-white px-8 py-4 rounded-xl font-bold transition-all shadow-lg shadow-primary/30 flex items-center justify-center gap-3">
-                Khám phá ngay <ArrowRight className="w-5 h-5" />
+            <div className="flex flex-col sm:flex-row gap-6 pt-2 justify-center md:justify-start items-center">
+              <Link to="/products" className="bg-[#1A3A2C] hover:bg-[#2A5C4A] text-white px-8 py-4 font-semibold transition-colors flex items-center justify-center gap-2 rounded-sm">
+                Mua sắm ngay <ArrowRight className="w-5 h-5" />
+              </Link>
+              <Link to="/products" className="text-[#1A3A2C] font-semibold hover:underline decoration-2 underline-offset-4 rounded-sm">
+                Xem bộ sưu tập
               </Link>
             </div>
           </div>
 
-          <div className="flex-1 w-full max-w-md md:max-w-none">
-            {/* Geometric Hero Art instead of external image */}
-            <div className="relative aspect-square md:aspect-[4/3] rounded-[2rem] overflow-hidden bg-gradient-to-tr from-light-surface to-white dark:from-dark-surface dark:to-dark-card border border-light-border dark:border-dark-border luxury-shadow flex items-center justify-center group">
-              <div className="absolute inset-0 bg-primary/5 group-hover:bg-primary/10 transition-colors duration-700"></div>
-
-              {/* Abstract shapes */}
-              <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-primary/20 rounded-full blur-2xl animate-pulse"></div>
-              <div className="absolute bottom-1/4 right-1/4 w-40 h-40 bg-primary/30 rounded-full blur-3xl animate-pulse delay-700"></div>
-
-              <div className="relative z-10 flex flex-col items-center text-center p-8">
-                <Sparkles className="w-16 h-16 text-primary mb-6" strokeWidth={1} />
-                <h2 className="text-3xl font-serif font-bold text-light-text dark:text-dark-text mb-2 uppercase tracking-widest">Premium</h2>
-                <p className="text-sm text-light-muted dark:text-dark-muted tracking-widest uppercase">Marketplace</p>
+          {/* Right Image */}
+          <div className="flex-1 w-full mt-16 md:mt-0 relative flex justify-center">
+            {/* Circle image container */}
+            <div className="relative w-[300px] h-[400px] md:w-[450px] md:h-[550px] bg-[#E8DCD0] rounded-t-full overflow-hidden shadow-xl">
+              <img 
+                src="https://images.unsplash.com/photo-1511511450040-677116ff389e?q=80&w=1473&auto=format&fit=crop" 
+                alt="Miva Lifestyle" 
+                className="w-full h-full object-cover object-center opacity-90"
+              />
+            </div>
+            
+            {/* Floating badge */}
+            <div className="absolute top-10 -left-10 md:-left-16 bg-white p-4 py-3 shadow-lg flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-[#E2F2E9] text-[#2A5C4A] flex items-center justify-center">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-xs text-gray-500">Sản phẩm mới</span>
+                <span className="font-bold text-[#1A3A2C]">Mỗi tuần</span>
               </div>
             </div>
           </div>
@@ -62,63 +79,47 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Trust / Benefits Section ── */}
-      <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 relative z-20 -mt-16 md:-mt-24 mb-20">
-        <div className="card-surface rounded-3xl p-6 md:p-8 lg:p-10 shadow-xl dark:shadow-2xl flex flex-col md:flex-row gap-8 justify-between divide-y md:divide-y-0 md:divide-x divide-light-border dark:divide-dark-border">
-
-          <div className="flex-1 flex flex-col items-center text-center px-4 pt-4 md:pt-0">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-light-text dark:text-dark-text mb-2">Chính hãng 100%</h3>
-            <p className="text-sm text-light-muted dark:text-dark-muted">Đảm bảo nguồn gốc xuất xứ rõ ràng từ các nhà cung cấp uy tín.</p>
-          </div>
-
-          <div className="flex-1 flex flex-col items-center text-center px-4 pt-8 md:pt-0">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
-              <Truck className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-light-text dark:text-dark-text mb-2">Giao hàng tốc hành</h3>
-            <p className="text-sm text-light-muted dark:text-dark-muted">Nhận hàng nhanh chóng trên toàn quốc với dịch vụ cao cấp.</p>
-          </div>
-
-          <div className="flex-1 flex flex-col items-center text-center px-4 pt-8 md:pt-0">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
-              <HeadphonesIcon className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-light-text dark:text-dark-text mb-2">Hỗ trợ 24/7</h3>
-            <p className="text-sm text-light-muted dark:text-dark-muted">Đội ngũ chăm sóc khách hàng luôn sẵn sàng phục vụ bạn.</p>
-          </div>
-
-        </div>
-      </section>
-
       {/* ── Categories ── */}
-      <section className="py-12 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex items-end justify-between mb-8">
+      <section className="py-16 md:py-24 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 gap-4">
           <div>
-            <h2 className="text-3xl md:text-4xl font-bold text-light-text dark:text-dark-text mb-2">Danh mục nổi bật</h2>
+            <div className="text-[#2A5C4A] text-xs font-bold tracking-widest uppercase mb-2">Khám phá</div>
+            <h2 className="text-4xl md:text-5xl font-serif text-[#1A3A2C] dark:text-dark-text tracking-tight">Mua sắm theo danh mục</h2>
           </div>
+          <Link to="/products" className="text-[#2A5C4A] font-semibold hover:text-[#1A3A2C] transition-colors flex items-center gap-2 group whitespace-nowrap">
+            Xem tất cả <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </Link>
         </div>
 
         {isLoadingCategories ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 lg:gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-32 bg-light-surface dark:bg-dark-surface rounded-2xl animate-pulse" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-80 bg-gray-200 dark:bg-dark-surface animate-pulse rounded-sm" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 lg:gap-6">
-            {displayCategories.map((category) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {displayCategories.map((category, index) => (
               <Link
                 key={category.id}
                 to={`/products?category=${category.slug}`}
-                className="group flex flex-col items-center justify-center p-6 card-surface rounded-2xl hover:border-primary transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                className={`group relative overflow-hidden flex flex-col justify-between p-8 ${categoryBgColors[index % 4]} transition-transform duration-300 hover:-translate-y-1 h-80 lg:h-96`}
               >
-                <div className="w-12 h-12 rounded-full bg-light-surface dark:bg-dark-surface text-primary group-hover:bg-primary group-hover:text-white transition-colors duration-300 flex items-center justify-center mb-4">
-                  <Gift className="w-5 h-5" />
+                <div className="z-10">
+                  <p className="text-gray-500 text-xs mb-1">100+ sản phẩm</p>
+                  <h3 className="text-2xl text-[#1A3A2C] font-serif tracking-tight">{category.name}</h3>
+                  <div className="w-10 h-10 mt-6 rounded-full bg-white flex items-center justify-center text-[#1A3A2C] group-hover:bg-[#1A3A2C] group-hover:text-white transition-colors shadow-sm">
+                    <ArrowRight className="w-5 h-5" />
+                  </div>
                 </div>
-                <h3 className="font-semibold text-light-text dark:text-dark-text text-center text-sm truncate w-full">{category.name}</h3>
+                
+                {/* Decorative curve */}
+                <div className="absolute bottom-0 right-0 w-3/4 h-1/2 bg-black/5 rounded-tl-full -mr-4 -mb-4 transition-transform group-hover:scale-110 duration-500"></div>
+                
+                {/* Generic placeholder image per category for aesthetics */}
+                <div className="absolute bottom-0 right-0 w-48 h-48 opacity-80 mix-blend-multiply rounded-tl-full overflow-hidden flex items-end justify-end">
+                   <div className="w-40 h-40 bg-black/10 rounded-full translate-x-10 translate-y-10"></div>
+                </div>
               </Link>
             ))}
           </div>
@@ -126,31 +127,63 @@ export default function Home() {
       </section>
 
       {/* ── Featured Products ── */}
-      <section className="py-12 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex items-end justify-between mb-8">
+      <section className="py-16 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 gap-4">
           <div>
-            <h2 className="text-3xl md:text-4xl font-bold text-light-text dark:text-dark-text mb-2">Các sản phẩm mua nhiều nhất</h2>
-            <p className="text-light-muted dark:text-dark-muted font-light hidden sm:block">Những sản phẩm được khách hàng yêu thích và săn đón.</p>
+            <div className="text-[#2A5C4A] text-xs font-bold tracking-widest uppercase mb-2">Được yêu thích</div>
+            <h2 className="text-4xl md:text-5xl font-serif text-[#1A3A2C] dark:text-dark-text tracking-tight">Sản phẩm nổi bật</h2>
           </div>
-          <Link to="/products" className="text-primary font-semibold hover:text-primary-dark transition-colors flex items-center gap-2 group whitespace-nowrap">
+          <Link to="/products" className="text-[#2A5C4A] font-semibold hover:text-[#1A3A2C] transition-colors flex items-center gap-2 group whitespace-nowrap">
             Xem tất cả <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 lg:gap-8">
           {isLoadingProducts ? (
-            [...Array(8)].map((_, i) => <ProductCardSkeleton key={i} />)
+            [...Array(4)].map((_, i) => <ProductCardSkeleton key={i} />)
           ) : products.length > 0 ? (
             products.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))
           ) : (
-            <div className="col-span-full py-20 text-center card-surface border-dashed rounded-3xl">
-              <p className="text-light-muted dark:text-dark-muted">Chưa có sản phẩm nào.</p>
+            <div className="col-span-full py-20 text-center border-dashed border-2 border-gray-200">
+              <p className="text-gray-500">Chưa có sản phẩm nào.</p>
             </div>
           )}
         </div>
       </section>
+
+      {/* ── Member Promotion Banner ── */}
+      <section className="py-16 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="w-full bg-[#1A3A2C] overflow-hidden relative flex flex-col md:flex-row items-center">
+          
+          <div className="flex-1 p-10 md:p-16 relative z-10">
+            <div className="text-white/70 text-xs font-bold tracking-widest uppercase mb-4">Đặc quyền thành viên</div>
+            <h2 className="text-4xl md:text-6xl font-serif text-white leading-tight mb-6">
+              Thêm niềm vui,<br/>
+              <span className="italic opacity-90">thêm ưu đãi.</span>
+            </h2>
+            <p className="text-white/80 max-w-md leading-relaxed mb-8 font-light">
+              Đăng ký thành viên MIVA để nhận ngay ưu đãi 15% cho đơn hàng đầu tiên và nhiều đặc quyền hấp dẫn.
+            </p>
+            <Link to="/login" className="inline-flex bg-white hover:bg-gray-100 text-[#1A3A2C] px-8 py-4 font-bold transition-colors items-center justify-center gap-3">
+              Đăng ký ngay <MoveRight className="w-5 h-5" />
+            </Link>
+          </div>
+
+          <div className="flex-1 w-full h-64 md:h-full relative overflow-hidden flex items-center justify-center min-h-[300px]">
+            {/* Outline circles */}
+            <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-64 h-64 border-[1px] border-white/20 rounded-full"></div>
+            {/* Main discount circle */}
+            <div className="relative z-10 w-64 h-64 md:w-80 md:h-80 bg-[#C99C53] rounded-full flex flex-col items-center justify-center text-[#1A3A2C]">
+              <span className="text-7xl md:text-8xl font-black tracking-tighter leading-none">15<span className="text-4xl md:text-5xl">%</span></span>
+              <span className="text-2xl md:text-3xl font-bold tracking-widest mt-2">OFF</span>
+            </div>
+          </div>
+          
+        </div>
+      </section>
+
     </div>
   );
 }
