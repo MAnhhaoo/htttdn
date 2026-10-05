@@ -1,35 +1,37 @@
-import { useState } from 'react';
-import { Search, Eye, Edit } from 'lucide-react';
-import { mockOrders, mockOrderDetails, mockProductVariants, mockProductColors, mockProducts, mockUsers, mockVendorProductMappings } from '../../data';
+import { useState, useEffect } from 'react';
+import { Search, Eye, Loader2 } from 'lucide-react';
+import { orderService } from '../../services/orderService';
+import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency, formatDate } from '../../utils/formatHelpers';
 import { Button, Select, Badge } from '../../components/ui';
 import OrderDetailModal from './OrderDetailModal';
 
-const CURRENT_VENDOR_ID = 3;
-
 export default function OrderManagement() {
-  const vendorProductIds = mockVendorProductMappings
-    .filter(m => m.vendorId === CURRENT_VENDOR_ID)
-    .map(m => m.productId);
-
-  const vendorColorIds = mockProductColors
-    .filter(c => vendorProductIds.includes(c.productId))
-    .map(c => c.id);
-
-  const vendorVariantIds = mockProductVariants
-    .filter(v => vendorColorIds.includes(v.productColorId))
-    .map(v => v.id);
-
-  const vendorOrderDetails = mockOrderDetails.filter(od => vendorVariantIds.includes(od.productVariantId));
-  const vendorOrderIds = [...new Set(vendorOrderDetails.map(od => od.orderId))];
-  const vendorOrders = mockOrders.filter(o => vendorOrderIds.includes(o.id));
-
+  const { user } = useAuth();
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
 
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [orderToView, setOrderToView] = useState(null);
 
-  const filtered = vendorOrders.filter(o =>
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const data = await orderService.getVendorOrders();
+      setOrders(data);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const filtered = orders.filter(o =>
     statusFilter === 'all' || o.status === statusFilter
   );
 
@@ -43,12 +45,28 @@ export default function OrderManagement() {
     return styles[status] || 'default';
   };
 
-  const handleViewClick = (order, userName) => {
-    // In Vendor, we should ideally filter the order items to ONLY show items belonging to this vendor
-    // But for simplicity in the mock, we pass the order. The Modal will show it.
-    setOrderToView({ ...order, userName });
+  const handleViewClick = (order) => {
+    setOrderToView(order);
     setIsDetailModalOpen(true);
   };
+
+  const handleStatusChange = async (orderId, newStatus) => {
+    try {
+      await orderService.updateOrderStatus(orderId, newStatus);
+      fetchOrders();
+    } catch (error) {
+      console.error('Failed to update status', error);
+      alert('Không thể cập nhật trạng thái đơn hàng. ' + (error.response?.data?.message || ''));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -63,8 +81,11 @@ export default function OrderManagement() {
             options={[
               { value: 'all', label: 'All Status' },
               { value: 'pending', label: 'Pending' },
+              { value: 'confirmed', label: 'Confirmed' },
+              { value: 'processing', label: 'Processing' },
               { value: 'shipping', label: 'Shipping' },
-              { value: 'completed', label: 'Completed' }
+              { value: 'completed', label: 'Completed' },
+              { value: 'cancelled', label: 'Cancelled' }
             ]}
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
@@ -76,7 +97,7 @@ export default function OrderManagement() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Order ID</th>
+                <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Order Code</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Customer</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Your Items</th>
                 <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Subtotal</th>
@@ -86,31 +107,35 @@ export default function OrderManagement() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(order => {
-                const user = mockUsers.find(u => u.id === order.userId);
-                const userName = user?.fullName || 'Unknown';
-                const myItems = vendorOrderDetails.filter(od => od.orderId === order.id);
-                const subtotal = myItems.reduce((sum, od) => sum + od.price * od.quantity, 0);
-                return (
-                  <tr key={order.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">#{order.id}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{userName}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{myItems.length} item(s)</td>
-                    <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">{formatCurrency(subtotal)}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={getStatusBadge(order.status)}>
-                        {order.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{formatDate(order.createdAt)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-indigo-600" onClick={() => handleViewClick(order, userName)} />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-8 text-slate-500">No orders found</td>
+                </tr>
+              ) : (
+                filtered.map(order => {
+                  const myItems = order.details.filter(od => od.productVariant?.productColor?.product?.vendorId === user?.id);
+                  const subtotal = myItems.reduce((sum, od) => sum + od.price * od.quantity, 0);
+                  return (
+                    <tr key={order.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
+                      <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">#{order.orderCode}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{order.receiverName}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{myItems.length} item(s)</td>
+                      <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">{formatCurrency(subtotal)}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={getStatusBadge(order.status)}>
+                          {order.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{formatDate(order.createdAt)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-indigo-600" onClick={() => handleViewClick(order)} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -120,8 +145,8 @@ export default function OrderManagement() {
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
         order={orderToView}
-        // Note: Vendor is usually not able to modify the overall order status if there are multiple vendors,
-        // but for simplicity in this mock, we can leave onStatusChange undefined or let them update it.
+        onStatusChange={(newStatus) => handleStatusChange(orderToView.id, newStatus)}
+        vendorId={user?.id}
       />
     </div>
   );

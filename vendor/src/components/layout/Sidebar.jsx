@@ -26,7 +26,7 @@ export default function Sidebar() {
 
   return (
     <aside className="w-64 bg-gradient-to-b from-indigo-950 to-indigo-900 text-indigo-200 min-h-screen flex flex-col">
-      <div className="h-16 flex items-center px-6 border-b border-indigo-800">
+      <div className="h-16 flex items-center px-6">
         <Store className="w-6 h-6 text-indigo-400 mr-2" />
         <h1 className="text-xl font-bold text-white tracking-wider">VENDOR</h1>
       </div>

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Package, ShoppingCart, Loader2 } from 'lucide-react';
+import { Package, ShoppingCart, Loader2, Heart } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { formatPrice } from '../../../utils/formatPrice';
 import { useCart } from '../../../hooks/useCart';
@@ -95,6 +95,18 @@ export default function ProductCard({ product }) {
               </span>
             </div>
           )}
+
+          {/* Wishlist Button */}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm text-gray-700 hover:text-red-500 hover:scale-110 transition-all duration-200 z-10"
+            aria-label="Yêu thích"
+          >
+            <Heart className="w-[18px] h-[18px]" strokeWidth={1.5} />
+          </button>
         </div>
 
         {/* Content */}

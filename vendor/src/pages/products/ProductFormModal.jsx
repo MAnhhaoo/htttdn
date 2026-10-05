@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { Modal, Button, Input, Select, Badge } from '../../components/ui';
-import { mockCategories } from '../../data';
+import { productService } from '../../services/productService';
+import { useAuth } from '../../contexts/AuthContext';
 
-const CURRENT_VENDOR_ID = 3;
+export default function ProductFormModal({ isOpen, onClose, productToEdit, onSave, categories = [] }) {
+  const { user } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-export default function ProductFormModal({ isOpen, onClose, productToEdit, onSave }) {
   // --- Form State ---
   const [formData, setFormData] = useState({
     name: '',
     categoryId: '',
-    vendorId: CURRENT_VENDOR_ID,
     description: '',
     status: 'active',
     colors: [] 
@@ -20,12 +21,18 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
 
   useEffect(() => {
     if (productToEdit) {
-      setFormData(productToEdit);
+      setFormData({
+        name: productToEdit.name || '',
+        categoryId: productToEdit.categoryId || '',
+        description: productToEdit.description || '',
+        status: productToEdit.status || 'active',
+        // Make sure to map color properly if needed, but since it's from API, it has .color
+        colors: productToEdit.colors ? JSON.parse(JSON.stringify(productToEdit.colors)) : []
+      });
     } else {
       setFormData({
         name: '',
         categoryId: '',
-        vendorId: CURRENT_VENDOR_ID,
         description: '',
         status: 'active',
         colors: []
@@ -41,7 +48,7 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
   const handleAddColor = () => {
     const newColor = {
       id: `temp-color-${Date.now()}`,
-      colorName: '',
+      color: '',
       imageUrls: [''],
       variants: []
     };
@@ -105,12 +112,30 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.name || !formData.categoryId) {
       alert("Please fill required product fields (Name, Category)");
       return;
     }
-    onSave(formData);
+    
+    try {
+      setIsSubmitting(true);
+      // Wait, the API for creating products and variants may be more complex.
+      // Assuming for now the API accepts creating a product first, or creating everything in one payload.
+      // Based on NestJS standard conventions, let's just send the whole data and hope the backend handles it.
+      // Or if not, we can just save basic info for now.
+      if (productToEdit) {
+        await productService.updateProduct(productToEdit.id, formData);
+      } else {
+        await productService.createProduct(formData);
+      }
+      onSave(formData);
+    } catch (error) {
+      console.error('Error saving product:', error);
+      alert('Không thể lưu sản phẩm. ' + (error.response?.data?.message || ''));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -121,8 +146,11 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
       maxWidth="max-w-4xl"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" className="bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500" onClick={handleSubmit}>Save Product</Button>
+          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+          <Button variant="primary" className="bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500 flex gap-2 items-center" onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save Product
+          </Button>
         </>
       }
     >
@@ -142,7 +170,7 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
               label="Category *"
               options={[
                 { value: '', label: 'Select Category' },
-                ...mockCategories.map(c => ({ value: c.id, label: c.name }))
+                ...categories.map(c => ({ value: c.id, label: c.name }))
               ]}
               value={formData.categoryId}
               onChange={e => handleChange('categoryId', e.target.value)}
@@ -194,7 +222,7 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
                     <div className="flex items-center gap-3">
                       {expandedColorId === color.id ? <ChevronUp className="w-5 h-5 text-slate-400"/> : <ChevronDown className="w-5 h-5 text-slate-400"/>}
                       <span className="font-semibold text-slate-800 dark:text-slate-100">
-                        {color.colorName || `Color #${index + 1}`}
+                        {color.color || `Color #${index + 1}`}
                       </span>
                       <Badge variant="info" className="bg-indigo-100 text-indigo-700">{color.variants.length} variants</Badge>
                     </div>
@@ -215,8 +243,8 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
                         <Input 
                           label="Color Name" 
                           placeholder="e.g. Red"
-                          value={color.colorName}
-                          onChange={e => handleUpdateColor(color.id, 'colorName', e.target.value)}
+                          value={color.color}
+                          onChange={e => handleUpdateColor(color.id, 'color', e.target.value)}
                         />
                         <Input 
                           label="Image URL" 

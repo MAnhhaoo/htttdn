@@ -57,12 +57,12 @@ export default function ProductDetailModal({ isOpen, onClose, product }) {
                 <div key={color.id} className="bg-white dark:bg-slate-900 transition-colors border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
                   <div className="flex items-center gap-4 p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
                     {color.imageUrls?.[0] ? (
-                      <img src={color.imageUrls[0]} alt={color.colorName} className="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-800" />
+                      <img src={color.imageUrls[0]} alt={color.color} className="w-16 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-800" />
                     ) : (
                       <div className="w-16 h-16 bg-slate-200 rounded-lg flex items-center justify-center text-xs text-slate-500 dark:text-slate-400">No Image</div>
                     )}
                     <div>
-                      <h4 className="font-semibold text-slate-800 dark:text-slate-100 text-lg">{color.colorName}</h4>
+                      <h4 className="font-semibold text-slate-800 dark:text-slate-100 text-lg">{color.color}</h4>
                       <p className="text-sm text-slate-500 dark:text-slate-400">{color.variants?.length || 0} variants</p>
                     </div>
                   </div>
