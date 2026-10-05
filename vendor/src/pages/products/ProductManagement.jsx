@@ -1,20 +1,19 @@
-import { useState } from 'react';
-import { Search, Eye, Edit, Trash2, Plus, Image } from 'lucide-react';
-import { mockProducts, mockCategories, mockProductColors, mockProductVariants, mockVendorProductMappings } from '../../data';
+import { useState, useEffect } from 'react';
+import { Search, Eye, Edit, Trash2, Plus, Image, Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatHelpers';
-import { getProductTotalStock, getProductMinPrice, getProductMaxPrice, getAvailableColors } from '../../utils/productHelpers';
 import { Button, Input, Select, Badge } from '../../components/ui';
+import { productService } from '../../services/productService';
+import { categoryService } from '../../services/categoryService';
+import { useAuth } from '../../contexts/AuthContext';
 import ProductFormModal from './ProductFormModal';
 import ProductDetailModal from './ProductDetailModal';
 
-const CURRENT_VENDOR_ID = 3;
-
 export default function ProductManagement() {
-  const vendorProductIds = mockVendorProductMappings
-    .filter(m => m.vendorId === CURRENT_VENDOR_ID)
-    .map(m => m.productId);
-
-  const [products, setProducts] = useState(mockProducts.filter(p => vendorProductIds.includes(p.id) && !p.deletedAt));
+  const { user } = useAuth();
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
 
@@ -24,16 +23,31 @@ export default function ProductManagement() {
   const [productToEdit, setProductToEdit] = useState(null);
   const [productToView, setProductToView] = useState(null);
 
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [prodRes, catRes] = await Promise.all([
+        productService.getVendorProducts({ itemPerPage: 100 }), // temporary high limit
+        categoryService.getAll()
+      ]);
+      setProducts(prodRes.list || []);
+      setCategories(catRes.list || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
-    const matchCategory = categoryFilter === 'all' || p.categoryId === Number(categoryFilter);
+    const matchCategory = categoryFilter === 'all' || p.categoryId === categoryFilter;
     return matchSearch && matchCategory;
   });
-
-  const getFirstImage = (productId) => {
-    const color = mockProductColors.find(c => c.productId === productId);
-    return color?.imageUrls?.[0] || null;
-  };
 
   const handleAddClick = () => {
     setProductToEdit(null);
@@ -41,50 +55,45 @@ export default function ProductManagement() {
   };
 
   const handleViewClick = (product) => {
-    const category = mockCategories.find(c => c.id === product.categoryId);
-    const colors = mockProductColors.filter(c => c.productId === product.id).map(c => ({
-      ...c,
-      colorName: c.color,
-      variants: mockProductVariants.filter(v => v.productColorId === c.id)
-    }));
-    
+    // We already have colors and variants nested from the backend API
     setProductToView({ 
       ...product, 
-      colors,
-      categoryName: category?.name,
-      // Vendor portal implicitly knows the vendor, so we can just set it or leave it as In-house
-      vendorName: 'Your Store'
+      categoryName: product.category?.name,
+      vendorName: user?.fullName || 'Your Store'
     });
     setIsDetailModalOpen(true);
   };
 
   const handleEditClick = (product) => {
-    const colors = mockProductColors.filter(c => c.productId === product.id).map(c => ({
-      ...c,
-      colorName: c.color,
-      variants: mockProductVariants.filter(v => v.productColorId === c.id)
-    }));
-    
-    setProductToEdit({ ...product, colors });
+    setProductToEdit(product);
     setIsModalOpen(true);
   };
 
-  const handleDeleteClick = (productId) => {
+  const handleDeleteClick = async (productId) => {
     if (window.confirm("Are you sure you want to delete this product?")) {
-      setProducts(prev => prev.filter(p => p.id !== productId));
+      try {
+        await productService.deleteProduct(productId);
+        setProducts(prev => prev.filter(p => p.id !== productId));
+      } catch (error) {
+        console.error('Failed to delete product', error);
+        alert('Có lỗi xảy ra khi xóa sản phẩm');
+      }
     }
   };
 
-  const handleSaveProduct = (savedData) => {
-    console.log("Saving product data:", savedData);
-    if (productToEdit) {
-      setProducts(prev => prev.map(p => p.id === savedData.id ? { ...p, ...savedData } : p));
-    } else {
-      const newProduct = { ...savedData, id: Date.now() };
-      setProducts(prev => [newProduct, ...prev]);
-    }
+  const handleSaveProduct = async (savedData) => {
+    // Re-fetch after save to get updated variants/colors
+    await fetchData();
     setIsModalOpen(false);
   };
+
+  if (loading) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -112,7 +121,7 @@ export default function ProductManagement() {
           <Select 
             options={[
               { value: 'all', label: 'All Categories' },
-              ...mockCategories.map(c => ({ value: c.id, label: c.name }))
+              ...categories.map(c => ({ value: c.id, label: c.name }))
             ]}
             value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value)}
@@ -134,48 +143,53 @@ export default function ProductManagement() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(product => {
-                const category = mockCategories.find(c => c.id === product.categoryId);
-                const img = getFirstImage(product.id);
-                const stock = getProductTotalStock(product.id);
-                return (
-                  <tr key={product.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center">
-                        {img ? (
-                          <img src={img} alt={product.name} className="w-10 h-10 rounded-lg object-cover mr-3 border border-slate-200 dark:border-slate-800" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 dark:border-slate-800 flex items-center justify-center mr-3"><Image className="w-5 h-5 text-slate-400" /></div>
-                        )}
-                        <div>
-                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{product.name}</p>
-                          <p className="text-xs text-slate-400">#{product.id}</p>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-8 text-slate-500">No products found</td>
+                </tr>
+              ) : (
+                filtered.map(product => {
+                  const stock = product.totalStock || 0;
+                  const colorsList = product.colors?.map(c => c.color).join(', ') || 'N/A';
+                  return (
+                    <tr key={product.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center">
+                          {product.thumbnail ? (
+                            <img src={product.thumbnail} alt={product.name} className="w-10 h-10 rounded-lg object-cover mr-3 border border-slate-200 dark:border-slate-800" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 dark:border-slate-800 flex items-center justify-center mr-3"><Image className="w-5 h-5 text-slate-400" /></div>
+                          )}
+                          <div>
+                            <p className="text-sm font-medium text-slate-800 dark:text-slate-100 line-clamp-1">{product.name}</p>
+                            <p className="text-xs text-slate-400">#{product.slug}</p>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{category?.name}</td>
-                    <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-medium">
-                      {formatCurrency(getProductMinPrice(product.id))} - {formatCurrency(getProductMaxPrice(product.id))}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-sm font-medium ${stock <= 5 ? 'text-red-500' : 'text-slate-800 dark:text-slate-100'}`}>{stock}</span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{getAvailableColors(product.id).join(', ')}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={product.status === 'active' ? 'success' : 'default'} className={product.status === 'active' ? 'bg-green-100 text-green-700' : ''}>
-                        {product.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-indigo-600" onClick={() => handleViewClick(product)} />
-                        <Button variant="ghost" size="sm" icon={Edit} className="text-slate-400 hover:text-amber-600" onClick={() => handleEditClick(product)} />
-                        <Button variant="ghost" size="sm" icon={Trash2} className="text-slate-400 hover:text-red-600" onClick={() => handleDeleteClick(product.id)} />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{product.category?.name}</td>
+                      <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-100 font-medium whitespace-nowrap">
+                        {product.minPrice ? formatCurrency(product.minPrice) : 'N/A'} {product.minPrice !== product.maxPrice && product.maxPrice ? ` - ${formatCurrency(product.maxPrice)}` : ''}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-sm font-medium ${stock <= 5 ? 'text-red-500' : 'text-slate-800 dark:text-slate-100'}`}>{stock}</span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{colorsList}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={product.status === 'active' ? 'success' : 'default'} className={product.status === 'active' ? 'bg-green-100 text-green-700' : ''}>
+                          {product.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-indigo-600" onClick={() => handleViewClick(product)} />
+                          <Button variant="ghost" size="sm" icon={Edit} className="text-slate-400 hover:text-amber-600" onClick={() => handleEditClick(product)} />
+                          <Button variant="ghost" size="sm" icon={Trash2} className="text-slate-400 hover:text-red-600" onClick={() => handleDeleteClick(product.id)} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -186,6 +200,7 @@ export default function ProductManagement() {
         onClose={() => setIsModalOpen(false)}
         productToEdit={productToEdit}
         onSave={handleSaveProduct}
+        categories={categories}
       />
 
       <ProductDetailModal

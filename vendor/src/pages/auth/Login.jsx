@@ -1,20 +1,35 @@
 import { useState } from 'react';
-import { Store, Eye, EyeOff } from 'lucide-react';
+import { Store, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Button, Input } from '../../components/ui';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function VendorLogin() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.email === 'vendor@shop.com' && formData.password === 'vendor123') {
+    setError('');
+    setIsLoading(true);
+    try {
+      await login(formData);
       navigate('/dashboard');
-    } else {
-      setError('Invalid email or password. Use vendor@shop.com / vendor123');
+    } catch (err) {
+      const msg = err.response?.data?.message;
+      if (Array.isArray(msg)) {
+        setError(msg[0]);
+      } else if (typeof msg === 'string') {
+        setError(msg);
+      } else {
+        setError('Email hoặc mật khẩu không chính xác');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -72,8 +87,8 @@ export default function VendorLogin() {
             <a href="#" className="text-indigo-600 hover:text-indigo-700 font-medium">Forgot password?</a>
           </div>
 
-          <Button type="submit" className="w-full h-12 text-base mt-2 bg-indigo-600 hover:bg-indigo-700 text-white">
-            Sign In
+          <Button type="submit" disabled={isLoading} className="w-full h-12 text-base mt-2 bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-2">
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
           </Button>
         </form>
 

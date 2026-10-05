@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Modal, Button, Input, Select } from '../../components/ui';
+import { voucherService } from '../../services/voucherService';
+import { Loader2 } from 'lucide-react';
 
 export default function VoucherFormModal({ isOpen, onClose, voucherToEdit, onSave }) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({ 
     code: '', 
     name: '',
@@ -37,12 +40,35 @@ export default function VoucherFormModal({ isOpen, onClose, voucherToEdit, onSav
     }
   }, [voucherToEdit, isOpen]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.code || !formData.name || !formData.discountValue) {
       alert('Please fill all required fields');
       return;
     }
-    onSave(formData);
+
+    try {
+      setIsSubmitting(true);
+      // Format payload correctly: dates to ISO strings
+      const payload = {
+        ...formData,
+        startDate: formData.startDate ? new Date(formData.startDate).toISOString() : undefined,
+        endDate: formData.endDate ? new Date(formData.endDate).toISOString() : undefined
+      };
+
+      if (voucherToEdit) {
+        // ID should not be in update payload
+        const { id, usedQuantity, vendorId, createdAt, updatedAt, deletedAt, ...updateData } = payload;
+        await voucherService.updateVoucher(voucherToEdit.id, updateData);
+      } else {
+        await voucherService.createVoucher(payload);
+      }
+      onSave(); // refetches list
+    } catch (error) {
+      console.error('Failed to save voucher', error);
+      alert('Có lỗi xảy ra: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -52,8 +78,11 @@ export default function VoucherFormModal({ isOpen, onClose, voucherToEdit, onSav
       title={voucherToEdit ? "Edit Shop Voucher" : "Create Shop Voucher"}
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handleSubmit}>Save Voucher</Button>
+          <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2" onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save Voucher
+          </Button>
         </>
       }
     >

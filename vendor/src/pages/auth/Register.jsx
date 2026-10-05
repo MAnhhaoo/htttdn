@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { Store, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Store, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
 import { Button, Input, Select } from '../../components/ui';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function VendorRegister() {
   const navigate = useNavigate();
+  const { register } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({ 
     storeName: '',
     businessType: '',
@@ -13,10 +17,22 @@ export default function VendorRegister() {
     password: '' 
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert('Mock Registration Successful! Please login.');
-    navigate('/login');
+    setError('');
+    setIsLoading(true);
+    try {
+      await register({
+        fullName: formData.storeName,
+        email: formData.email,
+        password: formData.password
+      });
+      navigate('/dashboard');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -33,6 +49,12 @@ export default function VendorRegister() {
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-2">Fill out the form below to start selling on our platform.</p>
         </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -93,8 +115,8 @@ export default function VendorRegister() {
             </label>
           </div>
 
-          <Button type="submit" className="w-full h-12 text-base mt-4 bg-indigo-600 hover:bg-indigo-700 text-white">
-            Create Store Account
+          <Button type="submit" disabled={isLoading} className="w-full h-12 text-base mt-4 bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-2">
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Store Account'}
           </Button>
         </form>
       </div>

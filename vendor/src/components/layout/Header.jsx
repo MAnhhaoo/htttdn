@@ -1,19 +1,12 @@
-import { Bell, Search, UserCircle, Moon, Sun } from 'lucide-react';
+import { Bell, UserCircle, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 
 export default function Header() {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 transition-colors">
-      <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-2 w-96">
-        <Search className="w-5 h-5 text-slate-400 mr-2" />
-        <input
-          type="text"
-          placeholder="Search products, orders..."
-          className="bg-transparent border-none outline-none text-sm w-full dark:text-slate-200"
-        />
-      </div>
+    <header className="h-16 bg-white dark:bg-slate-900 flex items-center justify-between px-6 transition-colors shadow-sm dark:shadow-none">
+      <div>{/* Empty div to keep flex space-between structure if needed, or remove and change justify-between to justify-end */}</div>
 
       <div className="flex items-center space-x-4">
         <button 
