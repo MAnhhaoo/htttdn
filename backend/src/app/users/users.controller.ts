@@ -25,7 +25,7 @@ import { UsersService } from './users.service';
 
 import { UpdateProfileDto, UpdateUserDto } from './dto/update-user.dto';
 
-import type { GetUsersPaginationDto } from './dto/get-user.dto';
+import { GetUsersPaginationDto } from './dto/get-user.dto';
 
 import type { User as UserEntity } from './entities/user.entity';
 
