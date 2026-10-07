@@ -101,6 +101,8 @@ export const ProductScalarFieldEnumSchema = z.enum(['id','categoryId','vendorId'
 
 export const ProductFavoriteScalarFieldEnumSchema = z.enum(['id','userId','productId','createdAt']);
 
+export const UserAddressScalarFieldEnumSchema = z.enum(['id','userId','receiverName','phone','addressLine','ward','district','province','label','isDefault','createdAt','updatedAt','deletedAt']);
+
 export const ProductColorScalarFieldEnumSchema = z.enum(['id','productId','color','imageUrls','createdAt','updatedAt','deletedAt']);
 
 export const ProductVariantScalarFieldEnumSchema = z.enum(['id','productColorId','size','stock','price','createdAt','updatedAt','deletedAt']);
@@ -189,7 +191,7 @@ export const OrderStatusSchema = z.enum(['pending','confirmed','processing','shi
 
 export type OrderStatusType = `${z.infer<typeof OrderStatusSchema>}`
 
-export const PaymentMethodSchema = z.enum(['cod','vnpay','momo','zalopay','bank_transfer']);
+export const PaymentMethodSchema = z.enum(['cod','vnpay','momo','zalopay','bank_transfer','credit_card','pay_later']);
 
 export type PaymentMethodType = `${z.infer<typeof PaymentMethodSchema>}`
 
@@ -430,6 +432,28 @@ export const ProductFavoriteSchema = z.object({
 export type ProductFavorite = z.infer<typeof ProductFavoriteSchema>
 
 /////////////////////////////////////////
+// USER ADDRESS SCHEMA
+/////////////////////////////////////////
+
+export const UserAddressSchema = z.object({
+  id: z.uuid(),
+  userId: z.string(),
+  receiverName: z.string(),
+  phone: z.string(),
+  addressLine: z.string(),
+  ward: z.string().nullable(),
+  district: z.string().nullable(),
+  province: z.string().nullable(),
+  label: z.string().nullable(),
+  isDefault: z.boolean(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+  deletedAt: z.coerce.date().nullable(),
+})
+
+export type UserAddress = z.infer<typeof UserAddressSchema>
+
+/////////////////////////////////////////
 // PRODUCT COLOR SCHEMA
 /////////////////////////////////////////
 
@@ -600,6 +624,7 @@ export const UserIncludeSchema: z.ZodType<Prisma.UserInclude> = z.object({
   surveyResponses: z.union([z.boolean(),z.lazy(() => SurveyResponseFindManyArgsSchema)]).optional(),
   notifications: z.union([z.boolean(),z.lazy(() => NotificationFindManyArgsSchema)]).optional(),
   productFavorites: z.union([z.boolean(),z.lazy(() => ProductFavoriteFindManyArgsSchema)]).optional(),
+  addresses: z.union([z.boolean(),z.lazy(() => UserAddressFindManyArgsSchema)]).optional(),
   vouchers: z.union([z.boolean(),z.lazy(() => VoucherFindManyArgsSchema)]).optional(),
   reviews: z.union([z.boolean(),z.lazy(() => ReviewFindManyArgsSchema)]).optional(),
   cart: z.union([z.boolean(),z.lazy(() => CartArgsSchema)]).optional(),
@@ -623,6 +648,7 @@ export const UserCountOutputTypeSelectSchema: z.ZodType<Prisma.UserCountOutputTy
   surveyResponses: z.boolean().optional(),
   notifications: z.boolean().optional(),
   productFavorites: z.boolean().optional(),
+  addresses: z.boolean().optional(),
   vouchers: z.boolean().optional(),
   reviews: z.boolean().optional(),
   orders: z.boolean().optional(),
@@ -649,6 +675,7 @@ export const UserSelectSchema: z.ZodType<Prisma.UserSelect> = z.object({
   surveyResponses: z.union([z.boolean(),z.lazy(() => SurveyResponseFindManyArgsSchema)]).optional(),
   notifications: z.union([z.boolean(),z.lazy(() => NotificationFindManyArgsSchema)]).optional(),
   productFavorites: z.union([z.boolean(),z.lazy(() => ProductFavoriteFindManyArgsSchema)]).optional(),
+  addresses: z.union([z.boolean(),z.lazy(() => UserAddressFindManyArgsSchema)]).optional(),
   vouchers: z.union([z.boolean(),z.lazy(() => VoucherFindManyArgsSchema)]).optional(),
   reviews: z.union([z.boolean(),z.lazy(() => ReviewFindManyArgsSchema)]).optional(),
   cart: z.union([z.boolean(),z.lazy(() => CartArgsSchema)]).optional(),
@@ -1062,6 +1089,35 @@ export const ProductFavoriteSelectSchema: z.ZodType<Prisma.ProductFavoriteSelect
   product: z.union([z.boolean(),z.lazy(() => ProductArgsSchema)]).optional(),
 }).strict()
 
+// USER ADDRESS
+//------------------------------------------------------
+
+export const UserAddressIncludeSchema: z.ZodType<Prisma.UserAddressInclude> = z.object({
+  user: z.union([z.boolean(),z.lazy(() => UserArgsSchema)]).optional(),
+}).strict();
+
+export const UserAddressArgsSchema: z.ZodType<Prisma.UserAddressDefaultArgs> = z.object({
+  select: z.lazy(() => UserAddressSelectSchema).optional(),
+  include: z.lazy(() => UserAddressIncludeSchema).optional(),
+}).strict();
+
+export const UserAddressSelectSchema: z.ZodType<Prisma.UserAddressSelect> = z.object({
+  id: z.boolean().optional(),
+  userId: z.boolean().optional(),
+  receiverName: z.boolean().optional(),
+  phone: z.boolean().optional(),
+  addressLine: z.boolean().optional(),
+  ward: z.boolean().optional(),
+  district: z.boolean().optional(),
+  province: z.boolean().optional(),
+  label: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+  createdAt: z.boolean().optional(),
+  updatedAt: z.boolean().optional(),
+  deletedAt: z.boolean().optional(),
+  user: z.union([z.boolean(),z.lazy(() => UserArgsSchema)]).optional(),
+}).strict()
+
 // PRODUCT COLOR
 //------------------------------------------------------
 
@@ -1385,6 +1441,7 @@ export const UserWhereInputSchema: z.ZodType<Prisma.UserWhereInput> = z.strictOb
   surveyResponses: z.lazy(() => SurveyResponseListRelationFilterSchema).optional(),
   notifications: z.lazy(() => NotificationListRelationFilterSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteListRelationFilterSchema).optional(),
+  addresses: z.lazy(() => UserAddressListRelationFilterSchema).optional(),
   vouchers: z.lazy(() => VoucherListRelationFilterSchema).optional(),
   reviews: z.lazy(() => ReviewListRelationFilterSchema).optional(),
   cart: z.union([ z.lazy(() => CartNullableScalarRelationFilterSchema), z.lazy(() => CartWhereInputSchema) ]).optional().nullable(),
@@ -1412,6 +1469,7 @@ export const UserOrderByWithRelationInputSchema: z.ZodType<Prisma.UserOrderByWit
   surveyResponses: z.lazy(() => SurveyResponseOrderByRelationAggregateInputSchema).optional(),
   notifications: z.lazy(() => NotificationOrderByRelationAggregateInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteOrderByRelationAggregateInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressOrderByRelationAggregateInputSchema).optional(),
   vouchers: z.lazy(() => VoucherOrderByRelationAggregateInputSchema).optional(),
   reviews: z.lazy(() => ReviewOrderByRelationAggregateInputSchema).optional(),
   cart: z.lazy(() => CartOrderByWithRelationInputSchema).optional(),
@@ -1454,6 +1512,7 @@ export const UserWhereUniqueInputSchema: z.ZodType<Prisma.UserWhereUniqueInput> 
   surveyResponses: z.lazy(() => SurveyResponseListRelationFilterSchema).optional(),
   notifications: z.lazy(() => NotificationListRelationFilterSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteListRelationFilterSchema).optional(),
+  addresses: z.lazy(() => UserAddressListRelationFilterSchema).optional(),
   vouchers: z.lazy(() => VoucherListRelationFilterSchema).optional(),
   reviews: z.lazy(() => ReviewListRelationFilterSchema).optional(),
   cart: z.union([ z.lazy(() => CartNullableScalarRelationFilterSchema), z.lazy(() => CartWhereInputSchema) ]).optional().nullable(),
@@ -2613,6 +2672,104 @@ export const ProductFavoriteScalarWhereWithAggregatesInputSchema: z.ZodType<Pris
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
 });
 
+export const UserAddressWhereInputSchema: z.ZodType<Prisma.UserAddressWhereInput> = z.strictObject({
+  AND: z.union([ z.lazy(() => UserAddressWhereInputSchema), z.lazy(() => UserAddressWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => UserAddressWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => UserAddressWhereInputSchema), z.lazy(() => UserAddressWhereInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  userId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  receiverName: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  phone: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  addressLine: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  ward: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  district: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  province: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  label: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  isDefault: z.union([ z.lazy(() => BoolFilterSchema), z.boolean() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  user: z.union([ z.lazy(() => UserScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional(),
+});
+
+export const UserAddressOrderByWithRelationInputSchema: z.ZodType<Prisma.UserAddressOrderByWithRelationInput> = z.strictObject({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  userId: z.lazy(() => SortOrderSchema).optional(),
+  receiverName: z.lazy(() => SortOrderSchema).optional(),
+  phone: z.lazy(() => SortOrderSchema).optional(),
+  addressLine: z.lazy(() => SortOrderSchema).optional(),
+  ward: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  district: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  province: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  label: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  isDefault: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  user: z.lazy(() => UserOrderByWithRelationInputSchema).optional(),
+});
+
+export const UserAddressWhereUniqueInputSchema: z.ZodType<Prisma.UserAddressWhereUniqueInput> = z.object({
+  id: z.uuid(),
+})
+.and(z.strictObject({
+  id: z.uuid().optional(),
+  AND: z.union([ z.lazy(() => UserAddressWhereInputSchema), z.lazy(() => UserAddressWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => UserAddressWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => UserAddressWhereInputSchema), z.lazy(() => UserAddressWhereInputSchema).array() ]).optional(),
+  userId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  receiverName: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  phone: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  addressLine: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  ward: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  district: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  province: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  label: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  isDefault: z.union([ z.lazy(() => BoolFilterSchema), z.boolean() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+  user: z.union([ z.lazy(() => UserScalarRelationFilterSchema), z.lazy(() => UserWhereInputSchema) ]).optional(),
+}));
+
+export const UserAddressOrderByWithAggregationInputSchema: z.ZodType<Prisma.UserAddressOrderByWithAggregationInput> = z.strictObject({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  userId: z.lazy(() => SortOrderSchema).optional(),
+  receiverName: z.lazy(() => SortOrderSchema).optional(),
+  phone: z.lazy(() => SortOrderSchema).optional(),
+  addressLine: z.lazy(() => SortOrderSchema).optional(),
+  ward: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  district: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  province: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  label: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  isDefault: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  _count: z.lazy(() => UserAddressCountOrderByAggregateInputSchema).optional(),
+  _max: z.lazy(() => UserAddressMaxOrderByAggregateInputSchema).optional(),
+  _min: z.lazy(() => UserAddressMinOrderByAggregateInputSchema).optional(),
+});
+
+export const UserAddressScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.UserAddressScalarWhereWithAggregatesInput> = z.strictObject({
+  AND: z.union([ z.lazy(() => UserAddressScalarWhereWithAggregatesInputSchema), z.lazy(() => UserAddressScalarWhereWithAggregatesInputSchema).array() ]).optional(),
+  OR: z.lazy(() => UserAddressScalarWhereWithAggregatesInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => UserAddressScalarWhereWithAggregatesInputSchema), z.lazy(() => UserAddressScalarWhereWithAggregatesInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
+  userId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
+  receiverName: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
+  phone: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
+  addressLine: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
+  ward: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  district: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  province: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  label: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  isDefault: z.union([ z.lazy(() => BoolWithAggregatesFilterSchema), z.boolean() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
+});
+
 export const ProductColorWhereInputSchema: z.ZodType<Prisma.ProductColorWhereInput> = z.strictObject({
   AND: z.union([ z.lazy(() => ProductColorWhereInputSchema), z.lazy(() => ProductColorWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => ProductColorWhereInputSchema).array().optional(),
@@ -3468,6 +3625,7 @@ export const UserCreateInputSchema: z.ZodType<Prisma.UserCreateInput> = z.strict
   surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
@@ -3495,6 +3653,7 @@ export const UserUncheckedCreateInputSchema: z.ZodType<Prisma.UserUncheckedCreat
   surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -3522,6 +3681,7 @@ export const UserUpdateInputSchema: z.ZodType<Prisma.UserUpdateInput> = z.strict
   surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -3549,6 +3709,7 @@ export const UserUncheckedUpdateInputSchema: z.ZodType<Prisma.UserUncheckedUpdat
   surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -4617,6 +4778,117 @@ export const ProductFavoriteUncheckedUpdateManyInputSchema: z.ZodType<Prisma.Pro
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
+export const UserAddressCreateInputSchema: z.ZodType<Prisma.UserAddressCreateInput> = z.strictObject({
+  id: z.uuid().optional(),
+  receiverName: z.string(),
+  phone: z.string(),
+  addressLine: z.string(),
+  ward: z.string().optional().nullable(),
+  district: z.string().optional().nullable(),
+  province: z.string().optional().nullable(),
+  label: z.string().optional().nullable(),
+  isDefault: z.boolean().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+  user: z.lazy(() => UserCreateNestedOneWithoutAddressesInputSchema),
+});
+
+export const UserAddressUncheckedCreateInputSchema: z.ZodType<Prisma.UserAddressUncheckedCreateInput> = z.strictObject({
+  id: z.uuid().optional(),
+  userId: z.string(),
+  receiverName: z.string(),
+  phone: z.string(),
+  addressLine: z.string(),
+  ward: z.string().optional().nullable(),
+  district: z.string().optional().nullable(),
+  province: z.string().optional().nullable(),
+  label: z.string().optional().nullable(),
+  isDefault: z.boolean().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+});
+
+export const UserAddressUpdateInputSchema: z.ZodType<Prisma.UserAddressUpdateInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  receiverName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  addressLine: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  ward: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  district: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  province: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  label: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  isDefault: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  user: z.lazy(() => UserUpdateOneRequiredWithoutAddressesNestedInputSchema).optional(),
+});
+
+export const UserAddressUncheckedUpdateInputSchema: z.ZodType<Prisma.UserAddressUncheckedUpdateInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  receiverName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  addressLine: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  ward: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  district: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  province: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  label: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  isDefault: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+});
+
+export const UserAddressCreateManyInputSchema: z.ZodType<Prisma.UserAddressCreateManyInput> = z.strictObject({
+  id: z.uuid().optional(),
+  userId: z.string(),
+  receiverName: z.string(),
+  phone: z.string(),
+  addressLine: z.string(),
+  ward: z.string().optional().nullable(),
+  district: z.string().optional().nullable(),
+  province: z.string().optional().nullable(),
+  label: z.string().optional().nullable(),
+  isDefault: z.boolean().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+});
+
+export const UserAddressUpdateManyMutationInputSchema: z.ZodType<Prisma.UserAddressUpdateManyMutationInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  receiverName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  addressLine: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  ward: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  district: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  province: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  label: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  isDefault: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+});
+
+export const UserAddressUncheckedUpdateManyInputSchema: z.ZodType<Prisma.UserAddressUncheckedUpdateManyInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  userId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  receiverName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  addressLine: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  ward: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  district: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  province: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  label: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  isDefault: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+});
+
 export const ProductColorCreateInputSchema: z.ZodType<Prisma.ProductColorCreateInput> = z.strictObject({
   id: z.uuid().optional(),
   color: z.string(),
@@ -5487,6 +5759,12 @@ export const ProductFavoriteListRelationFilterSchema: z.ZodType<Prisma.ProductFa
   none: z.lazy(() => ProductFavoriteWhereInputSchema).optional(),
 });
 
+export const UserAddressListRelationFilterSchema: z.ZodType<Prisma.UserAddressListRelationFilter> = z.strictObject({
+  every: z.lazy(() => UserAddressWhereInputSchema).optional(),
+  some: z.lazy(() => UserAddressWhereInputSchema).optional(),
+  none: z.lazy(() => UserAddressWhereInputSchema).optional(),
+});
+
 export const VoucherListRelationFilterSchema: z.ZodType<Prisma.VoucherListRelationFilter> = z.strictObject({
   every: z.lazy(() => VoucherWhereInputSchema).optional(),
   some: z.lazy(() => VoucherWhereInputSchema).optional(),
@@ -5540,6 +5818,10 @@ export const NotificationOrderByRelationAggregateInputSchema: z.ZodType<Prisma.N
 });
 
 export const ProductFavoriteOrderByRelationAggregateInputSchema: z.ZodType<Prisma.ProductFavoriteOrderByRelationAggregateInput> = z.strictObject({
+  _count: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const UserAddressOrderByRelationAggregateInputSchema: z.ZodType<Prisma.UserAddressOrderByRelationAggregateInput> = z.strictObject({
   _count: z.lazy(() => SortOrderSchema).optional(),
 });
 
@@ -6714,6 +6996,54 @@ export const ProductFavoriteMinOrderByAggregateInputSchema: z.ZodType<Prisma.Pro
   createdAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
+export const UserAddressCountOrderByAggregateInputSchema: z.ZodType<Prisma.UserAddressCountOrderByAggregateInput> = z.strictObject({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  userId: z.lazy(() => SortOrderSchema).optional(),
+  receiverName: z.lazy(() => SortOrderSchema).optional(),
+  phone: z.lazy(() => SortOrderSchema).optional(),
+  addressLine: z.lazy(() => SortOrderSchema).optional(),
+  ward: z.lazy(() => SortOrderSchema).optional(),
+  district: z.lazy(() => SortOrderSchema).optional(),
+  province: z.lazy(() => SortOrderSchema).optional(),
+  label: z.lazy(() => SortOrderSchema).optional(),
+  isDefault: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const UserAddressMaxOrderByAggregateInputSchema: z.ZodType<Prisma.UserAddressMaxOrderByAggregateInput> = z.strictObject({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  userId: z.lazy(() => SortOrderSchema).optional(),
+  receiverName: z.lazy(() => SortOrderSchema).optional(),
+  phone: z.lazy(() => SortOrderSchema).optional(),
+  addressLine: z.lazy(() => SortOrderSchema).optional(),
+  ward: z.lazy(() => SortOrderSchema).optional(),
+  district: z.lazy(() => SortOrderSchema).optional(),
+  province: z.lazy(() => SortOrderSchema).optional(),
+  label: z.lazy(() => SortOrderSchema).optional(),
+  isDefault: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const UserAddressMinOrderByAggregateInputSchema: z.ZodType<Prisma.UserAddressMinOrderByAggregateInput> = z.strictObject({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  userId: z.lazy(() => SortOrderSchema).optional(),
+  receiverName: z.lazy(() => SortOrderSchema).optional(),
+  phone: z.lazy(() => SortOrderSchema).optional(),
+  addressLine: z.lazy(() => SortOrderSchema).optional(),
+  ward: z.lazy(() => SortOrderSchema).optional(),
+  district: z.lazy(() => SortOrderSchema).optional(),
+  province: z.lazy(() => SortOrderSchema).optional(),
+  label: z.lazy(() => SortOrderSchema).optional(),
+  isDefault: z.lazy(() => SortOrderSchema).optional(),
+  createdAt: z.lazy(() => SortOrderSchema).optional(),
+  updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
+});
+
 export const StringNullableListFilterSchema: z.ZodType<Prisma.StringNullableListFilter> = z.strictObject({
   equals: z.string().array().optional().nullable(),
   has: z.string().optional().nullable(),
@@ -7272,6 +7602,13 @@ export const ProductFavoriteCreateNestedManyWithoutUserInputSchema: z.ZodType<Pr
   connect: z.union([ z.lazy(() => ProductFavoriteWhereUniqueInputSchema), z.lazy(() => ProductFavoriteWhereUniqueInputSchema).array() ]).optional(),
 });
 
+export const UserAddressCreateNestedManyWithoutUserInputSchema: z.ZodType<Prisma.UserAddressCreateNestedManyWithoutUserInput> = z.strictObject({
+  create: z.union([ z.lazy(() => UserAddressCreateWithoutUserInputSchema), z.lazy(() => UserAddressCreateWithoutUserInputSchema).array(), z.lazy(() => UserAddressUncheckedCreateWithoutUserInputSchema), z.lazy(() => UserAddressUncheckedCreateWithoutUserInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => UserAddressCreateOrConnectWithoutUserInputSchema), z.lazy(() => UserAddressCreateOrConnectWithoutUserInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => UserAddressCreateManyUserInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => UserAddressWhereUniqueInputSchema), z.lazy(() => UserAddressWhereUniqueInputSchema).array() ]).optional(),
+});
+
 export const VoucherCreateNestedManyWithoutUserInputSchema: z.ZodType<Prisma.VoucherCreateNestedManyWithoutUserInput> = z.strictObject({
   create: z.union([ z.lazy(() => VoucherCreateWithoutUserInputSchema), z.lazy(() => VoucherCreateWithoutUserInputSchema).array(), z.lazy(() => VoucherUncheckedCreateWithoutUserInputSchema), z.lazy(() => VoucherUncheckedCreateWithoutUserInputSchema).array() ]).optional(),
   connectOrCreate: z.union([ z.lazy(() => VoucherCreateOrConnectWithoutUserInputSchema), z.lazy(() => VoucherCreateOrConnectWithoutUserInputSchema).array() ]).optional(),
@@ -7339,6 +7676,13 @@ export const ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema: z.Z
   connectOrCreate: z.union([ z.lazy(() => ProductFavoriteCreateOrConnectWithoutUserInputSchema), z.lazy(() => ProductFavoriteCreateOrConnectWithoutUserInputSchema).array() ]).optional(),
   createMany: z.lazy(() => ProductFavoriteCreateManyUserInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => ProductFavoriteWhereUniqueInputSchema), z.lazy(() => ProductFavoriteWhereUniqueInputSchema).array() ]).optional(),
+});
+
+export const UserAddressUncheckedCreateNestedManyWithoutUserInputSchema: z.ZodType<Prisma.UserAddressUncheckedCreateNestedManyWithoutUserInput> = z.strictObject({
+  create: z.union([ z.lazy(() => UserAddressCreateWithoutUserInputSchema), z.lazy(() => UserAddressCreateWithoutUserInputSchema).array(), z.lazy(() => UserAddressUncheckedCreateWithoutUserInputSchema), z.lazy(() => UserAddressUncheckedCreateWithoutUserInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => UserAddressCreateOrConnectWithoutUserInputSchema), z.lazy(() => UserAddressCreateOrConnectWithoutUserInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => UserAddressCreateManyUserInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => UserAddressWhereUniqueInputSchema), z.lazy(() => UserAddressWhereUniqueInputSchema).array() ]).optional(),
 });
 
 export const VoucherUncheckedCreateNestedManyWithoutUserInputSchema: z.ZodType<Prisma.VoucherUncheckedCreateNestedManyWithoutUserInput> = z.strictObject({
@@ -7464,6 +7808,20 @@ export const ProductFavoriteUpdateManyWithoutUserNestedInputSchema: z.ZodType<Pr
   update: z.union([ z.lazy(() => ProductFavoriteUpdateWithWhereUniqueWithoutUserInputSchema), z.lazy(() => ProductFavoriteUpdateWithWhereUniqueWithoutUserInputSchema).array() ]).optional(),
   updateMany: z.union([ z.lazy(() => ProductFavoriteUpdateManyWithWhereWithoutUserInputSchema), z.lazy(() => ProductFavoriteUpdateManyWithWhereWithoutUserInputSchema).array() ]).optional(),
   deleteMany: z.union([ z.lazy(() => ProductFavoriteScalarWhereInputSchema), z.lazy(() => ProductFavoriteScalarWhereInputSchema).array() ]).optional(),
+});
+
+export const UserAddressUpdateManyWithoutUserNestedInputSchema: z.ZodType<Prisma.UserAddressUpdateManyWithoutUserNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => UserAddressCreateWithoutUserInputSchema), z.lazy(() => UserAddressCreateWithoutUserInputSchema).array(), z.lazy(() => UserAddressUncheckedCreateWithoutUserInputSchema), z.lazy(() => UserAddressUncheckedCreateWithoutUserInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => UserAddressCreateOrConnectWithoutUserInputSchema), z.lazy(() => UserAddressCreateOrConnectWithoutUserInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => UserAddressUpsertWithWhereUniqueWithoutUserInputSchema), z.lazy(() => UserAddressUpsertWithWhereUniqueWithoutUserInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => UserAddressCreateManyUserInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => UserAddressWhereUniqueInputSchema), z.lazy(() => UserAddressWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => UserAddressWhereUniqueInputSchema), z.lazy(() => UserAddressWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => UserAddressWhereUniqueInputSchema), z.lazy(() => UserAddressWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => UserAddressWhereUniqueInputSchema), z.lazy(() => UserAddressWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => UserAddressUpdateWithWhereUniqueWithoutUserInputSchema), z.lazy(() => UserAddressUpdateWithWhereUniqueWithoutUserInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => UserAddressUpdateManyWithWhereWithoutUserInputSchema), z.lazy(() => UserAddressUpdateManyWithWhereWithoutUserInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => UserAddressScalarWhereInputSchema), z.lazy(() => UserAddressScalarWhereInputSchema).array() ]).optional(),
 });
 
 export const VoucherUpdateManyWithoutUserNestedInputSchema: z.ZodType<Prisma.VoucherUpdateManyWithoutUserNestedInput> = z.strictObject({
@@ -7600,6 +7958,20 @@ export const ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema: z.Z
   update: z.union([ z.lazy(() => ProductFavoriteUpdateWithWhereUniqueWithoutUserInputSchema), z.lazy(() => ProductFavoriteUpdateWithWhereUniqueWithoutUserInputSchema).array() ]).optional(),
   updateMany: z.union([ z.lazy(() => ProductFavoriteUpdateManyWithWhereWithoutUserInputSchema), z.lazy(() => ProductFavoriteUpdateManyWithWhereWithoutUserInputSchema).array() ]).optional(),
   deleteMany: z.union([ z.lazy(() => ProductFavoriteScalarWhereInputSchema), z.lazy(() => ProductFavoriteScalarWhereInputSchema).array() ]).optional(),
+});
+
+export const UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema: z.ZodType<Prisma.UserAddressUncheckedUpdateManyWithoutUserNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => UserAddressCreateWithoutUserInputSchema), z.lazy(() => UserAddressCreateWithoutUserInputSchema).array(), z.lazy(() => UserAddressUncheckedCreateWithoutUserInputSchema), z.lazy(() => UserAddressUncheckedCreateWithoutUserInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => UserAddressCreateOrConnectWithoutUserInputSchema), z.lazy(() => UserAddressCreateOrConnectWithoutUserInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => UserAddressUpsertWithWhereUniqueWithoutUserInputSchema), z.lazy(() => UserAddressUpsertWithWhereUniqueWithoutUserInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => UserAddressCreateManyUserInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => UserAddressWhereUniqueInputSchema), z.lazy(() => UserAddressWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => UserAddressWhereUniqueInputSchema), z.lazy(() => UserAddressWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => UserAddressWhereUniqueInputSchema), z.lazy(() => UserAddressWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => UserAddressWhereUniqueInputSchema), z.lazy(() => UserAddressWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => UserAddressUpdateWithWhereUniqueWithoutUserInputSchema), z.lazy(() => UserAddressUpdateWithWhereUniqueWithoutUserInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => UserAddressUpdateManyWithWhereWithoutUserInputSchema), z.lazy(() => UserAddressUpdateManyWithWhereWithoutUserInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => UserAddressScalarWhereInputSchema), z.lazy(() => UserAddressScalarWhereInputSchema).array() ]).optional(),
 });
 
 export const VoucherUncheckedUpdateManyWithoutUserNestedInputSchema: z.ZodType<Prisma.VoucherUncheckedUpdateManyWithoutUserNestedInput> = z.strictObject({
@@ -8632,6 +9004,20 @@ export const ProductUpdateOneRequiredWithoutFavoritesNestedInputSchema: z.ZodTyp
   upsert: z.lazy(() => ProductUpsertWithoutFavoritesInputSchema).optional(),
   connect: z.lazy(() => ProductWhereUniqueInputSchema).optional(),
   update: z.union([ z.lazy(() => ProductUpdateToOneWithWhereWithoutFavoritesInputSchema), z.lazy(() => ProductUpdateWithoutFavoritesInputSchema), z.lazy(() => ProductUncheckedUpdateWithoutFavoritesInputSchema) ]).optional(),
+});
+
+export const UserCreateNestedOneWithoutAddressesInputSchema: z.ZodType<Prisma.UserCreateNestedOneWithoutAddressesInput> = z.strictObject({
+  create: z.union([ z.lazy(() => UserCreateWithoutAddressesInputSchema), z.lazy(() => UserUncheckedCreateWithoutAddressesInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => UserCreateOrConnectWithoutAddressesInputSchema).optional(),
+  connect: z.lazy(() => UserWhereUniqueInputSchema).optional(),
+});
+
+export const UserUpdateOneRequiredWithoutAddressesNestedInputSchema: z.ZodType<Prisma.UserUpdateOneRequiredWithoutAddressesNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => UserCreateWithoutAddressesInputSchema), z.lazy(() => UserUncheckedCreateWithoutAddressesInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => UserCreateOrConnectWithoutAddressesInputSchema).optional(),
+  upsert: z.lazy(() => UserUpsertWithoutAddressesInputSchema).optional(),
+  connect: z.lazy(() => UserWhereUniqueInputSchema).optional(),
+  update: z.union([ z.lazy(() => UserUpdateToOneWithWhereWithoutAddressesInputSchema), z.lazy(() => UserUpdateWithoutAddressesInputSchema), z.lazy(() => UserUncheckedUpdateWithoutAddressesInputSchema) ]).optional(),
 });
 
 export const ProductColorCreateimageUrlsInputSchema: z.ZodType<Prisma.ProductColorCreateimageUrlsInput> = z.strictObject({
@@ -10037,6 +10423,46 @@ export const ProductFavoriteCreateManyUserInputEnvelopeSchema: z.ZodType<Prisma.
   skipDuplicates: z.boolean().optional(),
 });
 
+export const UserAddressCreateWithoutUserInputSchema: z.ZodType<Prisma.UserAddressCreateWithoutUserInput> = z.strictObject({
+  id: z.uuid().optional(),
+  receiverName: z.string(),
+  phone: z.string(),
+  addressLine: z.string(),
+  ward: z.string().optional().nullable(),
+  district: z.string().optional().nullable(),
+  province: z.string().optional().nullable(),
+  label: z.string().optional().nullable(),
+  isDefault: z.boolean().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+});
+
+export const UserAddressUncheckedCreateWithoutUserInputSchema: z.ZodType<Prisma.UserAddressUncheckedCreateWithoutUserInput> = z.strictObject({
+  id: z.uuid().optional(),
+  receiverName: z.string(),
+  phone: z.string(),
+  addressLine: z.string(),
+  ward: z.string().optional().nullable(),
+  district: z.string().optional().nullable(),
+  province: z.string().optional().nullable(),
+  label: z.string().optional().nullable(),
+  isDefault: z.boolean().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+});
+
+export const UserAddressCreateOrConnectWithoutUserInputSchema: z.ZodType<Prisma.UserAddressCreateOrConnectWithoutUserInput> = z.strictObject({
+  where: z.lazy(() => UserAddressWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => UserAddressCreateWithoutUserInputSchema), z.lazy(() => UserAddressUncheckedCreateWithoutUserInputSchema) ]),
+});
+
+export const UserAddressCreateManyUserInputEnvelopeSchema: z.ZodType<Prisma.UserAddressCreateManyUserInputEnvelope> = z.strictObject({
+  data: z.union([ z.lazy(() => UserAddressCreateManyUserInputSchema), z.lazy(() => UserAddressCreateManyUserInputSchema).array() ]),
+  skipDuplicates: z.boolean().optional(),
+});
+
 export const VoucherCreateWithoutUserInputSchema: z.ZodType<Prisma.VoucherCreateWithoutUserInput> = z.strictObject({
   id: z.uuid().optional(),
   code: z.string(),
@@ -10397,6 +10823,41 @@ export const ProductFavoriteScalarWhereInputSchema: z.ZodType<Prisma.ProductFavo
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
 });
 
+export const UserAddressUpsertWithWhereUniqueWithoutUserInputSchema: z.ZodType<Prisma.UserAddressUpsertWithWhereUniqueWithoutUserInput> = z.strictObject({
+  where: z.lazy(() => UserAddressWhereUniqueInputSchema),
+  update: z.union([ z.lazy(() => UserAddressUpdateWithoutUserInputSchema), z.lazy(() => UserAddressUncheckedUpdateWithoutUserInputSchema) ]),
+  create: z.union([ z.lazy(() => UserAddressCreateWithoutUserInputSchema), z.lazy(() => UserAddressUncheckedCreateWithoutUserInputSchema) ]),
+});
+
+export const UserAddressUpdateWithWhereUniqueWithoutUserInputSchema: z.ZodType<Prisma.UserAddressUpdateWithWhereUniqueWithoutUserInput> = z.strictObject({
+  where: z.lazy(() => UserAddressWhereUniqueInputSchema),
+  data: z.union([ z.lazy(() => UserAddressUpdateWithoutUserInputSchema), z.lazy(() => UserAddressUncheckedUpdateWithoutUserInputSchema) ]),
+});
+
+export const UserAddressUpdateManyWithWhereWithoutUserInputSchema: z.ZodType<Prisma.UserAddressUpdateManyWithWhereWithoutUserInput> = z.strictObject({
+  where: z.lazy(() => UserAddressScalarWhereInputSchema),
+  data: z.union([ z.lazy(() => UserAddressUpdateManyMutationInputSchema), z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserInputSchema) ]),
+});
+
+export const UserAddressScalarWhereInputSchema: z.ZodType<Prisma.UserAddressScalarWhereInput> = z.strictObject({
+  AND: z.union([ z.lazy(() => UserAddressScalarWhereInputSchema), z.lazy(() => UserAddressScalarWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => UserAddressScalarWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => UserAddressScalarWhereInputSchema), z.lazy(() => UserAddressScalarWhereInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  userId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  receiverName: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  phone: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  addressLine: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  ward: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  district: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  province: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  label: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  isDefault: z.union([ z.lazy(() => BoolFilterSchema), z.boolean() ]).optional(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+});
+
 export const VoucherUpsertWithWhereUniqueWithoutUserInputSchema: z.ZodType<Prisma.VoucherUpsertWithWhereUniqueWithoutUserInput> = z.strictObject({
   where: z.lazy(() => VoucherWhereUniqueInputSchema),
   update: z.union([ z.lazy(() => VoucherUpdateWithoutUserInputSchema), z.lazy(() => VoucherUncheckedUpdateWithoutUserInputSchema) ]),
@@ -10611,6 +11072,7 @@ export const UserCreateWithoutSurveysInputSchema: z.ZodType<Prisma.UserCreateWit
   surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
@@ -10637,6 +11099,7 @@ export const UserUncheckedCreateWithoutSurveysInputSchema: z.ZodType<Prisma.User
   surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -10795,6 +11258,7 @@ export const UserUpdateWithoutSurveysInputSchema: z.ZodType<Prisma.UserUpdateWit
   surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -10821,6 +11285,7 @@ export const UserUncheckedUpdateWithoutSurveysInputSchema: z.ZodType<Prisma.User
   surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -11262,6 +11727,7 @@ export const UserCreateWithoutSurveyResponsesInputSchema: z.ZodType<Prisma.UserC
   surveys: z.lazy(() => SurveyCreateNestedManyWithoutCreatedByInputSchema).optional(),
   notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
@@ -11288,6 +11754,7 @@ export const UserUncheckedCreateWithoutSurveyResponsesInputSchema: z.ZodType<Pri
   surveys: z.lazy(() => SurveyUncheckedCreateNestedManyWithoutCreatedByInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -11489,6 +11956,7 @@ export const UserUpdateWithoutSurveyResponsesInputSchema: z.ZodType<Prisma.UserU
   surveys: z.lazy(() => SurveyUpdateManyWithoutCreatedByNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -11515,6 +11983,7 @@ export const UserUncheckedUpdateWithoutSurveyResponsesInputSchema: z.ZodType<Pri
   surveys: z.lazy(() => SurveyUncheckedUpdateManyWithoutCreatedByNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -11651,6 +12120,7 @@ export const UserCreateWithoutNotificationsInputSchema: z.ZodType<Prisma.UserCre
   surveys: z.lazy(() => SurveyCreateNestedManyWithoutCreatedByInputSchema).optional(),
   surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
@@ -11677,6 +12147,7 @@ export const UserUncheckedCreateWithoutNotificationsInputSchema: z.ZodType<Prism
   surveys: z.lazy(() => SurveyUncheckedCreateNestedManyWithoutCreatedByInputSchema).optional(),
   surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -11801,6 +12272,7 @@ export const UserUpdateWithoutNotificationsInputSchema: z.ZodType<Prisma.UserUpd
   surveys: z.lazy(() => SurveyUpdateManyWithoutCreatedByNestedInputSchema).optional(),
   surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -11827,6 +12299,7 @@ export const UserUncheckedUpdateWithoutNotificationsInputSchema: z.ZodType<Prism
   surveys: z.lazy(() => SurveyUncheckedUpdateManyWithoutCreatedByNestedInputSchema).optional(),
   surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -12144,6 +12617,7 @@ export const UserCreateWithoutVouchersInputSchema: z.ZodType<Prisma.UserCreateWi
   surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderCreateNestedManyWithoutUserInputSchema).optional(),
@@ -12170,6 +12644,7 @@ export const UserUncheckedCreateWithoutVouchersInputSchema: z.ZodType<Prisma.Use
   surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
@@ -12244,6 +12719,7 @@ export const UserUpdateWithoutVouchersInputSchema: z.ZodType<Prisma.UserUpdateWi
   surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUpdateManyWithoutUserNestedInputSchema).optional(),
@@ -12270,6 +12746,7 @@ export const UserUncheckedUpdateWithoutVouchersInputSchema: z.ZodType<Prisma.Use
   surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
@@ -12692,6 +13169,7 @@ export const UserCreateWithoutProductsInputSchema: z.ZodType<Prisma.UserCreateWi
   surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
@@ -12718,6 +13196,7 @@ export const UserUncheckedCreateWithoutProductsInputSchema: z.ZodType<Prisma.Use
   surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -12905,6 +13384,7 @@ export const UserUpdateWithoutProductsInputSchema: z.ZodType<Prisma.UserUpdateWi
   surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -12931,6 +13411,7 @@ export const UserUncheckedUpdateWithoutProductsInputSchema: z.ZodType<Prisma.Use
   surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -13033,6 +13514,7 @@ export const UserCreateWithoutProductFavoritesInputSchema: z.ZodType<Prisma.User
   surveys: z.lazy(() => SurveyCreateNestedManyWithoutCreatedByInputSchema).optional(),
   surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
@@ -13059,6 +13541,7 @@ export const UserUncheckedCreateWithoutProductFavoritesInputSchema: z.ZodType<Pr
   surveys: z.lazy(() => SurveyUncheckedCreateNestedManyWithoutCreatedByInputSchema).optional(),
   surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -13138,6 +13621,7 @@ export const UserUpdateWithoutProductFavoritesInputSchema: z.ZodType<Prisma.User
   surveys: z.lazy(() => SurveyUpdateManyWithoutCreatedByNestedInputSchema).optional(),
   surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -13164,6 +13648,7 @@ export const UserUncheckedUpdateWithoutProductFavoritesInputSchema: z.ZodType<Pr
   surveys: z.lazy(() => SurveyUncheckedUpdateManyWithoutCreatedByNestedInputSchema).optional(),
   surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -13213,6 +13698,130 @@ export const ProductUncheckedUpdateWithoutFavoritesInputSchema: z.ZodType<Prisma
   colors: z.lazy(() => ProductColorUncheckedUpdateManyWithoutProductNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutProductNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUncheckedUpdateManyWithoutProductNestedInputSchema).optional(),
+});
+
+export const UserCreateWithoutAddressesInputSchema: z.ZodType<Prisma.UserCreateWithoutAddressesInput> = z.strictObject({
+  id: z.uuid().optional(),
+  fullName: z.string(),
+  email: z.string(),
+  password: z.string(),
+  address: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  dateOfBirth: z.coerce.date().optional().nullable(),
+  gender: z.lazy(() => GenderSchema).optional().nullable(),
+  role: z.lazy(() => UserRoleSchema).optional(),
+  status: z.lazy(() => UserStatusSchema).optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+  createdBy: z.string().optional().nullable(),
+  surveys: z.lazy(() => SurveyCreateNestedManyWithoutCreatedByInputSchema).optional(),
+  surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
+  notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
+  productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
+  reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
+  cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
+  orders: z.lazy(() => OrderCreateNestedManyWithoutUserInputSchema).optional(),
+  products: z.lazy(() => ProductCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutActorInputSchema).optional(),
+});
+
+export const UserUncheckedCreateWithoutAddressesInputSchema: z.ZodType<Prisma.UserUncheckedCreateWithoutAddressesInput> = z.strictObject({
+  id: z.uuid().optional(),
+  fullName: z.string(),
+  email: z.string(),
+  password: z.string(),
+  address: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  dateOfBirth: z.coerce.date().optional().nullable(),
+  gender: z.lazy(() => GenderSchema).optional().nullable(),
+  role: z.lazy(() => UserRoleSchema).optional(),
+  status: z.lazy(() => UserStatusSchema).optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+  createdBy: z.string().optional().nullable(),
+  surveys: z.lazy(() => SurveyUncheckedCreateNestedManyWithoutCreatedByInputSchema).optional(),
+  surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
+  orders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  products: z.lazy(() => ProductUncheckedCreateNestedManyWithoutVendorInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutActorInputSchema).optional(),
+});
+
+export const UserCreateOrConnectWithoutAddressesInputSchema: z.ZodType<Prisma.UserCreateOrConnectWithoutAddressesInput> = z.strictObject({
+  where: z.lazy(() => UserWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => UserCreateWithoutAddressesInputSchema), z.lazy(() => UserUncheckedCreateWithoutAddressesInputSchema) ]),
+});
+
+export const UserUpsertWithoutAddressesInputSchema: z.ZodType<Prisma.UserUpsertWithoutAddressesInput> = z.strictObject({
+  update: z.union([ z.lazy(() => UserUpdateWithoutAddressesInputSchema), z.lazy(() => UserUncheckedUpdateWithoutAddressesInputSchema) ]),
+  create: z.union([ z.lazy(() => UserCreateWithoutAddressesInputSchema), z.lazy(() => UserUncheckedCreateWithoutAddressesInputSchema) ]),
+  where: z.lazy(() => UserWhereInputSchema).optional(),
+});
+
+export const UserUpdateToOneWithWhereWithoutAddressesInputSchema: z.ZodType<Prisma.UserUpdateToOneWithWhereWithoutAddressesInput> = z.strictObject({
+  where: z.lazy(() => UserWhereInputSchema).optional(),
+  data: z.union([ z.lazy(() => UserUpdateWithoutAddressesInputSchema), z.lazy(() => UserUncheckedUpdateWithoutAddressesInputSchema) ]),
+});
+
+export const UserUpdateWithoutAddressesInputSchema: z.ZodType<Prisma.UserUpdateWithoutAddressesInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fullName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  password: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  address: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dateOfBirth: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gender: z.union([ z.lazy(() => GenderSchema), z.lazy(() => NullableEnumGenderFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  role: z.union([ z.lazy(() => UserRoleSchema), z.lazy(() => EnumUserRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => UserStatusSchema), z.lazy(() => EnumUserStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdBy: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  surveys: z.lazy(() => SurveyUpdateManyWithoutCreatedByNestedInputSchema).optional(),
+  surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
+  productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
+  reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
+  cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
+  orders: z.lazy(() => OrderUpdateManyWithoutUserNestedInputSchema).optional(),
+  products: z.lazy(() => ProductUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutActorNestedInputSchema).optional(),
+});
+
+export const UserUncheckedUpdateWithoutAddressesInputSchema: z.ZodType<Prisma.UserUncheckedUpdateWithoutAddressesInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fullName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  password: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  address: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dateOfBirth: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gender: z.union([ z.lazy(() => GenderSchema), z.lazy(() => NullableEnumGenderFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  role: z.union([ z.lazy(() => UserRoleSchema), z.lazy(() => EnumUserRoleFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => UserStatusSchema), z.lazy(() => EnumUserStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdBy: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  surveys: z.lazy(() => SurveyUncheckedUpdateManyWithoutCreatedByNestedInputSchema).optional(),
+  surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
+  orders: z.lazy(() => OrderUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  products: z.lazy(() => ProductUncheckedUpdateManyWithoutVendorNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutActorNestedInputSchema).optional(),
 });
 
 export const ProductCreateWithoutColorsInputSchema: z.ZodType<Prisma.ProductCreateWithoutColorsInput> = z.strictObject({
@@ -13553,6 +14162,7 @@ export const UserCreateWithoutReviewsInputSchema: z.ZodType<Prisma.UserCreateWit
   surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderCreateNestedManyWithoutUserInputSchema).optional(),
@@ -13579,6 +14189,7 @@ export const UserUncheckedCreateWithoutReviewsInputSchema: z.ZodType<Prisma.User
   surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
@@ -13687,6 +14298,7 @@ export const UserUpdateWithoutReviewsInputSchema: z.ZodType<Prisma.UserUpdateWit
   surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUpdateManyWithoutUserNestedInputSchema).optional(),
@@ -13713,6 +14325,7 @@ export const UserUncheckedUpdateWithoutReviewsInputSchema: z.ZodType<Prisma.User
   surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
@@ -13817,6 +14430,7 @@ export const UserCreateWithoutCartInputSchema: z.ZodType<Prisma.UserCreateWithou
   surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderCreateNestedManyWithoutUserInputSchema).optional(),
@@ -13843,6 +14457,7 @@ export const UserUncheckedCreateWithoutCartInputSchema: z.ZodType<Prisma.UserUnc
   surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
@@ -13911,6 +14526,7 @@ export const UserUpdateWithoutCartInputSchema: z.ZodType<Prisma.UserUpdateWithou
   surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUpdateManyWithoutUserNestedInputSchema).optional(),
@@ -13937,6 +14553,7 @@ export const UserUncheckedUpdateWithoutCartInputSchema: z.ZodType<Prisma.UserUnc
   surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   orders: z.lazy(() => OrderUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
@@ -14091,6 +14708,7 @@ export const UserCreateWithoutOrdersInputSchema: z.ZodType<Prisma.UserCreateWith
   surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
@@ -14117,6 +14735,7 @@ export const UserUncheckedCreateWithoutOrdersInputSchema: z.ZodType<Prisma.UserU
   surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -14330,6 +14949,7 @@ export const UserUpdateWithoutOrdersInputSchema: z.ZodType<Prisma.UserUpdateWith
   surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -14356,6 +14976,7 @@ export const UserUncheckedUpdateWithoutOrdersInputSchema: z.ZodType<Prisma.UserU
   surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -14866,6 +15487,7 @@ export const UserCreateWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.
   surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartCreateNestedOneWithoutUserInputSchema).optional(),
@@ -14892,6 +15514,7 @@ export const UserUncheckedCreateWithoutOrderStatusHistoriesInputSchema: z.ZodTyp
   surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedCreateNestedManyWithoutUserInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -14989,6 +15612,7 @@ export const UserUpdateWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.
   surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -15015,6 +15639,7 @@ export const UserUncheckedUpdateWithoutOrderStatusHistoriesInputSchema: z.ZodTyp
   surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   productFavorites: z.lazy(() => ProductFavoriteUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
+  addresses: z.lazy(() => UserAddressUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   reviews: z.lazy(() => ReviewUncheckedUpdateManyWithoutUserNestedInputSchema).optional(),
   cart: z.lazy(() => CartUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -15071,6 +15696,21 @@ export const ProductFavoriteCreateManyUserInputSchema: z.ZodType<Prisma.ProductF
   id: z.uuid().optional(),
   productId: z.string(),
   createdAt: z.coerce.date().optional(),
+});
+
+export const UserAddressCreateManyUserInputSchema: z.ZodType<Prisma.UserAddressCreateManyUserInput> = z.strictObject({
+  id: z.uuid().optional(),
+  receiverName: z.string(),
+  phone: z.string(),
+  addressLine: z.string(),
+  ward: z.string().optional().nullable(),
+  district: z.string().optional().nullable(),
+  province: z.string().optional().nullable(),
+  label: z.string().optional().nullable(),
+  isDefault: z.boolean().optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const VoucherCreateManyUserInputSchema: z.ZodType<Prisma.VoucherCreateManyUserInput> = z.strictObject({
@@ -15303,6 +15943,51 @@ export const ProductFavoriteUncheckedUpdateManyWithoutUserInputSchema: z.ZodType
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+});
+
+export const UserAddressUpdateWithoutUserInputSchema: z.ZodType<Prisma.UserAddressUpdateWithoutUserInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  receiverName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  addressLine: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  ward: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  district: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  province: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  label: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  isDefault: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+});
+
+export const UserAddressUncheckedUpdateWithoutUserInputSchema: z.ZodType<Prisma.UserAddressUncheckedUpdateWithoutUserInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  receiverName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  addressLine: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  ward: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  district: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  province: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  label: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  isDefault: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+});
+
+export const UserAddressUncheckedUpdateManyWithoutUserInputSchema: z.ZodType<Prisma.UserAddressUncheckedUpdateManyWithoutUserInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  receiverName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  addressLine: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  ward: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  district: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  province: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  label: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  isDefault: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const VoucherUpdateWithoutUserInputSchema: z.ZodType<Prisma.VoucherUpdateWithoutUserInput> = z.strictObject({
@@ -17176,6 +17861,68 @@ export const ProductFavoriteFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.Produc
   where: ProductFavoriteWhereUniqueInputSchema, 
 }).strict();
 
+export const UserAddressFindFirstArgsSchema: z.ZodType<Prisma.UserAddressFindFirstArgs> = z.object({
+  select: UserAddressSelectSchema.optional(),
+  include: UserAddressIncludeSchema.optional(),
+  where: UserAddressWhereInputSchema.optional(), 
+  orderBy: z.union([ UserAddressOrderByWithRelationInputSchema.array(), UserAddressOrderByWithRelationInputSchema ]).optional(),
+  cursor: UserAddressWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ UserAddressScalarFieldEnumSchema, UserAddressScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const UserAddressFindFirstOrThrowArgsSchema: z.ZodType<Prisma.UserAddressFindFirstOrThrowArgs> = z.object({
+  select: UserAddressSelectSchema.optional(),
+  include: UserAddressIncludeSchema.optional(),
+  where: UserAddressWhereInputSchema.optional(), 
+  orderBy: z.union([ UserAddressOrderByWithRelationInputSchema.array(), UserAddressOrderByWithRelationInputSchema ]).optional(),
+  cursor: UserAddressWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ UserAddressScalarFieldEnumSchema, UserAddressScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const UserAddressFindManyArgsSchema: z.ZodType<Prisma.UserAddressFindManyArgs> = z.object({
+  select: UserAddressSelectSchema.optional(),
+  include: UserAddressIncludeSchema.optional(),
+  where: UserAddressWhereInputSchema.optional(), 
+  orderBy: z.union([ UserAddressOrderByWithRelationInputSchema.array(), UserAddressOrderByWithRelationInputSchema ]).optional(),
+  cursor: UserAddressWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ UserAddressScalarFieldEnumSchema, UserAddressScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const UserAddressAggregateArgsSchema: z.ZodType<Prisma.UserAddressAggregateArgs> = z.object({
+  where: UserAddressWhereInputSchema.optional(), 
+  orderBy: z.union([ UserAddressOrderByWithRelationInputSchema.array(), UserAddressOrderByWithRelationInputSchema ]).optional(),
+  cursor: UserAddressWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+}).strict();
+
+export const UserAddressGroupByArgsSchema: z.ZodType<Prisma.UserAddressGroupByArgs> = z.object({
+  where: UserAddressWhereInputSchema.optional(), 
+  orderBy: z.union([ UserAddressOrderByWithAggregationInputSchema.array(), UserAddressOrderByWithAggregationInputSchema ]).optional(),
+  by: UserAddressScalarFieldEnumSchema.array(), 
+  having: UserAddressScalarWhereWithAggregatesInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+}).strict();
+
+export const UserAddressFindUniqueArgsSchema: z.ZodType<Prisma.UserAddressFindUniqueArgs> = z.object({
+  select: UserAddressSelectSchema.optional(),
+  include: UserAddressIncludeSchema.optional(),
+  where: UserAddressWhereUniqueInputSchema, 
+}).strict();
+
+export const UserAddressFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.UserAddressFindUniqueOrThrowArgs> = z.object({
+  select: UserAddressSelectSchema.optional(),
+  include: UserAddressIncludeSchema.optional(),
+  where: UserAddressWhereUniqueInputSchema, 
+}).strict();
+
 export const ProductColorFindFirstArgsSchema: z.ZodType<Prisma.ProductColorFindFirstArgs> = z.object({
   select: ProductColorSelectSchema.optional(),
   include: ProductColorIncludeSchema.optional(),
@@ -18379,6 +19126,60 @@ export const ProductFavoriteUpdateManyAndReturnArgsSchema: z.ZodType<Prisma.Prod
 
 export const ProductFavoriteDeleteManyArgsSchema: z.ZodType<Prisma.ProductFavoriteDeleteManyArgs> = z.object({
   where: ProductFavoriteWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const UserAddressCreateArgsSchema: z.ZodType<Prisma.UserAddressCreateArgs> = z.object({
+  select: UserAddressSelectSchema.optional(),
+  include: UserAddressIncludeSchema.optional(),
+  data: z.union([ UserAddressCreateInputSchema, UserAddressUncheckedCreateInputSchema ]),
+}).strict();
+
+export const UserAddressUpsertArgsSchema: z.ZodType<Prisma.UserAddressUpsertArgs> = z.object({
+  select: UserAddressSelectSchema.optional(),
+  include: UserAddressIncludeSchema.optional(),
+  where: UserAddressWhereUniqueInputSchema, 
+  create: z.union([ UserAddressCreateInputSchema, UserAddressUncheckedCreateInputSchema ]),
+  update: z.union([ UserAddressUpdateInputSchema, UserAddressUncheckedUpdateInputSchema ]),
+}).strict();
+
+export const UserAddressCreateManyArgsSchema: z.ZodType<Prisma.UserAddressCreateManyArgs> = z.object({
+  data: z.union([ UserAddressCreateManyInputSchema, UserAddressCreateManyInputSchema.array() ]),
+  skipDuplicates: z.boolean().optional(),
+}).strict();
+
+export const UserAddressCreateManyAndReturnArgsSchema: z.ZodType<Prisma.UserAddressCreateManyAndReturnArgs> = z.object({
+  data: z.union([ UserAddressCreateManyInputSchema, UserAddressCreateManyInputSchema.array() ]),
+  skipDuplicates: z.boolean().optional(),
+}).strict();
+
+export const UserAddressDeleteArgsSchema: z.ZodType<Prisma.UserAddressDeleteArgs> = z.object({
+  select: UserAddressSelectSchema.optional(),
+  include: UserAddressIncludeSchema.optional(),
+  where: UserAddressWhereUniqueInputSchema, 
+}).strict();
+
+export const UserAddressUpdateArgsSchema: z.ZodType<Prisma.UserAddressUpdateArgs> = z.object({
+  select: UserAddressSelectSchema.optional(),
+  include: UserAddressIncludeSchema.optional(),
+  data: z.union([ UserAddressUpdateInputSchema, UserAddressUncheckedUpdateInputSchema ]),
+  where: UserAddressWhereUniqueInputSchema, 
+}).strict();
+
+export const UserAddressUpdateManyArgsSchema: z.ZodType<Prisma.UserAddressUpdateManyArgs> = z.object({
+  data: z.union([ UserAddressUpdateManyMutationInputSchema, UserAddressUncheckedUpdateManyInputSchema ]),
+  where: UserAddressWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const UserAddressUpdateManyAndReturnArgsSchema: z.ZodType<Prisma.UserAddressUpdateManyAndReturnArgs> = z.object({
+  data: z.union([ UserAddressUpdateManyMutationInputSchema, UserAddressUncheckedUpdateManyInputSchema ]),
+  where: UserAddressWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const UserAddressDeleteManyArgsSchema: z.ZodType<Prisma.UserAddressDeleteManyArgs> = z.object({
+  where: UserAddressWhereInputSchema.optional(), 
   limit: z.number().optional(),
 }).strict();
 

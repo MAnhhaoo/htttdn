@@ -33,10 +33,16 @@ export function generateSurveys(
   const surveyOptions: any[] = [];
   const surveyResponses: any[] = [];
   const surveyAnswers: any[] = [];
+  const notifications: any[] = [];
 
-  // 1. Build lookup: vendorId -> Set<customerId>
+  // 1. Build lookup: vendorId -> Set<customerId> and vendorId -> Order[]
   const vendorCustomers = new Map<string, Set<string>>();
-  vendors.forEach(v => vendorCustomers.set(v.id, new Set()));
+  const vendorCompletedOrders = new Map<string, any[]>();
+  
+  vendors.forEach(v => {
+    vendorCustomers.set(v.id, new Set());
+    vendorCompletedOrders.set(v.id, []);
+  });
 
   const productVendorMap = new Map<string, string>();
   products.forEach(p => { if (p.vendorId) productVendorMap.set(p.id, p.vendorId); });
@@ -47,14 +53,12 @@ export function generateSurveys(
   const variantColorMap = new Map<string, string>();
   variants.forEach(v => variantColorMap.set(v.id, v.productColorId));
 
-  const orderCustomerMap = new Map<string, { userId: string, createdAt: Date, status: string }>();
-  orders.forEach(o => orderCustomerMap.set(o.id, { userId: o.userId, createdAt: o.createdAt, status: o.status }));
+  const orderMap = new Map<string, any>();
+  orders.forEach(o => orderMap.set(o.id, o));
 
   orderDetails.forEach(detail => {
-    const order = orderCustomerMap.get(detail.orderId);
+    const order = orderMap.get(detail.orderId);
     if (!order) return;
-    // Only completed or shipping orders count for vendor feedback
-    if (order.status !== 'completed' && order.status !== 'shipping') return;
     
     const variantId = detail.productVariantId;
     const colorId = variantColorMap.get(variantId);
@@ -68,10 +72,17 @@ export function generateSurveys(
       if (set) {
         set.add(order.userId);
       }
+      
+      // Keep track of orders for vendor completed buyers
+      if (order.status === 'completed' || order.status === 'shipping') {
+        const vendorOrders = vendorCompletedOrders.get(vendorId);
+        if (vendorOrders && !vendorOrders.find(o => o.id === order.id)) {
+          vendorOrders.push(order);
+        }
+      }
     }
   });
 
-  // Remove vendors with no customers from being chosen if possible
   const eligibleVendors = vendors.filter(v => (vendorCustomers.get(v.id)?.size || 0) > 0);
 
   const numAdminSurveys = faker.number.int({ min: CONFIG.counts.adminSurveys.min, max: CONFIG.counts.adminSurveys.max });
@@ -81,11 +92,28 @@ export function generateSurveys(
   const createSurvey = (creator: any, role: 'admin' | 'vendor') => {
     const isDraft = faker.datatype.boolean(0.1);
     const isClosed = faker.datatype.boolean(0.2);
-    const status = isDraft ? 'draft' : (isClosed ? 'closed' : 'active');
+    const surveyStatus = isDraft ? 'draft' : (isClosed ? 'closed' : 'active');
     
     const createdAt = faker.date.between({ from: new Date('2025-06-01'), to: CONFIG.dateRange.end });
     const startDate = isDraft ? null : faker.date.soon({ days: 30, refDate: createdAt });
     const endDate = isClosed && startDate ? faker.date.soon({ days: 30, refDate: startDate }) : (isDraft ? null : faker.date.soon({ days: 100, refDate: startDate || createdAt }));
+
+    const scope = role === 'admin' ? 'platform' : 'vendor';
+    
+    // Choose audience and trigger types realistically
+    let audienceType = 'all_users';
+    let triggerType = 'manual';
+    
+    if (role === 'admin') {
+      audienceType = faker.helpers.arrayElement(['all_users', 'selected_users', 'all_vendors']);
+      triggerType = faker.helpers.arrayElement(['manual', 'after_checkout']);
+    } else {
+      audienceType = faker.helpers.arrayElement(['vendor_buyers', 'vendor_completed_buyers']);
+      triggerType = faker.helpers.arrayElement(['manual', 'after_order_completed']);
+      if (audienceType === 'vendor_completed_buyers') {
+        triggerType = 'after_order_completed';
+      }
+    }
 
     const survey = {
       id: faker.string.uuid(),
@@ -93,7 +121,10 @@ export function generateSurveys(
       title: role === 'admin' ? faker.helpers.arrayElement(ADMIN_SURVEY_TOPICS) : faker.helpers.arrayElement(VENDOR_SURVEY_TOPICS),
       description: faker.datatype.boolean(0.7) ? faker.lorem.sentences(2) : null,
       imageUrl: faker.datatype.boolean(0.8) ? faker.image.urlPicsumPhotos({ width: 800, height: 400 }) : null,
-      status,
+      scope,
+      audienceType,
+      triggerType,
+      status: surveyStatus,
       startDate,
       endDate,
       createdAt,
@@ -103,12 +134,11 @@ export function generateSurveys(
     surveys.push(survey);
 
     // Create Questions
-    const numQuestions = faker.number.int({ min: CONFIG.counts.questionsPerSurvey.min, max: CONFIG.counts.questionsPerSurvey.max });
+    const numQuestions = faker.number.int({ min: 4, max: 8 });
     const questionsForSurvey: any[] = [];
     
     for (let i = 1; i <= numQuestions; i++) {
       let type = faker.helpers.arrayElement(['text', 'single_choice', 'multiple_choice', 'rating']);
-      // Force at least some structure
       if (i === 1) type = 'rating';
       if (i === 2) type = 'single_choice';
       
@@ -128,7 +158,7 @@ export function generateSurveys(
       questionsForSurvey.push(question);
 
       if (type === 'single_choice' || type === 'multiple_choice') {
-        const numOptions = faker.number.int({ min: CONFIG.counts.optionsPerChoice.min, max: CONFIG.counts.optionsPerChoice.max });
+        const numOptions = faker.number.int({ min: 2, max: 6 });
         for (let j = 1; j <= numOptions; j++) {
           surveyOptions.push({
             id: faker.string.uuid(),
@@ -142,95 +172,154 @@ export function generateSurveys(
     }
 
     // Generate Responses
-    if (status !== 'draft') {
-      const eligibleCustomerIds = role === 'admin' 
-        ? customers.map(c => c.id) 
-        : Array.from(vendorCustomers.get(creator.id) || []);
+    if (surveyStatus !== 'draft') {
+      let targetList: any[] = [];
+      
+      if (role === 'admin') {
+        if (audienceType === 'all_users' || audienceType === 'selected_users') {
+          targetList = customers.map(c => ({ userId: c.id, orderId: null }));
+        } else if (audienceType === 'all_vendors') {
+          targetList = vendors.map(v => ({ userId: v.id, orderId: null }));
+        }
+        
+        if (triggerType === 'after_checkout') {
+          // Attach a recent order for each selected user if available
+          targetList = targetList.map(t => {
+            const userOrders = orders.filter(o => o.userId === t.userId);
+            return {
+              userId: t.userId,
+              orderId: userOrders.length > 0 ? faker.helpers.arrayElement(userOrders).id : null
+            };
+          }).filter(t => t.orderId !== null); // for after_checkout, let's strictly require order
+        }
+      } else {
+        if (audienceType === 'vendor_buyers') {
+          const buyers = Array.from(vendorCustomers.get(creator.id) || []);
+          targetList = buyers.map(id => ({ userId: id, orderId: null }));
+        } else if (audienceType === 'vendor_completed_buyers') {
+          const compOrders = vendorCompletedOrders.get(creator.id) || [];
+          targetList = compOrders.map(o => ({ userId: o.userId, orderId: o.id }));
+        }
+      }
       
       // Shuffle and pick
-      const pickedCustomers = faker.helpers.shuffle(eligibleCustomerIds).slice(0, faker.number.int({ min: Math.min(1, eligibleCustomerIds.length), max: Math.min(20, eligibleCustomerIds.length) }));
+      const pickedTargets = faker.helpers.shuffle(targetList).slice(0, faker.number.int({ min: Math.min(1, targetList.length), max: Math.min(20, targetList.length) }));
       
-      for (const customerId of pickedCustomers) {
-        // Must be submitted after startDate and before endDate (if closed)
-        const earliestSubmit = survey.startDate ? new Date(survey.startDate.getTime() + 86400) : survey.createdAt;
-        const maxSubmit = survey.endDate || CONFIG.dateRange.end;
+      for (const target of pickedTargets) {
+        const earliestAction = survey.startDate ? new Date(survey.startDate.getTime() + 86400) : survey.createdAt;
+        const maxAction = survey.endDate || CONFIG.dateRange.end;
         
-        let submittedAt = faker.date.between({ from: earliestSubmit, to: maxSubmit });
-        if (submittedAt > CONFIG.dateRange.end) submittedAt = CONFIG.dateRange.end;
+        let actionAt = faker.date.between({ from: earliestAction, to: maxAction });
+        if (actionAt > CONFIG.dateRange.end) actionAt = CONFIG.dateRange.end;
+
+        const responseStatus = faker.helpers.weightedArrayElement([
+          { weight: 20, value: 'pending' },
+          { weight: 50, value: 'submitted' },
+          { weight: 10, value: 'skipped' },
+          { weight: 20, value: 'expired' }
+        ]);
 
         const response = {
           id: faker.string.uuid(),
           surveyId: survey.id,
-          userId: customerId,
-          submittedAt: submittedAt,
-          createdAt: submittedAt,
+          userId: target.userId,
+          orderId: target.orderId,
+          deliveryKey: faker.string.uuid(), // unique
+          status: responseStatus,
+          notifiedAt: faker.datatype.boolean(0.8) ? new Date(actionAt.getTime() - 86400000) : null,
+          openedAt: responseStatus !== 'pending' || faker.datatype.boolean(0.5) ? new Date(actionAt.getTime() - 3600000) : null,
+          submittedAt: responseStatus === 'submitted' ? actionAt : null,
+          skippedAt: responseStatus === 'skipped' ? actionAt : null,
+          expiresAt: responseStatus === 'expired' ? new Date(actionAt.getTime() - 86400000) : (survey.endDate || new Date(actionAt.getTime() + 7 * 86400000)),
+          createdAt: new Date(actionAt.getTime() - 86400000 * 2), // slightly before
+          updatedAt: actionAt,
         };
         surveyResponses.push(response);
 
+        // Notification
+        if (response.notifiedAt) {
+          const isRead = response.openedAt ? true : faker.datatype.boolean(0.5);
+          notifications.push({
+            id: faker.string.uuid(),
+            userId: response.userId,
+            surveyId: survey.id,
+            surveyResponseId: response.id,
+            type: 'survey_invitation',
+            title: `Thư mời tham gia khảo sát: ${survey.title}`,
+            content: `Chào bạn, mời bạn tham gia khảo sát để cải thiện dịch vụ.`,
+            data: { surveyId: survey.id },
+            isRead: isRead,
+            readAt: isRead ? response.openedAt || response.notifiedAt : null,
+            expiresAt: response.expiresAt,
+            createdAt: response.notifiedAt,
+          });
+        }
+
         // Answers
-        for (const q of questionsForSurvey) {
-          if (!q.required && faker.datatype.boolean(0.2)) continue; // skip optional
+        if (responseStatus === 'submitted') {
+          for (const q of questionsForSurvey) {
+            if (!q.required && faker.datatype.boolean(0.2)) continue; // skip optional
 
-          const qOptions = surveyOptions.filter(o => o.questionId === q.id);
+            const qOptions = surveyOptions.filter(o => o.questionId === q.id);
 
-          if (q.type === 'text') {
-            surveyAnswers.push({
-              id: faker.string.uuid(),
-              responseId: response.id,
-              questionId: q.id,
-              optionId: null,
-              textAnswer: faker.helpers.arrayElement([
-                "Sản phẩm tốt, giao hàng khá nhanh.",
-                "Mình mong shop có thêm nhiều voucher.",
-                "Giao diện dễ sử dụng nhưng phần tìm kiếm có thể cải thiện.",
-                "Shop nên bổ sung thêm nhiều màu và kích thước.",
-                "Mình hài lòng với chất lượng sản phẩm.",
-                "Thời gian giao hàng có thể nhanh hơn.",
-                "Mong MIVA có thêm nhiều chương trình khuyến mãi."
-              ]),
-              ratingValue: null,
-              createdAt: response.submittedAt,
-            });
-          } else if (q.type === 'rating') {
-            // Realistic distribution: mostly 4 and 5, some 3, fewer 1 and 2
-            const rating = faker.helpers.weightedArrayElement([
-              { weight: 1, value: 1 },
-              { weight: 2, value: 2 },
-              { weight: 10, value: 3 },
-              { weight: 40, value: 4 },
-              { weight: 47, value: 5 }
-            ]);
-            surveyAnswers.push({
-              id: faker.string.uuid(),
-              responseId: response.id,
-              questionId: q.id,
-              optionId: null,
-              textAnswer: null,
-              ratingValue: rating,
-              createdAt: response.submittedAt,
-            });
-          } else if (q.type === 'single_choice' && qOptions.length > 0) {
-            surveyAnswers.push({
-              id: faker.string.uuid(),
-              responseId: response.id,
-              questionId: q.id,
-              optionId: faker.helpers.arrayElement(qOptions).id,
-              textAnswer: null,
-              ratingValue: null,
-              createdAt: response.submittedAt,
-            });
-          } else if (q.type === 'multiple_choice' && qOptions.length > 0) {
-            const selectedOptions = faker.helpers.arrayElements(qOptions, faker.number.int({ min: 1, max: Math.min(3, qOptions.length) }));
-            for (const selOpt of selectedOptions) {
+            if (q.type === 'text') {
               surveyAnswers.push({
                 id: faker.string.uuid(),
                 responseId: response.id,
                 questionId: q.id,
-                optionId: selOpt.id,
+                optionId: null,
+                textAnswer: faker.helpers.arrayElement([
+                  "Sản phẩm tốt, giao hàng khá nhanh.",
+                  "Mình mong shop có thêm nhiều voucher.",
+                  "Giao diện dễ sử dụng nhưng phần tìm kiếm có thể cải thiện.",
+                  "Shop nên bổ sung thêm nhiều màu và kích thước.",
+                  "Mình hài lòng với chất lượng sản phẩm.",
+                  "Thời gian giao hàng có thể nhanh hơn.",
+                  "Mong MIVA có thêm nhiều chương trình khuyến mãi."
+                ]),
+                ratingValue: null,
+                createdAt: response.submittedAt,
+              });
+            } else if (q.type === 'rating') {
+              const rating = faker.helpers.weightedArrayElement([
+                { weight: 1, value: 1 },
+                { weight: 2, value: 2 },
+                { weight: 10, value: 3 },
+                { weight: 40, value: 4 },
+                { weight: 47, value: 5 }
+              ]);
+              surveyAnswers.push({
+                id: faker.string.uuid(),
+                responseId: response.id,
+                questionId: q.id,
+                optionId: null,
+                textAnswer: null,
+                ratingValue: rating,
+                createdAt: response.submittedAt,
+              });
+            } else if (q.type === 'single_choice' && qOptions.length > 0) {
+              surveyAnswers.push({
+                id: faker.string.uuid(),
+                responseId: response.id,
+                questionId: q.id,
+                optionId: faker.helpers.arrayElement(qOptions).id,
                 textAnswer: null,
                 ratingValue: null,
                 createdAt: response.submittedAt,
               });
+            } else if (q.type === 'multiple_choice' && qOptions.length > 0) {
+              const selectedOptions = faker.helpers.arrayElements(qOptions, faker.number.int({ min: 1, max: Math.min(3, qOptions.length) }));
+              for (const selOpt of selectedOptions) {
+                surveyAnswers.push({
+                  id: faker.string.uuid(),
+                  responseId: response.id,
+                  questionId: q.id,
+                  optionId: selOpt.id,
+                  textAnswer: null,
+                  ratingValue: null,
+                  createdAt: response.submittedAt,
+                });
+              }
             }
           }
         }
@@ -257,6 +346,7 @@ export function generateSurveys(
     surveyOptions.length > 0 ? sqlSection('SurveyOptions', surveyOptions.length) + buildInsert('SurveyOption', surveyOptions) : '',
     surveyResponses.length > 0 ? sqlSection('SurveyResponses', surveyResponses.length) + buildInsert('SurveyResponse', surveyResponses) : '',
     surveyAnswers.length > 0 ? sqlSection('SurveyAnswers', surveyAnswers.length) + buildInsert('SurveyAnswer', surveyAnswers) : '',
+    notifications.length > 0 ? sqlSection('Notifications', notifications.length) + buildInsert('Notification', notifications) : '',
   ].filter(Boolean).join('\n');
 
   return { 
@@ -265,6 +355,7 @@ export function generateSurveys(
     surveyOptions, 
     surveyResponses, 
     surveyAnswers, 
+    notifications,
     sql 
   };
 }

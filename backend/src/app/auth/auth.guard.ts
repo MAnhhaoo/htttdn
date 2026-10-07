@@ -64,6 +64,10 @@ export class AuthGuard implements CanActivate {
       return bearerToken;
     }
 
-    return request.cookies?.[TokenKeys.ACCESS_TOKEN_KEY];
+    const appRole = request.headers['x-app-role'] as string;
+    const suffix = appRole ? `_${appRole}` : '';
+    const cookieKey = `${TokenKeys.ACCESS_TOKEN_KEY}${suffix}`;
+
+    return request.cookies?.[cookieKey];
   }
 }

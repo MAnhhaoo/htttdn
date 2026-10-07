@@ -32,17 +32,18 @@ async function main() {
   console.log(`Loaded ${orders.length} orders, ${products.length} products.`);
 
   console.log('\n📝 Generating surveys...');
-  const { surveys, surveyResponses, surveyAnswers, sql: surveysSql } = generateSurveys(
+  const { surveys, surveyResponses, surveyAnswers, notifications, sql: surveysSql } = generateSurveys(
     admins, vendors, customers, orders, orderDetails, products, colors, variants
   );
 
-  console.log(`   ✅ ${surveys.length} surveys, ${surveyResponses.length} responses, ${surveyAnswers.length} answers`);
+  console.log(`   ✅ ${surveys.length} surveys, ${surveyResponses.length} responses, ${surveyAnswers.length} answers, ${notifications.length} notifications`);
 
   const deleteSql = `
 -- ============================================================
 -- CLEAR EXISTING SURVEY DATA
 -- Safe to rerun because of CASCADE or explicit ordering
 -- ============================================================
+DELETE FROM "Notification" WHERE "type" = 'survey_invitation';
 DELETE FROM "SurveyAnswer";
 DELETE FROM "SurveyResponse";
 DELETE FROM "SurveyOption";

@@ -115,6 +115,8 @@ enum PaymentMethod {
   momo
   zalopay
   bank_transfer
+  credit_card
+  pay_later
 }
 
 enum PaymentStatus {
@@ -144,6 +146,7 @@ model User {
   surveyResponses      SurveyResponse[]     @relation("SurveyRespondent")
   notifications        Notification[]
   productFavorites     ProductFavorite[]
+  addresses            UserAddress[]
   vouchers             Voucher[]
   reviews              Review[]
   cart                 Cart?
@@ -373,6 +376,26 @@ model ProductFavorite {
   @@unique([userId, productId])
   @@index([userId, createdAt])
   @@index([productId])
+}
+
+model UserAddress {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid
+  receiverName String    @db.VarChar(255)
+  phone        String    @db.VarChar(50)
+  addressLine  String    @db.VarChar(500)
+  ward         String?   @db.VarChar(255)
+  district     String?   @db.VarChar(255)
+  province     String?   @db.VarChar(255)
+  label        String?   @db.VarChar(100)
+  isDefault    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, deletedAt])
 }
 
 model ProductColor {

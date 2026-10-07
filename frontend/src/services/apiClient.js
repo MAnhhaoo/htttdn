@@ -4,6 +4,9 @@ export const apiClient = axios.create({
   baseURL: '/api',
   withCredentials: true,
   timeout: 10000,
+  headers: {
+    'x-app-role': 'customer',
+  },
 });
 
 apiClient.interceptors.response.use(

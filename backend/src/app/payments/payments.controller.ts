@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
 } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
@@ -40,5 +41,15 @@ export class PaymentsController {
     @Body() dto: UpdatePaymentStatusDto,
   ) {
     return this.paymentsService.updateStatus(id, dto);
+  }
+
+  @Post('demo/:id')
+  @Roles(UserRole.customer)
+  async processDemoPayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('success') success: boolean,
+  ) {
+    const status = success ? 'completed' : 'failed';
+    return this.paymentsService.updateStatus(id, { status } as any);
   }
 }

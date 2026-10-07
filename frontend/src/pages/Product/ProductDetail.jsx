@@ -24,10 +24,43 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [mainImgError, setMainImgError] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   // Derived image state from selected color
   const images = selectedColor?.imageUrls || [];
   const mainImageUrl = images[currentImageIndex] || null;
+
+  useEffect(() => {
+    if (product && isAuthenticated) {
+      import('../../services/apiClient').then(({ apiClient }) => {
+        apiClient.get(`/products/${product.id}/favorite-status`)
+          .then(res => setIsFavorite(res.favorited))
+          .catch(console.error);
+      });
+    }
+  }, [product, isAuthenticated]);
+
+  const toggleFavorite = async () => {
+    if (!isAuthenticated) {
+      toast.info('Vui lòng đăng nhập để lưu sản phẩm yêu thích');
+      navigate('/login');
+      return;
+    }
+    try {
+      const { apiClient } = await import('../../services/apiClient');
+      if (isFavorite) {
+        await apiClient.delete(`/products/${product.id}/favorite`);
+        setIsFavorite(false);
+        toast.success('Đã bỏ yêu thích');
+      } else {
+        await apiClient.post(`/products/${product.id}/favorite`);
+        setIsFavorite(true);
+        toast.success('Đã lưu vào yêu thích');
+      }
+    } catch (e) {
+      toast.error('Lỗi khi cập nhật trạng thái yêu thích');
+    }
+  };
 
   useEffect(() => {
     if (product && product.colors?.length > 0) {
@@ -327,8 +360,15 @@ export default function ProductDetail() {
               {isOutOfStock ? 'Hết hàng' : isAdding ? 'Đang thêm...' : 'Thêm vào giỏ hàng'}
             </button>
 
-            <button className="w-14 h-14 border border-light-border dark:border-dark-border rounded-xl flex items-center justify-center text-light-muted hover:text-red-500 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all shrink-0">
-              <Heart className="w-6 h-6" />
+            <button 
+              onClick={toggleFavorite}
+              className={`w-14 h-14 border rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                isFavorite 
+                  ? 'border-red-500 bg-red-50 dark:bg-red-500/10 text-red-500' 
+                  : 'border-light-border dark:border-dark-border text-light-muted hover:text-red-500 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-500/10'
+              }`}
+            >
+              <Heart className={`w-6 h-6 ${isFavorite ? 'fill-current' : ''}`} />
             </button>
           </div>
         </div>

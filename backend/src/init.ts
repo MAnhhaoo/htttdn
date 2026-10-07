@@ -47,7 +47,7 @@ const initApp = (app: INestApplication) => {
     origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'x-app-role'],
   });
   // app.enableVersioning({
   //   type: VersioningType.HEADER,

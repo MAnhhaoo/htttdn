@@ -69,22 +69,25 @@ export default function Analytics() {
     // --- Calculate overall KPIs ---
     let revenue = 0;
     const vendorOrderSet = new Set();
+    const completedOrderSet = new Set();
     
     allVendorOrders.forEach(od => {
       vendorOrderSet.add(od.order.id);
       if (od.order.status === 'completed') {
         revenue += Number(od.price) * od.quantity;
+        completedOrderSet.add(od.order.id);
       }
     });
 
     const totalOrders = vendorOrderSet.size;
+    const completedOrders = completedOrderSet.size;
 
     let totalRating = 0;
     allReviews.forEach(r => {
       if (r.rating) totalRating += r.rating;
     });
     const avgRating = allReviews.length > 0 ? (totalRating / allReviews.length).toFixed(1) : 0;
-    const conversionRate = (Math.random() * (4.5 - 2.0) + 2.0).toFixed(1);
+    const conversionRate = totalOrders > 0 ? ((completedOrders / totalOrders) * 100).toFixed(1) : 0;
 
     const statsData = { revenue, totalOrders, avgRating, conversionRate };
 

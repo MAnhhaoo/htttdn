@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Package, ShoppingCart, TrendingUp, Star, AlertTriangle, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { dashboardService } from '../../services/dashboardService';
+import { reviewService } from '../../services/reviewService';
 import { Link } from 'react-router-dom';
 
 function StatCard({ title, value, icon: Icon, color, subtitle }) {
@@ -82,14 +83,26 @@ export default function Dashboard() {
         // Reviews stats
         let totalRating = 0;
         let reviewCount = 0;
-        products.forEach(p => {
-          if (p.rating > 0) {
-            // Approximation since we don't have exact total reviews endpoint here
-            // Just average of product ratings
-            totalRating += p.rating;
+        
+        let allReviews = [];
+        for (const product of products) {
+          try {
+            const prodReviews = await reviewService.getReviewsByProduct(product.id);
+            if (prodReviews && Array.isArray(prodReviews)) {
+              allReviews = [...allReviews, ...prodReviews];
+            }
+          } catch (e) {
+            console.error('Error fetching reviews for product', product.id);
+          }
+        }
+        
+        allReviews.forEach(r => {
+          if (r.rating) {
+            totalRating += r.rating;
             reviewCount++;
           }
         });
+
         const avgRating = reviewCount > 0 ? (totalRating / reviewCount).toFixed(1) : 0;
 
         setStats({

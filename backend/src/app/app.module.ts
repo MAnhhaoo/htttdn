@@ -28,6 +28,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { SurveysModule } from './surveys/surveys.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
+import { AddressesModule } from './addresses/addresses.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { ReportsModule } from './reports/reports.module';
     SurveysModule,
     NotificationsModule,
     ReportsModule,
+    AddressesModule,
   ],
   controllers: [AppController],
   providers: [

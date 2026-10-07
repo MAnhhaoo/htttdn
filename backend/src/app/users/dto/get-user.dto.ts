@@ -1,10 +1,11 @@
-import { Prisma, UserRole, UserStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { User } from '../entities/user.entity';
 
 import { PaginationQuerySchema } from '../../../common/utils/paginaton-util/pagination-util.interface';
+import { UserStatusSchema, UserRoleSchema } from '../../../generated/zod';
 
 class ExportUsersDto {
   ids: NonNullable<Prisma.UserWhereUniqueInput['id']>[];
@@ -16,8 +17,8 @@ class IsExistPermissionKeyDto {
 }
 
 const GetUsersPaginationSchema = PaginationQuerySchema.extend({
-  status: z.enum(UserStatus).optional(),
-  role: z.enum(UserRole).optional(),
+  status: UserStatusSchema.optional(),
+  role: UserRoleSchema.optional(),
 }).strict();
 
 class GetUsersPaginationDto extends createZodDto(GetUsersPaginationSchema) {}

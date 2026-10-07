@@ -7,6 +7,7 @@ const axiosClient = axios.create({
   withCredentials: true, // gửi cookie (access_token, refresh_token) tự động
   headers: {
     'Content-Type': 'application/json',
+    'x-app-role': 'admin',
   },
 });
 

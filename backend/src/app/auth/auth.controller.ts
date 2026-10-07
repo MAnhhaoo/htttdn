@@ -1,5 +1,5 @@
-import { Body, Controller, Post, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Body, Controller, Post, Res, Req } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
 import ms from 'ms';
 
@@ -48,18 +48,24 @@ export class AuthController {
   async signIn(
     @Body() signInDto: SignInDto,
 
+    @Req() request: Request,
     @Res({ passthrough: true })
     response: Response,
   ) {
     const result = await this.authService.signIn(signInDto);
 
-    response.cookie(TokenKeys.ACCESS_TOKEN_KEY, result.data.accessToken, {
+    const appRole = request.headers['x-app-role'] as string;
+    const suffix = appRole ? `_${appRole}` : '';
+    const accessKey = `${TokenKeys.ACCESS_TOKEN_KEY}${suffix}`;
+    const refreshKey = `${TokenKeys.REFRESH_TOKEN_KEY}${suffix}`;
+
+    response.cookie(accessKey, result.data.accessToken, {
       ...COOKIE_CONFIG_DEFAULT,
 
       maxAge: ms(CookiesToken.ACCESS_TOKEN_EXPIRE_IN),
     });
 
-    response.cookie(TokenKeys.REFRESH_TOKEN_KEY, result.data.refreshToken, {
+    response.cookie(refreshKey, result.data.refreshToken, {
       ...COOKIE_CONFIG_DEFAULT,
 
       maxAge: ms(CookiesToken.REFRESH_TOKEN_EXPIRE_IN),
@@ -74,21 +80,26 @@ export class AuthController {
   @Post('refresh-token')
   @SkipAuth()
   async refreshToken(
-    @Cookies(TokenKeys.REFRESH_TOKEN_KEY)
-    refreshToken: string | undefined,
-
+    @Req() request: Request,
     @Res({ passthrough: true })
     response: Response,
   ) {
+    const appRole = request.headers['x-app-role'] as string;
+    const suffix = appRole ? `_${appRole}` : '';
+    const accessKey = `${TokenKeys.ACCESS_TOKEN_KEY}${suffix}`;
+    const refreshKey = `${TokenKeys.REFRESH_TOKEN_KEY}${suffix}`;
+
+    const refreshToken = (request.cookies as Record<string, string>)?.[refreshKey];
+
     const result = await this.authService.refreshToken(refreshToken);
 
-    response.cookie(TokenKeys.ACCESS_TOKEN_KEY, result.data.accessToken, {
+    response.cookie(accessKey, result.data.accessToken, {
       ...COOKIE_CONFIG_DEFAULT,
 
       maxAge: ms(CookiesToken.ACCESS_TOKEN_EXPIRE_IN),
     });
 
-    response.cookie(TokenKeys.REFRESH_TOKEN_KEY, result.data.refreshToken, {
+    response.cookie(refreshKey, result.data.refreshToken, {
       ...COOKIE_CONFIG_DEFAULT,
 
       maxAge: ms(CookiesToken.REFRESH_TOKEN_EXPIRE_IN),
@@ -99,22 +110,21 @@ export class AuthController {
 
   /**
    * Đăng xuất.
-   *
-   * @remarks
-   * **Stateless logout** – Chỉ xóa cookie access_token và refresh_token phía client.
-   * Token phía server KHÔNG bị revoke (không dùng blacklist/denylist).
-   * Điều này có nghĩa là nếu ai đó giữ token hợp lệ, họ vẫn có thể dùng cho đến khi token hết hạn.
-   * Nếu cần revoke token (vd: force logout, đổi mật khẩu), hãy triển khai token blacklist (Redis,...).
    */
   @Post('sign-out')
   @SkipAuth()
   signOut(
+    @Req() request: Request,
     @Res({ passthrough: true })
     response: Response,
   ) {
-    response.clearCookie(TokenKeys.ACCESS_TOKEN_KEY, COOKIE_CONFIG_DEFAULT);
+    const appRole = request.headers['x-app-role'] as string;
+    const suffix = appRole ? `_${appRole}` : '';
+    const accessKey = `${TokenKeys.ACCESS_TOKEN_KEY}${suffix}`;
+    const refreshKey = `${TokenKeys.REFRESH_TOKEN_KEY}${suffix}`;
 
-    response.clearCookie(TokenKeys.REFRESH_TOKEN_KEY, COOKIE_CONFIG_DEFAULT);
+    response.clearCookie(accessKey, COOKIE_CONFIG_DEFAULT);
+    response.clearCookie(refreshKey, COOKIE_CONFIG_DEFAULT);
 
     return {
       message: 'Đăng xuất thành công',

@@ -98,10 +98,10 @@ function main() {
 
   // ── 12. Surveys ──
   console.log('\n📝 Generating surveys...');
-  const { surveys, surveyQuestions, surveyOptions, surveyResponses, surveyAnswers, sql: surveysSql } = generateSurveys(
+  const { surveys, surveyQuestions, surveyOptions, surveyResponses, surveyAnswers, notifications, sql: surveysSql } = generateSurveys(
     admins, vendors, customers, orders, orderDetails, products, colors, variants
   );
-  console.log(`   ✅ ${surveys.length} surveys, ${surveyResponses.length} responses, ${surveyAnswers.length} answers`);
+  console.log(`   ✅ ${surveys.length} surveys, ${surveyResponses.length} responses, ${surveyAnswers.length} answers, ${notifications.length} notifications`);
 
   // ── 13. Reviews ──
   console.log('\n⭐ Generating reviews...');
@@ -190,6 +190,7 @@ function main() {
   console.log(`   Reviews:            ${resolvedReviews.length}`);
   console.log(`   Surveys:            ${surveys.length}`);
   console.log(`   Survey Responses:   ${surveyResponses.length}`);
+  console.log(`   Notifications:      ${notifications.length}`);
 }
 
 main();
