@@ -84,12 +84,12 @@ SELECT "type", COUNT(*) FROM "SurveyQuestion" GROUP BY "type";
 -- 22. Survey Responses
 SELECT COUNT(*) AS total_responses FROM "SurveyResponse";
 
--- 23. Invalid Survey Responses (Customer has no completed/shipping order from Vendor)
+-- 23. Invalid Survey Responses (vendor_completed_buyers customer has no completed/shipping order from Vendor)
 SELECT sr."id" AS response_id, sr."userId" AS customer_id, s."createdById" AS vendor_id
 FROM "SurveyResponse" sr
 JOIN "Survey" s ON s."id" = sr."surveyId"
 JOIN "User" u ON u."id" = s."createdById"
-WHERE u."role" = 'vendor'
+WHERE s."audienceType" = 'vendor_completed_buyers'
   AND NOT EXISTS (
     SELECT 1 FROM "Order" o
     JOIN "OrderDetail" od ON od."orderId" = o."id"
@@ -125,6 +125,7 @@ UNION ALL SELECT 'SurveyQuestions', COUNT(*) FROM "SurveyQuestion"
 UNION ALL SELECT 'SurveyOptions', COUNT(*) FROM "SurveyOption"
 UNION ALL SELECT 'SurveyResponses', COUNT(*) FROM "SurveyResponse"
 UNION ALL SELECT 'SurveyAnswers', COUNT(*) FROM "SurveyAnswer"
+UNION ALL SELECT 'Notifications', COUNT(*) FROM "Notification"
 ORDER BY entity;
 `;
 }

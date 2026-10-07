@@ -76,7 +76,7 @@ export class UsersService
       omit: { password: true },
       where,
       skip: paging.skip,
-      take: itemPerPage,
+      take: Number(itemPerPage),
       orderBy: {
         createdAt: 'desc',
       },
@@ -124,7 +124,7 @@ export class UsersService
         ...searchFields,
       },
 
-      take: limit,
+      take: Number(limit),
 
       orderBy: {
         fullName: 'asc',

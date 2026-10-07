@@ -13,6 +13,8 @@ import Checkout from '../pages/Cart/Checkout';
 import Orders from '../pages/Account/Orders';
 import About from '../pages/About/About';
 import Contact from '../pages/Contact/Contact';
+import PaymentDemo from '../pages/Cart/PaymentDemo';
+import Favorites from '../pages/Account/Favorites';
 
 export default function AppRoutes() {
   return (
@@ -33,8 +35,10 @@ export default function AppRoutes() {
         {/* Protected Routes */}
         <Route element={<ProtectedRoute />}>
           <Route path="/checkout" element={<Checkout />} />
+          <Route path="/payment-demo/:orderId" element={<PaymentDemo />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/orders" element={<Orders />} />
+          <Route path="/favorites" element={<Favorites />} />
         </Route>
       </Route>
     </Routes>

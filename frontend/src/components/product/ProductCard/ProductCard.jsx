@@ -4,8 +4,10 @@ import { useSelector } from 'react-redux';
 import { formatPrice } from '../../../utils/formatPrice';
 import { useCart } from '../../../hooks/useCart';
 import { useToast } from '../../common/Toast/Toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import QuickAddModal from '../QuickAddModal/QuickAddModal';
+
+import { useQueryClient } from '@tanstack/react-query';
 
 export default function ProductCard({ product }) {
   const [imgError, setImgError] = useState(false);
@@ -16,7 +18,11 @@ export default function ProductCard({ product }) {
   const isAuthenticated = useSelector(state => state.auth.isAuthenticated);
   const { addToCart } = useCart();
   const toast = useToast();
+  const queryClient = useQueryClient();
 
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  // Derived image state from selected color
   // Backend toCatalogProduct() already provides these fields
   const imageUrl = product.thumbnail;
   const price = product.minPrice;
@@ -29,6 +35,42 @@ export default function ProductCard({ product }) {
   const purchasableVariants = allVariants.filter(v => v.stock > 0);
   const hasSingleVariant = purchasableVariants.length === 1;
   const hasMultipleVariants = purchasableVariants.length > 1;
+
+  // Fetch initial favorite status
+  useEffect(() => {
+    if (product?.id && isAuthenticated) {
+      import('../../../services/apiClient').then(({ apiClient }) => {
+        apiClient.get(`/products/${product.id}/favorite-status`)
+          .then(res => setIsFavorite(res.favorited))
+          .catch(console.error);
+      });
+    }
+  }, [product?.id, isAuthenticated]);
+
+  const toggleFavorite = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isAuthenticated) {
+      toast.info('Vui lòng đăng nhập để lưu sản phẩm yêu thích');
+      navigate('/login');
+      return;
+    }
+    try {
+      const { apiClient } = await import('../../../services/apiClient');
+      if (isFavorite) {
+        await apiClient.delete(`/products/${product.id}/favorite`);
+        setIsFavorite(false);
+      } else {
+        await apiClient.post(`/products/${product.id}/favorite`);
+        setIsFavorite(true);
+        toast.success('Đã lưu vào yêu thích');
+      }
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
+    } catch (err) {
+      console.error(err);
+      toast.error('Lỗi khi cập nhật trạng thái yêu thích');
+    }
+  };
 
   const handleCartClick = async (e) => {
     e.preventDefault();
@@ -98,14 +140,15 @@ export default function ProductCard({ product }) {
 
           {/* Wishlist Button */}
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm text-gray-700 hover:text-red-500 hover:scale-110 transition-all duration-200 z-10"
+            onClick={toggleFavorite}
+            className={`absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full shadow-sm transition-all duration-200 z-10 ${
+              isFavorite 
+                ? 'bg-red-50 text-red-500 hover:scale-110' 
+                : 'bg-white text-gray-700 hover:text-red-500 hover:scale-110'
+            }`}
             aria-label="Yêu thích"
           >
-            <Heart className="w-[18px] h-[18px]" strokeWidth={1.5} />
+            <Heart className={`w-[18px] h-[18px] ${isFavorite ? 'fill-current' : ''}`} strokeWidth={1.5} />
           </button>
         </div>
 

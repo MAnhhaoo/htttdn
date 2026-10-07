@@ -59,6 +59,12 @@ export class ProductsController {
   ) {
     return this.productService.getProductsByCategory(categorySlug, query);
   }
+  @Get('favorites')
+  @Roles(UserRole.customer)
+  listFavorites(@CurrentUser() user: UserInfo) {
+    return this.productService.listFavorites(user.userID);
+  }
+
   @Get(':id/favorite-status')
   @Roles(UserRole.customer)
   favoriteStatus(

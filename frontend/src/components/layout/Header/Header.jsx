@@ -90,7 +90,7 @@ export default function Header() {
               </span>
             </Link>
 
-            <Link to="#" className="p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors">
+            <Link to="/favorites" className="p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors">
               <Heart className="w-5 h-5 text-[#1A3A2C] dark:text-white" strokeWidth={2.5} />
             </Link>
 
