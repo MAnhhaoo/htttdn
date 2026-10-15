@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ProductVariantService } from './productVariant.service';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
-import { UserRole } from '@prisma/client';
+
 import { CreateProductVariantDto } from './dto/createProductVariant.dto';
 import { UpdateProductVariantDto } from './dto/updateProductVariant.dto';
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
@@ -20,7 +20,7 @@ import type { UserInfo } from 'src/common/decorators/user.decorator';
 export class ProductVariantController {
   constructor(private readonly productVariantService: ProductVariantService) {}
   @Post()
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   createProductVariant(
     @Body() createProductVariantDto: CreateProductVariantDto,
     @CurrentUser() user: UserInfo,
@@ -41,7 +41,7 @@ export class ProductVariantController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   updateProductVariant(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateDto: UpdateProductVariantDto,
@@ -55,7 +55,7 @@ export class ProductVariantController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   deleteProductVariant(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserInfo,

@@ -6,7 +6,10 @@
     "dist",
     "**/*spec.ts",
     "prisma",
+    "prisma/**/*",
     "knowledge",
-    "src/generated"
+    "knowledge/**/*",
+    "src/generated",
+    "src/generated/**/*"
   ]
 }

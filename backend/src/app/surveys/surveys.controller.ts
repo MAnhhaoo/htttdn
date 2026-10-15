@@ -9,7 +9,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+
 
 import { User } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
@@ -30,31 +30,37 @@ export class SurveysController {
   constructor(private readonly surveysService: SurveysService) {}
 
   @Post()
-  @Roles(UserRole.admin, UserRole.vendor)
+  @Roles('admin', 'vendor')
   create(@Body() dto: CreateSurveyDto, @User() user: UserInfo) {
     return this.surveysService.create(dto, user);
   }
 
+  @Get('templates')
+  @Roles('admin', 'vendor')
+  getTemplates(@Query('target') target?: string) {
+    return this.surveysService.getTemplates(target);
+  }
+
   @Get('mine')
-  @Roles(UserRole.admin, UserRole.vendor)
+  @Roles('admin', 'vendor')
   listMine(@Query() query: GetSurveysQueryDto, @User() user: UserInfo) {
-    return this.surveysService.listMine(user.userID, query);
+    return this.surveysService.listMine(user, query);
   }
 
   @Get('admin/all')
-  @Roles(UserRole.admin)
+  @Roles('admin')
   listAll(@Query() query: GetSurveysQueryDto) {
     return this.surveysService.listAll(query);
   }
 
   @Get('inbox')
-  @Roles(UserRole.customer, UserRole.vendor)
+  @Roles('client', 'vendor')
   listInbox(@Query() query: GetSurveyInboxQueryDto, @User() user: UserInfo) {
     return this.surveysService.listInbox(user.userID, query);
   }
 
   @Get('inbox/:responseId')
-  @Roles(UserRole.customer, UserRole.vendor)
+  @Roles('client', 'vendor')
   getInboxDetail(
     @Param('responseId', ParseUUIDPipe) responseId: string,
     @User() user: UserInfo,
@@ -63,7 +69,7 @@ export class SurveysController {
   }
 
   @Patch('inbox/:responseId/open')
-  @Roles(UserRole.customer, UserRole.vendor)
+  @Roles('client', 'vendor')
   openResponse(
     @Param('responseId', ParseUUIDPipe) responseId: string,
     @User() user: UserInfo,
@@ -72,7 +78,7 @@ export class SurveysController {
   }
 
   @Post('inbox/:responseId/responses')
-  @Roles(UserRole.customer, UserRole.vendor)
+  @Roles('client', 'vendor')
   submitResponse(
     @Param('responseId', ParseUUIDPipe) responseId: string,
     @Body() dto: SubmitSurveyDto,
@@ -82,7 +88,7 @@ export class SurveysController {
   }
 
   @Patch('inbox/:responseId/skip')
-  @Roles(UserRole.customer, UserRole.vendor)
+  @Roles('client', 'vendor')
   skipResponse(
     @Param('responseId', ParseUUIDPipe) responseId: string,
     @User() user: UserInfo,
@@ -91,7 +97,7 @@ export class SurveysController {
   }
 
   @Get('orders/:orderId/pending')
-  @Roles(UserRole.customer)
+  @Roles('client')
   listPendingForOrder(
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @User() user: UserInfo,
@@ -100,7 +106,7 @@ export class SurveysController {
   }
 
   @Get(':id/manage')
-  @Roles(UserRole.admin, UserRole.vendor)
+  @Roles('admin', 'vendor')
   getManagementDetail(
     @Param('id', ParseUUIDPipe) id: string,
     @User() user: UserInfo,
@@ -109,7 +115,7 @@ export class SurveysController {
   }
 
   @Get(':id/results')
-  @Roles(UserRole.admin, UserRole.vendor)
+  @Roles('admin', 'vendor')
   getResults(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: GetSurveyResultsQueryDto,
@@ -119,7 +125,7 @@ export class SurveysController {
   }
 
   @Get(':id/orders/:orderId/my-response')
-  @Roles(UserRole.customer)
+  @Roles('client')
   getMyResponse(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('orderId', ParseUUIDPipe) orderId: string,
@@ -129,7 +135,7 @@ export class SurveysController {
   }
 
   @Post(':id/orders/:orderId/responses')
-  @Roles(UserRole.customer)
+  @Roles('client')
   submit(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('orderId', ParseUUIDPipe) orderId: string,
@@ -140,7 +146,7 @@ export class SurveysController {
   }
 
   @Patch(':id/orders/:orderId/skip')
-  @Roles(UserRole.customer)
+  @Roles('client')
   skip(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('orderId', ParseUUIDPipe) orderId: string,
@@ -150,7 +156,7 @@ export class SurveysController {
   }
 
   @Patch(':id/status')
-  @Roles(UserRole.admin, UserRole.vendor)
+  @Roles('admin', 'vendor')
   changeStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: SurveyStatusDto,
@@ -160,7 +166,7 @@ export class SurveysController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.admin, UserRole.vendor)
+  @Roles('admin', 'vendor')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateSurveyDto,
@@ -170,7 +176,7 @@ export class SurveysController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.admin, UserRole.vendor)
+  @Roles('admin', 'vendor')
   remove(@Param('id', ParseUUIDPipe) id: string, @User() user: UserInfo) {
     return this.surveysService.remove(id, user);
   }

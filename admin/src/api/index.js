@@ -6,7 +6,7 @@ export const authApi = {
   signIn: (data) => axiosClient.post('/auth/sign-in', data),
   signOut: () => axiosClient.post('/auth/sign-out'),
   refreshToken: () => axiosClient.post('/auth/refresh-token'),
-  getProfile: () => axiosClient.get('/users/profile'),
+  getProfile: () => axiosClient.get('/admins/profile'),
 };
 
 // ==================== USERS ====================
@@ -16,6 +16,18 @@ export const usersApi = {
   getUser: (id) => axiosClient.get(`/users/${id}`),
   updateUser: (id, data) => axiosClient.patch(`/users/${id}`, data),
   deleteUser: (id) => axiosClient.delete(`/users/${id}`),
+};
+
+// ==================== VENDORS ====================
+
+export const vendorsApi = {
+  getVendors: (params = {}) => axiosClient.get('/vendors', { params }),
+  getVendor: (id) => axiosClient.get(`/vendors/${id}`),
+  updateVendor: (id, data) => axiosClient.patch(`/vendors/${id}`, data),
+  deleteVendor: (id) => axiosClient.delete(`/vendors/${id}`),
+  getRegistrations: (params = {}) => axiosClient.get('/vendors/admin/registrations', { params }),
+  approveRegistration: (id, data = {}) => axiosClient.patch(`/vendors/admin/registrations/${id}/approve`, data),
+  rejectRegistration: (id, data = {}) => axiosClient.patch(`/vendors/admin/registrations/${id}/reject`, data),
 };
 
 // ==================== CATEGORIES ====================
@@ -54,7 +66,10 @@ export const productColorsApi = {
 
 export const ordersApi = {
   getOrders: (params = {}) => axiosClient.get('/orders/admin/all', { params }),
-  updateOrderStatus: (id, status) => axiosClient.patch(`/orders/${id}/status`, { status }),
+  updateOrderStatus: (id, status, note) => axiosClient.patch(`/orders/${id}/status`, { status, note }),
+  assignOrder: (id, data) => axiosClient.patch(`/orders/${id}/assign`, data),
+  autoAssignOrder: (id) => axiosClient.post(`/orders/${id}/auto-assign`),
+  autoAssignAll: () => axiosClient.post('/orders/admin/auto-assign-all'),
 };
 
 // ==================== VOUCHERS ====================
@@ -72,4 +87,68 @@ export const reviewsApi = {
   getReviews: (params = {}) => axiosClient.get('/reviews/admin/all', { params }),
   deleteReview: (id) => axiosClient.delete(`/reviews/admin/${id}`),
 };
+
+// ==================== REPORTS & ANALYTICS ====================
+
+export const reportsApi = {
+  getAnalytics: (params = {}) => axiosClient.get('/admin/reports/analytics', { params }),
+  getCustomerReport: (params = {}) => axiosClient.get('/admin/reports/customers', { params }),
+  getCustomerAnalytics: (params = {}) => axiosClient.get('/admin/reports/customer-analytics', { params }),
+};
+
+// ==================== EMPLOYEES ====================
+
+export const employeesApi = {
+  getEmployees: (params = {}) => axiosClient.get('/employees', { params }),
+  getEmployee: (id) => axiosClient.get(`/employees/${id}`),
+  createEmployee: (data) => axiosClient.post('/employees', data),
+  updateEmployee: (id, data) => axiosClient.patch(`/employees/${id}`, data),
+  updateStatus: (id, status) => axiosClient.patch(`/employees/${id}/status`, { status }),
+  deleteEmployee: (id) => axiosClient.delete(`/employees/${id}`),
+  getSalaryHistory: (id) => axiosClient.get(`/employees/${id}/salary-history`),
+};
+
+// ==================== SHIPPING ====================
+
+export const shippingApi = {
+  getShipments: (params = {}) => axiosClient.get('/shipping/shipments', { params }),
+  getShipment: (id) => axiosClient.get(`/shipping/shipments/${id}`),
+  updateStatus: (id, data) => axiosClient.patch(`/shipping/shipments/${id}/status`, data),
+  assignCarrier: (id, data) => axiosClient.patch(`/shipping/shipments/${id}/assign`, data),
+};
+
+// ==================== PAYROLL ====================
+
+export const payrollApi = {
+  getPayrolls: (params = {}) => axiosClient.get('/payroll', { params }),
+  calculate: (data) => axiosClient.post('/payroll/calculate', data),
+  updatePayroll: (id, data) => axiosClient.patch(`/payroll/${id}`, data),
+  recordAttendance: (data) => axiosClient.post('/payroll/attendance', data),
+  getAttendance: (params = {}) => axiosClient.get('/payroll/attendance', { params }),
+};
+
+// ==================== SURVEYS ====================
+
+export const surveysApi = {
+  getSurveys: (params = {}) => axiosClient.get('/surveys/admin/all', { params }),
+  getMine: (params = {}) => axiosClient.get('/surveys/mine', { params }),
+  getTemplates: (target = 'client') => axiosClient.get('/surveys/templates', { params: { target } }),
+  createSurvey: (data) => axiosClient.post('/surveys', data),
+  getSurveyDetail: (id) => axiosClient.get(`/surveys/${id}/manage`),
+  updateSurvey: (id, data) => axiosClient.patch(`/surveys/${id}`, data),
+  changeStatus: (id, status) => axiosClient.patch(`/surveys/${id}/status`, { status }),
+  getResults: (id, params = {}) => axiosClient.get(`/surveys/${id}/results`, { params }),
+  deleteSurvey: (id) => axiosClient.delete(`/surveys/${id}`),
+};
+
+// ==================== NOTIFICATIONS ====================
+
+export const notificationsApi = {
+  getNotifications: (params = {}) => axiosClient.get('/notifications', { params }),
+  getUnreadCount: () => axiosClient.get('/notifications/unread-count'),
+  markAsRead: (id) => axiosClient.patch(`/notifications/${id}/read`),
+  markAllAsRead: () => axiosClient.patch('/notifications/read-all'),
+};
+
+
 

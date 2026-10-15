@@ -1,8 +1,11 @@
-import { Bell, UserCircle, Moon, Sun } from 'lucide-react';
+import { UserCircle, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
+import NotificationDropdown from './NotificationDropdown';
 
 export default function Header() {
   const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
 
   return (
     <header className="h-16 bg-white dark:bg-slate-900 flex items-center justify-between px-6 transition-colors shadow-sm dark:shadow-none">
@@ -17,15 +20,16 @@ export default function Header() {
           {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
 
-        <button className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900"></span>
-        </button>
+        <NotificationDropdown />
         <div className="flex items-center cursor-pointer ml-2">
           <UserCircle className="w-8 h-8 text-indigo-400 dark:text-indigo-500 mr-2" />
           <div className="flex flex-col">
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Nike Official</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">Vendor</span>
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {user?.storeName || user?.fullName || 'Vendor'}
+            </span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {user?.taxId ? `MST: ${user.taxId}` : 'Vendor'}
+            </span>
           </div>
         </div>
       </div>

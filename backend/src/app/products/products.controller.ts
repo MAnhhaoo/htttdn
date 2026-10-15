@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ProductService } from './products.service';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
-import { UserRole } from '@prisma/client';
+
 import { CreateProductDto } from './dto/create-product.dto';
 
 import {
@@ -29,7 +29,7 @@ export class ProductsController {
   constructor(private readonly productService: ProductService) {}
 
   @Post()
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   createProduct(
     @Body() createProductDto: CreateProductDto,
     @CurrentUser() user: UserInfo,
@@ -38,7 +38,7 @@ export class ProductsController {
   }
 
   @Get('vendor/mine')
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   getVendorProducts(
     @Query() query: GetVendorProductsPaginationDto,
     @CurrentUser() user: UserInfo,
@@ -60,13 +60,13 @@ export class ProductsController {
     return this.productService.getProductsByCategory(categorySlug, query);
   }
   @Get('favorites')
-  @Roles(UserRole.customer)
+  @Roles('client')
   listFavorites(@CurrentUser() user: UserInfo) {
     return this.productService.listFavorites(user.userID);
   }
 
   @Get(':id/favorite-status')
-  @Roles(UserRole.customer)
+  @Roles('client')
   favoriteStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserInfo,
@@ -74,7 +74,7 @@ export class ProductsController {
     return this.productService.favoriteStatus(id, user.userID);
   }
   @Post(':id/favorite')
-  @Roles(UserRole.customer)
+  @Roles('client')
   addFavorite(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserInfo,
@@ -82,7 +82,7 @@ export class ProductsController {
     return this.productService.addFavorite(id, user.userID);
   }
   @Delete(':id/favorite')
-  @Roles(UserRole.customer)
+  @Roles('client')
   removeFavorite(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserInfo,
@@ -95,7 +95,7 @@ export class ProductsController {
     return this.productService.getProductById(id);
   }
   @Patch(':id')
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   updateProduct(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateProductDto: UpdateProductDto,
@@ -104,7 +104,7 @@ export class ProductsController {
     return this.productService.updateProduct(id, updateProductDto, user.userID);
   }
   @Delete(':id')
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   deleteProduct(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserInfo,

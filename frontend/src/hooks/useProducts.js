@@ -12,6 +12,8 @@ export const useProducts = (params = {}) => {
       if (params.q || params.search) apiParams.search = params.q || params.search;
       if (params.page) apiParams.page = params.page;
       if (params.createdAfter) apiParams.createdAfter = params.createdAfter;
+      if (params.minPrice) apiParams.minPrice = params.minPrice;
+      if (params.maxPrice) apiParams.maxPrice = params.maxPrice;
       
       // Backend uses strict validation (PaginationQuerySchema.strict()),
       // so only send: page, itemPerPage, search.

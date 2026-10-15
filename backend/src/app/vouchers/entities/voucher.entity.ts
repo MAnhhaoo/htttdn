@@ -2,7 +2,8 @@ import { Voucher as PrismaVoucher } from '@prisma/client';
 
 export class Voucher implements PrismaVoucher {
   id: string;
-  userId: string;
+  adminId: string | null;
+  vendorId: string | null;
   code: string;
   name: string;
   scope: PrismaVoucher['scope'];

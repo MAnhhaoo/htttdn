@@ -10,7 +10,7 @@ import type { GeneratedProductVariant } from './productVariants.generator';
 
 export interface GeneratedCart {
   id: string;
-  userId: string;
+  clientId: string;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: null;
@@ -47,7 +47,7 @@ export function generateCarts(
     });
     const cart: GeneratedCart = {
       id: faker.string.uuid(),
-      userId: customer.id,
+      clientId: customer.id,
       createdAt: created,
       updatedAt: created,
       deletedAt: null,

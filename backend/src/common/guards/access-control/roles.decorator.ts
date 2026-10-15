@@ -1,5 +1,6 @@
 import { SetMetadata } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+export type UserRole = 'admin' | 'client' | 'vendor' | 'employee';
+
 
 export const ROLES_KEY = 'roles';
 

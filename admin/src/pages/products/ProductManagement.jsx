@@ -11,6 +11,7 @@ export default function ProductManagement() {
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -36,6 +37,9 @@ export default function ProductManagement() {
     try {
       const params = { page, itemPerPage: 10 };
       if (search) params.search = search;
+      if (categoryFilter && categoryFilter !== 'all') params.category = categoryFilter;
+      if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
+      if (statusFilter === 'all') params.status = 'all';
 
       const res = await productsApi.getProducts(params);
       const data = res.data;
@@ -47,7 +51,7 @@ export default function ProductManagement() {
     } finally {
       setLoading(false);
     }
-  }, [page, search]);
+  }, [page, search, categoryFilter, statusFilter]);
 
   useEffect(() => {
     fetchCategories();
@@ -59,7 +63,7 @@ export default function ProductManagement() {
 
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, categoryFilter, statusFilter]);
 
   const getCategoryName = (categoryId) => {
     const cat = categories.find(c => c.id === categoryId);
@@ -162,11 +166,23 @@ export default function ProductManagement() {
           </div>
           <Select 
             options={[
-              { value: 'all', label: 'All Categories' },
+              { value: 'all', label: 'Tất cả danh mục' },
               ...categories.map(c => ({ value: c.id, label: c.name }))
             ]}
             value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value)}
+            className="w-48"
+          />
+          <Select 
+            options={[
+              { value: 'all', label: 'Tất cả trạng thái' },
+              { value: 'active', label: 'Đang bán (Active)' },
+              { value: 'inactive', label: 'Tạm ẩn (Inactive)' },
+              { value: 'draft', label: 'Bản nháp (Draft)' },
+            ]}
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="w-48"
           />
         </div>
 

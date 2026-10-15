@@ -34,7 +34,7 @@ axiosClient.interceptors.response.use(
     // Nếu 401 và chưa retry
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Không retry cho các auth-related endpoints
-      const skipUrls = ['/auth/sign-in', '/auth/sign-out', '/auth/refresh-token', '/users/profile'];
+      const skipUrls = ['/auth/sign-in', '/auth/sign-out', '/auth/refresh-token', '/admins/profile'];
       if (skipUrls.some(url => originalRequest.url?.includes(url))) {
         return Promise.reject(error);
       }

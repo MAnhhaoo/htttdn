@@ -12,6 +12,7 @@ export const CONFIG = {
   /** Record counts */
   counts: {
     adminUsers: 5,
+    employeeUsers: 15,
     vendorUsers: 25,
     customerUsers: 120,
     categories: 15,
@@ -26,8 +27,8 @@ export const CONFIG = {
     orders: 800,
     orderItemsPerOrder: { min: 1, max: 4 },
     reviewsTarget: 400,
-    adminSurveys: { min: 3, max: 5 },
-    vendorSurveys: { min: 5, max: 10 },
+    adminSurveys: { min: 8, max: 12 },
+    vendorSurveys: { min: 12, max: 18 },
     questionsPerSurvey: { min: 4, max: 8 },
     optionsPerChoice: { min: 3, max: 6 },
   },

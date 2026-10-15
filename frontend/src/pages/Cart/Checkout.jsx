@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCart } from '../../hooks/useCart';
 import { useAuth } from '../../hooks/useAuth';
 import { orderService } from '../../services/orderService';
@@ -10,6 +11,7 @@ import Button from '../../components/common/Button/Button';
 
 export default function Checkout() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { items, subtotal } = useCart();
   const { user } = useAuth();
   
@@ -27,9 +29,10 @@ export default function Checkout() {
   useEffect(() => {
     const fetchAddresses = async () => {
       try {
-        const data = await addressService.getAddresses();
-        setAddresses(data);
-        const defaultAddr = data.find(a => a.isDefault) || data[0];
+        const res = await addressService.getAddresses();
+        const addressList = Array.isArray(res) ? res : res?.data || [];
+        setAddresses(addressList);
+        const defaultAddr = addressList.find(a => a.isDefault) || addressList[0];
         if (defaultAddr) {
           setSelectedAddressId(defaultAddr.id);
         }
@@ -50,32 +53,75 @@ export default function Checkout() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      let payload = {
-        paymentMethod: formData.paymentMethod,
-      };
+      let receiverName = '';
+      let receiverPhone = '';
+      let shippingAddress = '';
 
-      if (selectedAddressId) {
+      if (selectedAddressId && Array.isArray(addresses)) {
         const addr = addresses.find(a => a.id === selectedAddressId);
-        payload.receiverName = addr.receiverName;
-        payload.receiverPhone = addr.phone;
-        payload.shippingAddress = addr.addressLine + (addr.ward ? `, ${addr.ward}` : '') + (addr.district ? `, ${addr.district}` : '') + (addr.province ? `, ${addr.province}` : '');
-      } else {
-        payload.receiverName = formData.receiverName;
-        payload.receiverPhone = formData.phone;
-        payload.shippingAddress = formData.shippingAddress;
+        if (addr) {
+          receiverName = addr.receiverName;
+          receiverPhone = addr.phone;
+          shippingAddress = [addr.addressLine, addr.ward, addr.district, addr.province].filter(Boolean).join(', ');
+        }
       }
 
+      if (!receiverName) {
+        receiverName = formData.receiverName || user?.fullName || '';
+      }
+      if (!receiverPhone) {
+        receiverPhone = formData.phone || user?.phone || '';
+      }
+      if (!shippingAddress) {
+        shippingAddress = formData.shippingAddress || '';
+      }
+
+      if (!receiverName || receiverName.trim().length < 2) {
+        alert('Vui lòng nhập họ tên người nhận (tối thiểu 2 ký tự)');
+        setIsSubmitting(false);
+        return;
+      }
+      if (!receiverPhone || receiverPhone.trim().length < 8) {
+        alert('Vui lòng nhập số điện thoại hợp lệ (tối thiểu 8 chữ số)');
+        setIsSubmitting(false);
+        return;
+      }
+      if (!shippingAddress || shippingAddress.trim().length < 5) {
+        alert('Vui lòng chọn hoặc nhập địa chỉ giao hàng chi tiết (tối thiểu 5 ký tự)');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const payload = {
+        receiverName: receiverName.trim(),
+        receiverPhone: receiverPhone.trim(),
+        shippingAddress: shippingAddress.trim(),
+        paymentMethod: formData.paymentMethod,
+        voucherCodes: [],
+      };
+
       const response = await orderService.checkout(payload);
-      const order = response.data;
+      const order = response?.data || response;
       
-      alert('Order placed successfully!');
+      // Clear cart immediately from React Query cache so cart doesn't persist
+      queryClient.setQueryData(['cart'], { items: [], totalQuantity: 0, subtotalAmount: 0 });
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+
+      alert('Đặt hàng và thanh toán thành công!');
       if (formData.paymentMethod === 'credit_card' || formData.paymentMethod === 'pay_later') {
         navigate(`/payment-demo/${order.id}`);
       } else {
         navigate('/orders');
       }
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to place order');
+      console.error('Checkout error:', error);
+      const errMessage = 
+        error.response?.data?.errors?.[0]?.message || 
+        error.response?.data?.message || 
+        error.message || 
+        'Không thể thực hiện thanh toán. Vui lòng thử lại!';
+      alert(errMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -166,8 +212,8 @@ export default function Checkout() {
               </div>
             </div>
 
-            <Button type="submit" size="lg" className="w-full" isLoading={isSubmitting}>
-              Đặt hàng
+            <Button type="submit" size="lg" className="w-full text-base font-bold shadow-lg shadow-primary/20" isLoading={isSubmitting}>
+              Thực hiện thanh toán
             </Button>
           </form>
         </div>

@@ -9,7 +9,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+
 
 import { SkipAuth } from 'src/app/auth/auth.decorator';
 import { User } from 'src/common/decorators/user.decorator';
@@ -32,7 +32,7 @@ export class ReviewsController {
   }
 
   @Get('admin/all')
-  @Roles(UserRole.admin)
+  @Roles('admin')
   listAll(
     @Query(new ParseParamsPaginationPipe()) query: GetReviewsPaginationDto,
   ) {
@@ -40,19 +40,19 @@ export class ReviewsController {
   }
 
   @Post()
-  @Roles(UserRole.customer)
+  @Roles('client')
   create(@Body() dto: CreateReviewDto, @User() user: UserInfo) {
     return this.reviewsService.create(user.userID, dto);
   }
 
   @Delete('admin/:id')
-  @Roles(UserRole.admin)
+  @Roles('admin')
   moderateRemove(@Param('id', ParseUUIDPipe) id: string) {
     return this.reviewsService.moderateRemove(id);
   }
 
   @Patch(':id')
-  @Roles(UserRole.customer)
+  @Roles('client')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateReviewDto,
@@ -62,7 +62,7 @@ export class ReviewsController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.customer)
+  @Roles('client')
   remove(@Param('id', ParseUUIDPipe) id: string, @User() user: UserInfo) {
     return this.reviewsService.remove(user.userID, id);
   }

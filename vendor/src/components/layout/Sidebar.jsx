@@ -1,14 +1,17 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   LayoutDashboard,
   Package,
   ShoppingCart,
+  Boxes,
   Ticket,
   Star,
   LineChart,
   Settings,
   Store,
-  LogOut
+  LogOut,
+  ClipboardList
 } from 'lucide-react';
 
 const navItems = [
@@ -16,13 +19,21 @@ const navItems = [
   { name: 'Analytics', path: '/analytics', icon: LineChart },
   { name: 'My Products', path: '/products', icon: Package },
   { name: 'Orders', path: '/orders', icon: ShoppingCart },
+  { name: 'Đóng gói & Giao ship', path: '/fulfillment', icon: Boxes },
   { name: 'Vouchers', path: '/vouchers', icon: Ticket },
   { name: 'Reviews', path: '/reviews', icon: Star },
+  { name: 'Surveys', path: '/surveys', icon: ClipboardList },
   { name: 'Settings', path: '/settings', icon: Settings },
 ];
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   return (
     <aside className="w-64 bg-gradient-to-b from-indigo-950 to-indigo-900 text-indigo-200 min-h-screen flex flex-col">
@@ -56,7 +67,7 @@ export default function Sidebar() {
       </nav>
       <div className="p-4 border-t border-indigo-800">
         <button 
-          onClick={() => navigate('/login')}
+          onClick={handleLogout}
           className="flex items-center w-full px-3 py-2.5 rounded-lg text-indigo-300 hover:text-white hover:bg-indigo-800 transition-colors"
         >
           <LogOut className="w-5 h-5 mr-3" />

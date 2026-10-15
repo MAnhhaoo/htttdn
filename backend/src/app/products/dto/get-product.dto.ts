@@ -5,12 +5,17 @@ import { PaginationQuerySchema } from '../../../common/utils/paginaton-util/pagi
 
 const GetProductsPaginationSchema = PaginationQuerySchema.extend({
   createdAfter: z.string().datetime().optional(),
+  minPrice: z.coerce.number().min(0).optional(),
+  maxPrice: z.coerce.number().min(0).optional(),
+  category: z.string().optional(),
+  status: z.string().optional(),
+  q: z.string().optional(),
+  search: z.string().optional(),
 }).strict();
 
 const GetVendorProductsPaginationSchema = PaginationQuerySchema.extend({
   status: z.enum(ProductStatus).optional(),
-  createdAfter: z.string().datetime().optional(),
-}).strict();
+  createdAfter: z.string().datetime().optional()}).strict();
 
 class GetProductsPaginationDto extends createZodDto(
   GetProductsPaginationSchema,
@@ -27,5 +32,4 @@ class ExportProductsDto {
 export {
   GetProductsPaginationDto,
   GetVendorProductsPaginationDto,
-  ExportProductsDto,
-};
+  ExportProductsDto};

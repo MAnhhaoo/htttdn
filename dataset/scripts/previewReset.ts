@@ -26,20 +26,37 @@ function main() {
 
   // Tables in reverse FK dependency order (delete children first)
   const TABLES_DELETE_ORDER = [
+    'Notification',
+    'SurveyAnswer',
+    'SurveyResponse',
+    'SurveyOption',
+    'SurveyQuestion',
+    'Survey',
     'Review',
     'OrderStatusHistory',
+    'ShipmentEvent',
+    'Shipment',
     'VoucherDetail',
     'Payment',
     'OrderDetail',
+    'VendorOrder',
     'Order',
     'CartItem',
     'Cart',
+    'ProductFavorite',
     'ProductVariant',
     'ProductColor',
     'Product',
     'Voucher',
     'Category',
-    'User',
+    'ClientAddress',
+    'EmployeePayroll',
+    'EmployeeAttendance',
+    'EmployeeSalaryHistory',
+    'Employee',
+    'Client',
+    'Vendor',
+    'Admin',
   ];
 
   const sql = `-- ============================================================

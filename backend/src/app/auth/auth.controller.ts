@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Res, Req } from '@nestjs/common';
+import { Body, Controller, Get, Post, Res, Req } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ZodResponse } from 'nestjs-zod';
 import ms from 'ms';
@@ -9,6 +9,8 @@ import { SignInDto, SignInResponseDto, SignUpDto } from './dto/sign.dto';
 import { ForgotPasswordDto, ResetPasswordDto } from './dto/password.dto';
 import { TokenKeys } from './consts/jwt.const';
 
+import { User } from '../../common/decorators/user.decorator';
+import type { UserInfo } from '../../common/decorators/user.decorator';
 import { Cookies } from '../../common/decorators/cookie/cookie.decorator';
 import {
   COOKIE_CONFIG_DEFAULT,
@@ -129,5 +131,13 @@ export class AuthController {
     return {
       message: 'Đăng xuất thành công',
     };
+  }
+
+  /**
+   * Lấy thông tin tài khoản đang đăng nhập.
+   */
+  @Get('me')
+  me(@User() user: UserInfo) {
+    return this.authService.getMe(user);
   }
 }

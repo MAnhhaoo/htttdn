@@ -14,6 +14,11 @@ import { buildInsert, sqlSection, buildSqlFile } from '../utils/sqlBuilder';
 import { generateValidationSql } from '../utils/validateDataset';
 
 import { generateUsers } from '../generators/users.generator';
+import { generateClientAddresses } from '../generators/clientAddresses.generator';
+import { generateEmployees } from '../generators/employees.generator';
+import { generateSalaryHistories } from '../generators/salaryHistories.generator';
+import { generateAttendances } from '../generators/attendances.generator';
+import { generatePayrolls } from '../generators/payrolls.generator';
 import { generateCategories } from '../generators/categories.generator';
 import { generateProducts } from '../generators/products.generator';
 import { generateProductColors } from '../generators/productColors.generator';
@@ -22,6 +27,8 @@ import { generateVouchers } from '../generators/vouchers.generator';
 import { generateVoucherDetails } from '../generators/voucherDetails.generator';
 import { generateCarts } from '../generators/carts.generator';
 import { generateOrders } from '../generators/orders.generator';
+import { generateVendorOrders } from '../generators/vendorOrders.generator';
+import { generateShipments } from '../generators/shipments.generator';
 import { generateOrderStatusHistory } from '../generators/orderStatusHistory.generator';
 import { generateOrderVoucherDetails } from '../generators/orderVoucherDetails.generator';
 import { generateReviews } from '../generators/reviews.generator';
@@ -37,8 +44,33 @@ function main() {
 
   // ── 1. Users ──
   console.log('\n👤 Generating users...');
-  const { admins, vendors, customers, sql: usersSql, data: allUsers } = generateUsers();
-  console.log(`   ✅ ${admins.length} admins, ${vendors.length} vendors, ${customers.length} customers`);
+  const { admins, vendors, clients, sql: usersSql } = generateUsers();
+  console.log(`   ✅ ${admins.length} admins, ${vendors.length} vendors, ${clients.length} clients`);
+
+  // ── 1b. Client Addresses ──
+  console.log('\n🏠 Generating client delivery addresses...');
+  const { data: clientAddresses, sql: clientAddressesSql } = generateClientAddresses(clients);
+  console.log(`   ✅ ${clientAddresses.length} client addresses (home & office)`);
+
+  // ── 1c. Employees ──
+  console.log('\n👔 Generating employees...');
+  const { employees, sql: employeesSql } = generateEmployees(admins);
+  console.log(`   ✅ ${employees.length} employees (order management & restricted roles)`);
+
+  // ── 1d. Salary Histories ──
+  console.log('\n📈 Generating employee salary histories...');
+  const { data: salaryHistories, sql: salaryHistoriesSql } = generateSalaryHistories(employees, admins);
+  console.log(`   ✅ ${salaryHistories.length} salary history records`);
+
+  // ── 1e. Daily Attendances ──
+  console.log('\n⏰ Generating employee daily attendance...');
+  const { data: attendances, sql: attendancesSql } = generateAttendances(employees);
+  console.log(`   ✅ ${attendances.length} attendance records`);
+
+  // ── 1f. Monthly Payrolls ──
+  console.log('\n💰 Generating employee monthly payrolls (months 7, 8, 9, 10)...');
+  const { data: payrolls, sql: payrollsSql } = generatePayrolls(employees);
+  console.log(`   ✅ ${payrolls.length} payroll records`);
 
   // ── 2. Categories ──
   console.log('\n📁 Generating categories...');
@@ -72,20 +104,37 @@ function main() {
 
   // ── 8. Carts ──
   console.log('\n🛒 Generating carts...');
-  const { carts, cartItems, sql: cartsSql } = generateCarts(customers, variants);
+  const { carts, cartItems, sql: cartsSql } = generateCarts(clients, variants);
   console.log(`   ✅ ${carts.length} carts, ${cartItems.length} cart items`);
 
   // ── 9. Orders + OrderDetails + Payments ──
-  console.log('\n📋 Generating orders...');
-  const { orders, orderDetails, payments, sql: ordersSql } = generateOrders(
-    customers, products, colors, variants,
+  console.log('\n📋 Generating orders (linked directly to authenticated clients)...');
+  const { orders, orderDetails, payments, ordersSql, getOrderDetailsSql, paymentsSql } = generateOrders(
+    clients, products, colors, variants, clientAddresses,
   );
   console.log(`   ✅ ${orders.length} orders, ${orderDetails.length} order details, ${payments.length} payments`);
 
+  // ── 9b. VendorOrders ──
+  console.log('\n🏬 Generating vendor orders (split by vendor per order)...');
+  const { data: vendorOrders, sql: vendorOrdersSql } = generateVendorOrders(
+    orders, orderDetails, products, colors, variants,
+  );
+  console.log(`   ✅ ${vendorOrders.length} vendor orders`);
+
+  // Build orderDetailsSql AFTER vendorOrderId has been linked
+  const orderDetailsSql = getOrderDetailsSql();
+
+  // ── 9c. Shipments & Shipment Events ──
+  console.log('\n🚚 Generating shipments & tracking events...');
+  const { shipments, events: shipmentEvents, sql: shipmentsSql } = generateShipments(
+    orders, vendorOrders, employees, vendors,
+  );
+  console.log(`   ✅ ${shipments.length} shipments, ${shipmentEvents.length} tracking events`);
+
   // ── 10. OrderStatusHistory ──
-  console.log('\n📜 Generating order status history...');
+  console.log('\n📜 Generating order status history (attributed to Client, Employee, Vendor, Admin)...');
   const { data: statusHistory, sql: statusHistorySql } = generateOrderStatusHistory(
-    orders, admins, vendors,
+    orders, admins, vendors, clients, employees,
   );
   console.log(`   ✅ ${statusHistory.length} status history entries`);
 
@@ -99,7 +148,7 @@ function main() {
   // ── 12. Surveys ──
   console.log('\n📝 Generating surveys...');
   const { surveys, surveyQuestions, surveyOptions, surveyResponses, surveyAnswers, notifications, sql: surveysSql } = generateSurveys(
-    admins, vendors, customers, orders, orderDetails, products, colors, variants
+    admins, vendors, clients, orders, orderDetails, products, colors, variants
   );
   console.log(`   ✅ ${surveys.length} surveys, ${surveyResponses.length} responses, ${surveyAnswers.length} answers, ${notifications.length} notifications`);
 
@@ -142,9 +191,14 @@ function main() {
   // ── Write output files ──
   mkdirSync(OUTPUT_DIR, { recursive: true });
 
-  // seed.sql
+  // seed.sql in strict Foreign Key sequence
   const allSql = buildSqlFile([
     usersSql,
+    clientAddressesSql,
+    employeesSql,
+    salaryHistoriesSql,
+    attendancesSql,
+    payrollsSql,
     categoriesSql,
     productsSql,
     colorsSql,
@@ -153,6 +207,10 @@ function main() {
     voucherDetailsSql,
     cartsSql,
     ordersSql,
+    vendorOrdersSql,
+    orderDetailsSql,
+    paymentsSql,
+    shipmentsSql,
     statusHistorySql,
     orderVoucherDetailsSql,
     reviewsSql,
@@ -171,10 +229,14 @@ function main() {
 
   // Summary table
   console.log('\n📊 Summary:');
-  console.log(`   Users:              ${allUsers.length}`);
+  console.log(`   Users:              ${(admins.length + clients.length + vendors.length + employees.length)}`);
   console.log(`     Admins:           ${admins.length}`);
+  console.log(`     Employees:        ${employees.length}`);
   console.log(`     Vendors:          ${vendors.length}`);
-  console.log(`     Customers:        ${customers.length}`);
+  console.log(`     Customers:        ${clients.length}`);
+  console.log(`   Client Addresses:   ${clientAddresses.length}`);
+  console.log(`   Attendances:        ${attendances.length}`);
+  console.log(`   Payrolls:           ${payrolls.length}`);
   console.log(`   Categories:         ${categories.length}`);
   console.log(`   Products:           ${products.length}`);
   console.log(`   Product Colors:     ${colors.length}`);
@@ -184,6 +246,9 @@ function main() {
   console.log(`   Carts:              ${carts.length}`);
   console.log(`   Cart Items:         ${cartItems.length}`);
   console.log(`   Orders:             ${orders.length}`);
+  console.log(`   Vendor Orders:      ${vendorOrders.length}`);
+  console.log(`   Shipments:          ${shipments.length}`);
+  console.log(`   Shipment Events:    ${shipmentEvents.length}`);
   console.log(`   Order Details:      ${orderDetails.length}`);
   console.log(`   Payments:           ${payments.length}`);
   console.log(`   Status History:     ${statusHistory.length}`);

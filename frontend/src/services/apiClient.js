@@ -5,7 +5,7 @@ export const apiClient = axios.create({
   withCredentials: true,
   timeout: 10000,
   headers: {
-    'x-app-role': 'customer',
+    'x-app-role': 'client',
   },
 });
 

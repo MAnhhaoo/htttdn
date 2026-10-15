@@ -38,12 +38,14 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [productsRes, orders] = await Promise.all([
+        setLoading(true);
+        const [productsRes, ordersRes] = await Promise.all([
           dashboardService.getProducts(),
           dashboardService.getOrders()
         ]);
         
-        const products = productsRes.list || [];
+        const products = Array.isArray(productsRes) ? productsRes : (productsRes?.list || []);
+        const orders = Array.isArray(ordersRes) ? ordersRes : (ordersRes?.list || []);
         
         // Product stats
         let totalStock = 0;
@@ -51,8 +53,9 @@ export default function Dashboard() {
         products.forEach(p => {
           p.colors?.forEach(c => {
             c.variants?.forEach(v => {
-              totalStock += v.stock;
-              if (v.stock > 0 && v.stock <= 5) lowStockCount++;
+              const stock = Number(v.stock) || 0;
+              totalStock += stock;
+              if (stock > 0 && stock <= 5) lowStockCount++;
             });
           });
         });
@@ -62,44 +65,44 @@ export default function Dashboard() {
         const pendingOrders = orders.filter(o => o.status === 'pending');
         
         // Calculate revenue from completed orders that belong to this vendor
-        // Note: The /orders/vendor/mine returns full orders. We need to sum up the order details that belong to this vendor.
         let revenue = 0;
         let allOrderDetails = [];
+        const currentVendorId = user?.id || user?.userID;
         
         orders.forEach(order => {
-          order.details.forEach(detail => {
-            if (detail.productVariant?.productColor?.product?.vendorId === user?.id) {
+          (order.details || []).forEach(detail => {
+            const matchesVendor = !currentVendorId || 
+              detail.productVariant?.productColor?.product?.vendorId === currentVendorId ||
+              order.vendorOrders?.some(vo => vo.vendorId === currentVendorId);
+
+            if (matchesVendor) {
               allOrderDetails.push({ ...detail, order });
               if (order.status === 'completed') {
-                revenue += detail.price * detail.quantity;
+                revenue += (Number(detail.price) || 0) * (detail.quantity || 1);
               }
             }
           });
         });
 
         // Sort recent order details by creation
-        allOrderDetails.sort((a, b) => new Date(b.order.createdAt) - new Date(a.order.createdAt));
+        allOrderDetails.sort((a, b) => new Date(b.order?.createdAt || 0) - new Date(a.order?.createdAt || 0));
 
-        // Reviews stats
+        // Reviews stats - parallelized for performance
         let totalRating = 0;
         let reviewCount = 0;
         
-        let allReviews = [];
-        for (const product of products) {
-          try {
-            const prodReviews = await reviewService.getReviewsByProduct(product.id);
-            if (prodReviews && Array.isArray(prodReviews)) {
-              allReviews = [...allReviews, ...prodReviews];
-            }
-          } catch (e) {
-            console.error('Error fetching reviews for product', product.id);
-          }
-        }
-        
-        allReviews.forEach(r => {
-          if (r.rating) {
-            totalRating += r.rating;
-            reviewCount++;
+        const reviewResults = await Promise.allSettled(
+          products.slice(0, 30).map(product => reviewService.getReviewsByProduct(product.id))
+        );
+
+        reviewResults.forEach(res => {
+          if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+            res.value.forEach(r => {
+              if (r.rating) {
+                totalRating += Number(r.rating);
+                reviewCount++;
+              }
+            });
           }
         });
 
@@ -125,7 +128,7 @@ export default function Dashboard() {
     };
 
     fetchDashboardData();
-  }, [user?.id]);
+  }, [user?.id, user?.userID]);
 
   if (loading) {
     return (

@@ -5,6 +5,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useCart } from '../../../hooks/useCart';
 import { useCategories } from '../../../hooks/useCategories';
 import ThemeToggle from '../../common/ThemeToggle/ThemeToggle';
+import NotificationBellDropdown from './NotificationBellDropdown';
 
 export default function Header() {
   const navigate = useNavigate();
@@ -83,12 +84,7 @@ export default function Header() {
           <div className="flex items-center gap-2 sm:gap-4">
             <ThemeToggle />
 
-            <Link to="#" className="relative p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors">
-              <Bell className="w-5 h-5 text-[#1A3A2C] dark:text-white" strokeWidth={2.5} />
-              <span className="absolute 0 top-0.5 right-0.5 w-4 h-4 bg-[#c26d53] text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-[#FAF7F2] dark:border-dark-card">
-                3
-              </span>
-            </Link>
+            <NotificationBellDropdown />
 
             <Link to="/favorites" className="p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors">
               <Heart className="w-5 h-5 text-[#1A3A2C] dark:text-white" strokeWidth={2.5} />

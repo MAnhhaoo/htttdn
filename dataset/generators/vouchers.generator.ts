@@ -6,11 +6,12 @@
 import { faker } from '../utils/faker';
 import { buildInsert, sqlSection } from '../utils/sqlBuilder';
 import { CONFIG } from '../config/dataset.config';
-import type { GeneratedUser } from './users.generator';
+import type { GeneratedAdmin, GeneratedVendor } from './users.generator';
 
 export interface GeneratedVoucher {
   id: string;
-  userId: string;
+  adminId: string | null;
+  vendorId: string | null;
   code: string;
   name: string;
   scope: 'platform' | 'vendor';
@@ -30,8 +31,8 @@ export interface GeneratedVoucher {
 }
 
 export function generateVouchers(
-  admins: GeneratedUser[],
-  vendors: GeneratedUser[],
+  admins: GeneratedAdmin[],
+  vendors: GeneratedVendor[],
 ) {
   const data: GeneratedVoucher[] = [];
   const usedCodes = new Set<string>();
@@ -59,7 +60,8 @@ export function generateVouchers(
 
     data.push({
       id: faker.string.uuid(),
-      userId: admin.id,
+      adminId: admin.id,
+      vendorId: null,
       code: uniqueCode('MIVA'),
       name: `Giảm giá toàn sàn ${i + 1}`,
       scope: 'platform',
@@ -104,7 +106,8 @@ export function generateVouchers(
 
     data.push({
       id: faker.string.uuid(),
-      userId: vendor.id,
+      adminId: null,
+      vendorId: vendor.id,
       code: uniqueCode('VD'),
       name: `Khuyến mãi cửa hàng ${vendor.fullName.substring(0, 20)}`,
       scope: 'vendor',

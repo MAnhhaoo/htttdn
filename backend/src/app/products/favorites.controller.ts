@@ -1,5 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+
 
 import { User } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
@@ -11,7 +11,7 @@ export class FavoritesController {
   constructor(private readonly productService: ProductService) {}
 
   @Get()
-  @Roles(UserRole.customer)
+  @Roles('client')
   list(@User() user: UserInfo) {
     return this.productService.listFavorites(user.userID);
   }

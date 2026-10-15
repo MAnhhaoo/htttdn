@@ -5,42 +5,37 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateAddressDto, UpdateAddressDto } from './dto/address.dto';
 
 @Injectable()
-export class AddressesService extends PrismaBaseService<'userAddress'> {
+export class AddressesService extends PrismaBaseService<'clientAddress'> {
   constructor(prismaService: PrismaService) {
-    super(prismaService, 'userAddress');
+    super(prismaService, 'clientAddress');
   }
 
-  async createAddress(userId: string, data: CreateAddressDto) {
+  async createAddress(clientId: string, data: CreateAddressDto) {
     // If this is set as default, we need to unset the others
     if (data.isDefault) {
-      await this.extended.updateMany({
-        where: { userId, deletedAt: null },
-        data: { isDefault: false },
-      });
+      await this.prismaService.clientAddress.updateMany({
+        where: { clientId, deletedAt: null },
+        data: { isDefault: false }});
     }
 
-    return this.extended.create({
+    return this.prismaService.clientAddress.create({
       data: {
         ...data,
-        userId,
-      },
-    });
+        clientId}});
   }
 
-  async getUserAddresses(userId: string) {
-    return this.extended.findMany({
-      where: { userId, deletedAt: null },
+  async getUserAddresses(clientId: string) {
+    return this.prismaService.clientAddress.findMany({
+      where: { clientId, deletedAt: null },
       orderBy: [
         { isDefault: 'desc' },
         { createdAt: 'desc' },
-      ],
-    });
+      ]});
   }
 
-  async getAddress(userId: string, id: string) {
-    const address = await this.extended.findFirst({
-      where: { id, userId, deletedAt: null },
-    });
+  async getAddress(clientId: string, id: string) {
+    const address = await this.prismaService.clientAddress.findFirst({
+      where: { id, clientId, deletedAt: null }});
 
     if (!address) {
       throw new NotFoundException('Address not found');
@@ -49,28 +44,25 @@ export class AddressesService extends PrismaBaseService<'userAddress'> {
     return address;
   }
 
-  async updateAddress(userId: string, id: string, data: UpdateAddressDto) {
-    const address = await this.getAddress(userId, id);
+  async updateAddress(clientId: string, id: string, data: UpdateAddressDto) {
+    const address = await this.getAddress(clientId, id);
 
     if (data.isDefault) {
-      await this.extended.updateMany({
-        where: { userId, deletedAt: null, id: { not: id } },
-        data: { isDefault: false },
-      });
+      await this.prismaService.clientAddress.updateMany({
+        where: { clientId, deletedAt: null, id: { not: id } },
+        data: { isDefault: false }});
     }
 
-    return this.extended.update({
+    return this.prismaService.clientAddress.update({
       where: { id },
-      data,
-    });
+      data});
   }
 
-  async deleteAddress(userId: string, id: string) {
-    const address = await this.getAddress(userId, id);
+  async deleteAddress(clientId: string, id: string) {
+    const address = await this.getAddress(clientId, id);
 
-    return this.extended.update({
+    return this.prismaService.clientAddress.update({
       where: { id },
-      data: { deletedAt: new Date() },
-    });
+      data: { deletedAt: new Date() }});
   }
 }

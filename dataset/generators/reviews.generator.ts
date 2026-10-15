@@ -12,7 +12,7 @@ import type { GeneratedProductColor } from './productColors.generator';
 
 export interface GeneratedReview {
   id: string;
-  userId: string;
+  clientId: string;
   productId: string;
   orderDetailId: string;
   content: string | null;
@@ -48,11 +48,11 @@ export function generateReviews(
   }
 
   // Collect all eligible order details (from completed orders)
-  const eligibleDetails: Array<{ detail: GeneratedOrderDetail; userId: string }> = [];
+  const eligibleDetails: Array<{ detail: GeneratedOrderDetail; clientId: string }> = [];
   for (const order of completedOrders) {
     const details = detailsByOrder.get(order.id) ?? [];
     for (const d of details) {
-      eligibleDetails.push({ detail: d, userId: order.userId });
+      eligibleDetails.push({ detail: d, clientId: order.clientId });
     }
   }
 
@@ -63,7 +63,7 @@ export function generateReviews(
   // Track used orderDetailIds (unique constraint)
   const usedOrderDetailIds = new Set<string>();
 
-  for (const { detail, userId } of toReview) {
+  for (const { detail, clientId } of toReview) {
     if (usedOrderDetailIds.has(detail.id)) continue;
     usedOrderDetailIds.add(detail.id);
 
@@ -79,7 +79,7 @@ export function generateReviews(
 
     data.push({
       id: faker.string.uuid(),
-      userId,
+      clientId,
       productId: '', // Will be resolved in generate.ts
       orderDetailId: detail.id,
       content: faker.datatype.boolean(0.85) ? content : null,

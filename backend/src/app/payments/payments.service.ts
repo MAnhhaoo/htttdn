@@ -2,9 +2,8 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { OrderStatus, PaymentStatus, UserRole } from '@prisma/client';
+  NotFoundException} from '@nestjs/common';
+import { OrderStatus, PaymentStatus } from '@prisma/client';
 
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -17,13 +16,7 @@ const paymentInclude = {
       details: {
         include: {
           productVariant: {
-            include: { productColor: { include: { product: true } } },
-          },
-        },
-      },
-    },
-  },
-};
+            include: { productColor: { include: { product: true } } }}}}}}};
 
 @Injectable()
 export class PaymentsService {
@@ -35,15 +28,13 @@ export class PaymentsService {
   listAll() {
     return this.prisma.payment.findMany({
       include: paymentInclude,
-      orderBy: { createdAt: 'desc' },
-    });
+      orderBy: { createdAt: 'desc' }});
   }
 
   async getByOrder(orderId: string, user: UserInfo) {
     const payment = await this.prisma.payment.findUnique({
       where: { orderId },
-      include: paymentInclude,
-    });
+      include: paymentInclude});
     if (!payment) throw new NotFoundException('Thanh toán không tồn tại');
     this.assertAccess(payment.order, user);
     return payment;
@@ -52,8 +43,7 @@ export class PaymentsService {
   async updateStatus(id: string, dto: UpdatePaymentStatusDto) {
     const current = await this.prisma.payment.findUnique({
       where: { id },
-      include: paymentInclude,
-    });
+      include: paymentInclude});
     if (!current) throw new NotFoundException('Thanh toán không tồn tại');
     if (
       current.order.status === OrderStatus.cancelled &&
@@ -67,16 +57,13 @@ export class PaymentsService {
       data: {
         ...dto,
         paidAt: dto.status === PaymentStatus.paid ? now : undefined,
-        failedAt: dto.status === PaymentStatus.failed ? now : undefined,
-      },
-      include: paymentInclude,
-    });
+        failedAt: dto.status === PaymentStatus.failed ? now : undefined},
+      include: paymentInclude});
     const payload = {
       paymentId: payment.id,
       orderId: payment.orderId,
-      status: payment.status,
-    };
-    this.realtime.emitToUser(payment.order.userId, 'payment:updated', payload);
+      status: payment.status};
+    this.realtime.emitToUser(payment.order.clientId, 'payment:updated', payload);
     this.realtime.emitToAdmins('payment:updated', payload);
     for (const vendorId of new Set(
       payment.order.details.map(
@@ -91,7 +78,7 @@ export class PaymentsService {
 
   private assertAccess(
     order: {
-      userId: string;
+      clientId: string;
       details: Array<{
         productVariant: {
           productColor: { product: { vendorId: string | null } };
@@ -100,12 +87,12 @@ export class PaymentsService {
     },
     user: UserInfo,
   ) {
-    if (user.role === UserRole.admin || order.userId === user.userID) return;
+    if (user.role === 'admin' || order.clientId === user.userID) return;
     const ownsProduct = order.details.some(
       (item) =>
         item.productVariant.productColor.product.vendorId === user.userID,
     );
-    if (user.role !== UserRole.vendor || !ownsProduct) {
+    if (user.role !== 'vendor' || !ownsProduct) {
       throw new ForbiddenException('Bạn không có quyền xem thanh toán này');
     }
   }

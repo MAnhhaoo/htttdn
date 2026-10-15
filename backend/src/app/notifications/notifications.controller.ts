@@ -6,7 +6,7 @@ import {
   Patch,
   Query,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+
 
 import { User } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
@@ -19,26 +19,26 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
-  @Roles(UserRole.customer, UserRole.vendor, UserRole.admin)
+  @Roles('client', 'vendor', 'admin')
   list(@Query() query: GetNotificationsQueryDto, @User() user: UserInfo) {
-    return this.notificationsService.list(user.userID, query);
+    return this.notificationsService.list(user, query);
   }
 
   @Get('unread-count')
-  @Roles(UserRole.customer, UserRole.vendor, UserRole.admin)
+  @Roles('client', 'vendor', 'admin')
   unreadCount(@User() user: UserInfo) {
-    return this.notificationsService.unreadCount(user.userID);
+    return this.notificationsService.unreadCount(user);
   }
 
   @Patch('read-all')
-  @Roles(UserRole.customer, UserRole.vendor, UserRole.admin)
+  @Roles('client', 'vendor', 'admin')
   markAllRead(@User() user: UserInfo) {
-    return this.notificationsService.markAllRead(user.userID);
+    return this.notificationsService.markAllRead(user);
   }
 
   @Patch(':id/read')
-  @Roles(UserRole.customer, UserRole.vendor, UserRole.admin)
+  @Roles('client', 'vendor', 'admin')
   markRead(@Param('id', ParseUUIDPipe) id: string, @User() user: UserInfo) {
-    return this.notificationsService.markRead(id, user.userID);
+    return this.notificationsService.markRead(id, user);
   }
 }

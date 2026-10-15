@@ -4,8 +4,7 @@ import {
   Prisma,
   ProductStatus,
   VoucherScope,
-  VoucherStatus,
-} from '@prisma/client';
+  VoucherStatus} from '@prisma/client';
 
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { VouchersService } from './vouchers.service';
@@ -42,10 +41,7 @@ describe('VouchersService', () => {
         status: ProductStatus.active,
         createdAt: new Date(),
         updatedAt: new Date(),
-        deletedAt: null,
-      },
-    },
-  });
+        deletedAt: null}}});
 
   const voucher = (
     id: string,
@@ -73,8 +69,7 @@ describe('VouchersService', () => {
     updatedAt: new Date(),
     deletedAt: null,
     details:
-      scope === VoucherScope.vendor ? [{ productId, orderId: null }] : [],
-  });
+      scope === VoucherScope.vendor ? [{ productId, orderId: null }] : []});
 
   it('applies vendor first, caps it to eligible products, then applies platform voucher', async () => {
     const db = {
@@ -88,8 +83,7 @@ describe('VouchersService', () => {
               80,
               anotherProductId,
             ),
-          ]),
-      },
+          ])},
       voucher: {
         findMany: jest
           .fn()
@@ -108,10 +102,8 @@ describe('VouchersService', () => {
               DiscountType.fixed_amount,
               30,
             ),
-          ]),
-      },
-      voucherDetail: { count: jest.fn().mockResolvedValue(0) },
-    };
+          ])},
+      voucherDetail: { count: jest.fn().mockResolvedValue(0) }};
     const service = new VouchersService({} as PrismaService);
     const result = await service.calculate(
       ['PLATFORM10', 'VENDOR30'],
@@ -119,12 +111,10 @@ describe('VouchersService', () => {
       [
         {
           productVariantId: '55555555-5555-4555-8555-555555555555',
-          quantity: 1,
-        },
+          quantity: 1},
         {
           productVariantId: '66666666-6666-4666-8666-666666666666',
-          quantity: 1,
-        },
+          quantity: 1},
       ],
       db as never,
     );
@@ -145,8 +135,7 @@ describe('VouchersService', () => {
           .fn()
           .mockResolvedValue([
             variant('55555555-5555-4555-8555-555555555555', 20, productId),
-          ]),
-      },
+          ])},
       voucher: {
         findMany: jest
           .fn()
@@ -165,10 +154,8 @@ describe('VouchersService', () => {
               DiscountType.percentage,
               20,
             ),
-          ]),
-      },
-      voucherDetail: { count: jest.fn().mockResolvedValue(0) },
-    };
+          ])},
+      voucherDetail: { count: jest.fn().mockResolvedValue(0) }};
     const service = new VouchersService({} as PrismaService);
 
     await expect(
@@ -178,8 +165,7 @@ describe('VouchersService', () => {
         [
           {
             productVariantId: '55555555-5555-4555-8555-555555555555',
-            quantity: 1,
-          },
+            quantity: 1},
         ],
         db as never,
       ),

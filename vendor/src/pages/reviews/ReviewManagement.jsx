@@ -47,7 +47,7 @@ export default function ReviewManagement() {
     const searchLower = search.toLowerCase();
     return (
       (r.productName || '').toLowerCase().includes(searchLower) ||
-      (r.user?.fullName || '').toLowerCase().includes(searchLower) ||
+      (r.client?.fullName || r.user?.fullName || '').toLowerCase().includes(searchLower) ||
       (r.content || '').toLowerCase().includes(searchLower)
     );
   });
@@ -98,7 +98,7 @@ export default function ReviewManagement() {
               {filteredReviews.map(review => (
                 <tr key={review.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
                   <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">{review.productName || 'Unknown'}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{review.user?.fullName || 'Unknown'}</td>
+                  <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{review.client?.fullName || review.user?.fullName || 'Khách hàng'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       {[...Array(5)].map((_, i) => (
