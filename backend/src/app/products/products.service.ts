@@ -1,8 +1,7 @@
 import {
   ConflictException,
   Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+  NotFoundException} from '@nestjs/common';
 import { PrismaBaseService } from 'src/common/service/prisma-base.service';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { PaginationUtilService } from 'src/common/utils/paginaton-util/pagintion-util.service';
@@ -11,26 +10,20 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { StringUtilService } from 'src/common/utils/string-util/string-util.service';
 import {
   GetProductsPaginationDto,
-  GetVendorProductsPaginationDto,
-} from './dto/get-product.dto';
+  GetVendorProductsPaginationDto} from './dto/get-product.dto';
 import { Prisma, ProductStatus } from '@prisma/client';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 const productRelations = {
   category: {
-    select: { id: true, name: true, slug: true },
-  },
+    select: { id: true, name: true, slug: true }},
   colors: {
     where: { deletedAt: null },
     orderBy: { createdAt: 'asc' },
     include: {
       variants: {
         where: { deletedAt: null },
-        orderBy: { createdAt: 'asc' },
-      },
-    },
-  },
-} satisfies Prisma.ProductInclude;
+        orderBy: { createdAt: 'asc' }}}}} satisfies Prisma.ProductInclude;
 
 type ProductWithRelations = Prisma.ProductGetPayload<{
   include: typeof productRelations;
@@ -51,8 +44,7 @@ export class ProductService extends PrismaBaseService<'product'> {
     const slug = this.stringUtilService.toSlug(createProductDto.name);
 
     const existingProduct = await this.extended.findUnique({
-      where: { slug },
-    });
+      where: { slug }});
 
     if (existingProduct) {
       throw new ConflictException(
@@ -67,14 +59,28 @@ export class ProductService extends PrismaBaseService<'product'> {
         status: createProductDto.status,
         category: createProductDto.category,
         vendor: { connect: { id: vendorId } },
-        slug,
-      },
-    });
+        slug}});
   }
   async getProducts(query: GetProductsPaginationDto) {
-    return this.findProducts(query, {
-      status: ProductStatus.active,
-      category: { deletedAt: null },
+    const { category, status, ...rest } = query as any;
+    const isStatusAll = status === 'all';
+    const isValidStatus = status && Object.values(ProductStatus).includes(status);
+    const targetStatus = isStatusAll ? undefined : (isValidStatus ? status : (status ? undefined : ProductStatus.active));
+
+    const isUUID = category && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(category);
+    const categoryCondition = category && category !== 'all'
+      ? {
+          OR: [
+            { slug: category },
+            ...(isUUID ? [{ id: category }] : []),
+          ],
+          deletedAt: null,
+        }
+      : { deletedAt: null };
+
+    return this.findProducts(rest, {
+      ...(targetStatus ? { status: targetStatus } : {}),
+      category: categoryCondition,
     });
   }
 
@@ -94,8 +100,7 @@ export class ProductService extends PrismaBaseService<'product'> {
   ) {
     return this.findProducts(query, {
       vendorId,
-      ...(status ? { status } : {}),
-    });
+      ...(status ? { status } : {})});
   }
 
   async getProductById(id: string) {
@@ -104,10 +109,8 @@ export class ProductService extends PrismaBaseService<'product'> {
         id,
         deletedAt: null,
         status: ProductStatus.active,
-        category: { deletedAt: null },
-      },
-      include: productRelations,
-    });
+        category: { deletedAt: null }},
+      include: productRelations});
 
     if (!product) {
       throw new NotFoundException('Sản phẩm không tồn tại');
@@ -116,50 +119,43 @@ export class ProductService extends PrismaBaseService<'product'> {
     return this.toCatalogProduct(product);
   }
 
-  async addFavorite(productId: string, userId: string) {
+  async addFavorite(productId: string, clientId: string) {
     await this.getProductById(productId);
     const favorite = await this.prismaService.productFavorite.upsert({
-      where: { userId_productId: { userId, productId } },
-      create: { userId, productId },
+      where: { clientId_productId: { clientId, productId } },
+      create: { clientId, productId },
       update: {},
-      include: { product: { include: productRelations } },
-    });
+      include: { product: { include: productRelations } }});
     return { ...favorite, favorited: true };
   }
 
-  async removeFavorite(productId: string, userId: string) {
+  async removeFavorite(productId: string, clientId: string) {
     await this.prismaService.productFavorite.deleteMany({
-      where: { userId, productId },
-    });
+      where: { clientId, productId }});
     return { productId, favorited: false };
   }
 
-  async favoriteStatus(productId: string, userId: string) {
+  async favoriteStatus(productId: string, clientId: string) {
     const favorite = await this.prismaService.productFavorite.findUnique({
-      where: { userId_productId: { userId, productId } },
-      select: { id: true },
-    });
+      where: { clientId_productId: { clientId, productId } },
+      select: { id: true }});
     return { productId, favorited: Boolean(favorite) };
   }
 
-  async listFavorites(userId: string) {
+  async listFavorites(clientId: string) {
     const favorites = await this.prismaService.productFavorite.findMany({
       where: {
-        userId,
+        clientId,
         product: {
           deletedAt: null,
           status: ProductStatus.active,
-          category: { deletedAt: null },
-        },
-      },
+          category: { deletedAt: null }}},
       include: { product: { include: productRelations } },
-      orderBy: { createdAt: 'desc' },
-    });
+      orderBy: { createdAt: 'desc' }});
     return favorites.map((favorite) => ({
       id: favorite.id,
       createdAt: favorite.createdAt,
-      product: this.toCatalogProduct(favorite.product),
-    }));
+      product: this.toCatalogProduct(favorite.product)}));
   }
 
   private async findProducts(
@@ -167,43 +163,65 @@ export class ProductService extends PrismaBaseService<'product'> {
       page = 1,
       itemPerPage = 10,
       search,
+      q,
       createdAfter,
-    }: GetProductsPaginationDto & GetVendorProductsPaginationDto,
+      minPrice,
+      maxPrice,
+    }: any,
     scope: Prisma.ProductWhereInput,
   ) {
-    const searchCondition = this.queryUtil.createStringSearchCondition(search, [
+    const keyword = search || q;
+    const searchCondition = this.queryUtil.createStringSearchCondition(keyword, [
       'name',
       'slug',
       'description',
     ]) as Prisma.ProductWhereInput;
+
+    const hasPriceFilter =
+      (minPrice !== undefined && minPrice !== null && !isNaN(Number(minPrice))) ||
+      (maxPrice !== undefined && maxPrice !== null && !isNaN(Number(maxPrice)));
+
+    const priceCondition: Prisma.ProductColorListRelationFilter = {
+      some: {
+        deletedAt: null,
+        variants: {
+          some: {
+            deletedAt: null,
+            ...(minPrice !== undefined && minPrice !== null && !isNaN(Number(minPrice))
+              ? { price: { gte: Number(minPrice) } }
+              : {}),
+            ...(maxPrice !== undefined && maxPrice !== null && !isNaN(Number(maxPrice))
+              ? { price: { lte: Number(maxPrice) } }
+              : {}),
+          },
+        },
+      },
+    };
 
     const where: Prisma.ProductWhereInput = {
       deletedAt: null,
       ...scope,
       ...searchCondition,
       ...(createdAfter ? { createdAt: { gte: new Date(createdAfter) } } : {}),
+      ...(hasPriceFilter ? { colors: priceCondition } : {}),
     };
 
     const totalItems = await this.extended.count({
-      where,
-    });
+      where});
 
     const paging = this.paginationUtilService.paging({
       page,
       itemPerPage,
-      totalItems,
-    });
+      totalItems});
 
     const list = await this.extended.findMany({
       where,
       skip: paging.skip,
       take: itemPerPage,
       orderBy: {
-        createdAt: 'desc',
-      },
+        createdAt: 'desc'},
 
-      include: productRelations,
-    });
+      include: productRelations});
 
     return paging.format(list.map((product) => this.toCatalogProduct(product)));
   }
@@ -229,8 +247,7 @@ export class ProductService extends PrismaBaseService<'product'> {
           ?.imageUrls[0] ?? null,
       minPrice: minPrice?.toString() ?? null,
       maxPrice: maxPrice?.toString() ?? null,
-      totalStock: variants.reduce((total, variant) => total + variant.stock, 0),
-    };
+      totalStock: variants.reduce((total, variant) => total + variant.stock, 0)};
   }
   async updateProduct(id: string, data: UpdateProductDto, vendorId: string) {
     await this.getOwnedProduct(id, vendorId);
@@ -241,9 +258,7 @@ export class ProductService extends PrismaBaseService<'product'> {
         name: data.name,
         description: data.description,
         status: data.status,
-        category: data.category,
-      },
-    });
+        category: data.category}});
   }
 
   async deleteProduct(id: string, vendorId: string) {
@@ -252,16 +267,13 @@ export class ProductService extends PrismaBaseService<'product'> {
     return this.extended.update({
       where: { id, vendorId, deletedAt: null },
       data: {
-        status: 'inactive',
-      },
-    });
+        status: 'inactive'}});
   }
 
   private async getOwnedProduct(id: string, vendorId: string) {
     const product = await this.extended.findFirst({
       where: { id, vendorId },
-      select: { id: true },
-    });
+      select: { id: true }});
 
     if (!product) {
       throw new NotFoundException('Sản phẩm không tồn tại');

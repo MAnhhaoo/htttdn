@@ -2,9 +2,8 @@ import {
   ArgumentMetadata,
   BadRequestException,
   Injectable,
-  PipeTransform,
-} from '@nestjs/common';
-import { UserRole, UserStatus } from '@prisma/client';
+  PipeTransform} from '@nestjs/common';
+import { UserStatus } from '@prisma/client';
 
 @Injectable()
 export class ParseParamsPaginationPipe implements PipeTransform {
@@ -19,8 +18,8 @@ export class ParseParamsPaginationPipe implements PipeTransform {
 
     // Validate enum role
     if (value.role !== undefined && value.role !== '') {
-      const validRoles = Object.values(UserRole);
-      if (!validRoles.includes(value.role as UserRole)) {
+      const validRoles = ['admin', 'client', 'vendor'];
+      if (!validRoles.includes(value.role as string)) {
         throw new BadRequestException(
           `role không hợp lệ. Giá trị hợp lệ: ${validRoles.join(', ')}`,
         );
@@ -29,8 +28,8 @@ export class ParseParamsPaginationPipe implements PipeTransform {
       value.role = undefined;
     }
 
-    // Validate enum status
-    if (value.status !== undefined && value.status !== '') {
+    // Validate enum status for user role if role is present
+    if (value.role !== undefined && value.status !== undefined && value.status !== '') {
       const validStatuses = Object.values(UserStatus);
       if (!validStatuses.includes(value.status as UserStatus)) {
         throw new BadRequestException(

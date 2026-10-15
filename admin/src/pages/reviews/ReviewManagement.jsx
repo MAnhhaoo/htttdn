@@ -78,11 +78,15 @@ export default function ReviewManagement() {
               </thead>
               <tbody>
                 {reviews.map(review => {
-                  const userName = review.user?.fullName || 'Khách vãng lai';
+                  const userName = review.client?.fullName || review.user?.fullName || 'Khách hàng';
+                  const userEmail = review.client?.email || '';
                   const productName = review.product?.name || 'Sản phẩm không rõ';
                   return (
                     <tr key={review.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                      <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">{userName}</td>
+                      <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">
+                        <div className="font-medium">{userName}</div>
+                        {userEmail && <div className="text-xs text-slate-400 dark:text-slate-500">{userEmail}</div>}
+                      </td>
                       <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{productName}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">

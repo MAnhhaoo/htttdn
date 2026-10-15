@@ -26,6 +26,7 @@ ls output/
 | Entity            | Count      |
 |-------------------|------------|
 | Admin users       | 5          |
+| Employee users    | 15         |
 | Vendor users      | 25         |
 | Customer users    | 120        |
 | Categories        | 15         |
@@ -190,5 +191,6 @@ All generated users use the same password: **`admin123`**
 | Role     | Email Pattern         | Count |
 |----------|-----------------------|-------|
 | Admin    | `admin1@miva.vn` …   | 5     |
+| Employee | `employee1@miva.vn` …| 15    |
 | Vendor   | `vendor1@miva.vn` …  | 25    |
 | Customer | faker-generated       | 120   |

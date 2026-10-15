@@ -12,7 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { UserRole } from '@prisma/client';
+
 import { diskStorage } from 'multer';
 import { unlink } from 'node:fs/promises';
 import { extname } from 'path';
@@ -72,7 +72,7 @@ export class ProductColorController {
    * POST /api/productColors
    */
   @Post()
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   @UseInterceptors(ProductImagesInterceptor)
   createProductColor(
     @Body() dto: CreateProductColorDto,
@@ -122,7 +122,7 @@ export class ProductColorController {
    * PATCH /api/productColors/:id
    */
   @Patch(':id')
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   @UseInterceptors(ProductImagesInterceptor)
   updateProductColor(
     @Param('id', ParseUUIDPipe) id: string,
@@ -153,7 +153,7 @@ export class ProductColorController {
    * POST /api/productColors/:id/images
    */
   @Post(':id/images')
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   @UseInterceptors(ProductImagesInterceptor)
   addImages(
     @Param('id', ParseUUIDPipe) id: string,
@@ -177,7 +177,7 @@ export class ProductColorController {
    * PATCH /api/productColors/:id/restore
    */
   @Patch(':id/restore')
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   restoreProductColor(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserInfo,
@@ -194,7 +194,7 @@ export class ProductColorController {
    * DELETE /api/productColors/:id
    */
   @Delete(':id')
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   deleteProductColor(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserInfo,

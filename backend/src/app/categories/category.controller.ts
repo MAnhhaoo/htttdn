@@ -9,7 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 
-import { UserRole } from '@prisma/client';
+
 
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 
@@ -41,7 +41,7 @@ export class CategoryController {
    * Tạo category mới.
    */
   @Post()
-  @Roles(UserRole.admin)
+  @Roles('admin')
   createCategory(
     @Body()
     createCategoryDto: CreateCategoryDto,
@@ -49,7 +49,7 @@ export class CategoryController {
     return this.categoryService.createCategory(createCategoryDto);
   }
   @Patch(':id')
-  @Roles(UserRole.admin)
+  @Roles('admin')
   updateCategory(
     @Param('id') id: string,
     @Body() updateCategoryDto: UpdateCategoryDto,
@@ -62,7 +62,7 @@ export class CategoryController {
     });
   }
   @Delete(':id')
-  @Roles(UserRole.admin)
+  @Roles('admin')
   deleteCategory(@Param('id') id: string) {
     return this.categoryService.deleteCategory({ id });
   }

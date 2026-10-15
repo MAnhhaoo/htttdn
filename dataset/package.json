@@ -6,6 +6,7 @@
   "scripts": {
     "generate": "tsx scripts/generate.ts",
     "preview-reset": "tsx scripts/previewReset.ts",
+    "apply-seed": "tsx scripts/applySeed.ts",
     "validate-images": "tsx utils/validateImages.ts"
   },
   "dependencies": {

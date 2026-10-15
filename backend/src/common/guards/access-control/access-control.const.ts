@@ -1,4 +1,5 @@
-import { UserRole } from '@prisma/client';
+export type UserRole = 'admin' | 'client' | 'vendor' | 'employee';
+
 
 export enum Actions {
   MANAGE = 'manage',
@@ -9,12 +10,13 @@ export enum Actions {
 }
 
 export const ROLE_ACTION: Record<UserRole, Actions[]> = {
-  [UserRole.admin]: [Actions.MANAGE],
-  [UserRole.vendor]: [
+  ['admin']: [Actions.MANAGE],
+  ['employee']: [Actions.READ, Actions.UPDATE],
+  ['vendor']: [
     Actions.CREATE,
     Actions.READ,
     Actions.DELETE,
     Actions.UPDATE,
   ],
-  [UserRole.customer]: [Actions.READ],
+  ['client']: [Actions.READ],
 };

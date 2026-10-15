@@ -2,8 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+  NotFoundException} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -56,12 +55,9 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     const product = await this.prismaDb.extended.product.findFirst({
       where: {
         id: productId,
-        vendorId,
-      },
+        vendorId},
       select: {
-        id: true,
-      },
-    });
+        id: true}});
 
     if (!product) {
       throw new NotFoundException('Sản phẩm không tồn tại');
@@ -72,10 +68,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
       where: {
         productId_color: {
           productId,
-          color: dto.color,
-        },
-      },
-    });
+          color: dto.color}}});
 
     // Màu đang tồn tại và chưa bị xóa.
     if (existingColor && !existingColor.deletedAt) {
@@ -88,8 +81,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     if (existingColor?.deletedAt) {
       return this.extended.update({
         where: {
-          id: existingColor.id,
-        },
+          id: existingColor.id},
         data: {
           color,
           deletedAt: null,
@@ -97,10 +89,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
           // Có ảnh mới thì thay ảnh cũ.
           // Không có ảnh mới thì giữ nguyên ảnh cũ.
           ...(uniqueImageUrls.length > 0 && {
-            imageUrls: uniqueImageUrls,
-          }),
-        },
-      });
+            imageUrls: uniqueImageUrls})}});
     }
 
     // Màu chưa từng tồn tại thì tạo mới.
@@ -111,11 +100,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
 
         product: {
           connect: {
-            id: productId,
-          },
-        },
-      },
-    });
+            id: productId}}}});
   }
 
   /**
@@ -126,12 +111,9 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     const product = await this.prismaDb.product.findFirst({
       where: {
         id: productId,
-        deletedAt: null,
-      },
+        deletedAt: null},
       select: {
-        id: true,
-      },
-    });
+        id: true}});
 
     if (!product) {
       throw new NotFoundException('Sản phẩm không tồn tại');
@@ -140,15 +122,11 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     return this.extended.findMany({
       where: {
         productId,
-        deletedAt: null,
-      },
+        deletedAt: null},
       orderBy: {
-        createdAt: 'asc',
-      },
+        createdAt: 'asc'},
       include: {
-        variants: true,
-      },
-    });
+        variants: true}});
   }
 
   /**
@@ -156,8 +134,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
    */
   async getProductColorById(where: Prisma.ProductColorWhereUniqueInput) {
     const productColor = await this.extended.findUnique({
-      where,
-    });
+      where});
 
     if (!productColor || productColor.deletedAt) {
       throw new NotFoundException('Màu sản phẩm không tồn tại');
@@ -186,10 +163,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
         where: {
           productId_color: {
             productId: currentColor.productId,
-            color,
-          },
-        },
-      });
+            color}}});
 
       /*
        * Dù màu trùng đã bị xóa mềm, bản ghi vẫn còn trong database
@@ -216,15 +190,11 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
       data: {
         // Chỉ cập nhật tên màu nếu client gửi color.
         ...(color !== undefined && {
-          color,
-        }),
+          color}),
 
         // Chỉ thay ảnh nếu client upload ảnh mới.
         ...(uniqueImageUrls !== undefined && {
-          imageUrls: uniqueImageUrls,
-        }),
-      },
-    });
+          imageUrls: uniqueImageUrls})}});
   }
 
   /**
@@ -253,9 +223,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     return this.extended.update({
       where: { id, productId: productColor.productId, deletedAt: null },
       data: {
-        imageUrls: uniqueImageUrls,
-      },
-    });
+        imageUrls: uniqueImageUrls}});
   }
 
   /**
@@ -270,9 +238,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     return this.extended.update({
       where: { id, productId: productColor.productId, deletedAt: null },
       data: {
-        deletedAt: new Date(),
-      },
-    });
+        deletedAt: new Date()}});
   }
 
   /**
@@ -282,8 +248,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
    */
   async restoreProductColor(id: string, vendorId: string) {
     const productColor = await this.prismaDb.productColor.findFirst({
-      where: { id, product: { vendorId, deletedAt: null } },
-    });
+      where: { id, product: { vendorId, deletedAt: null } }});
 
     if (!productColor) {
       throw new NotFoundException('Màu sản phẩm không tồn tại');
@@ -296,18 +261,14 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
     return this.extended.update({
       where: { id, productId: productColor.productId },
       data: {
-        deletedAt: null,
-      },
-    });
+        deletedAt: null}});
   }
 
   private async getOwnedActiveColor(id: string, vendorId: string) {
     const productColor = await this.extended.findFirst({
       where: {
         id,
-        product: { vendorId, deletedAt: null },
-      },
-    });
+        product: { vendorId, deletedAt: null }}});
 
     if (!productColor) {
       throw new NotFoundException('Màu sản phẩm không tồn tại');

@@ -11,12 +11,12 @@ import { Request } from 'express';
 
 import { IS_SKIP_AUTH } from '../../../app/auth/auth.decorator';
 import { TokenPayload } from '../../../app/auth/auth.service';
-import { UsersService } from '../../../app/users/users.service';
-import { User } from '../../../app/users/entities/user.entity';
+import { PrismaService } from '../../prisma/prisma.service';
+
 import { Actions, ROLE_ACTION } from './access-control.const';
 import { ROLES_KEY } from './roles.decorator';
 import { RequestMethod } from '../../utils/api-util/api-util.const';
-import { UserRole } from '@prisma/client';
+import { UserRole } from './roles.decorator';
 
 /**
  * Dùng TokenPayload (đầy đủ trường từ JWT) thay vì type cục bộ
@@ -27,21 +27,25 @@ type AuthenticatedUser = TokenPayload;
 @Injectable()
 export class AccessControlGuard implements CanActivate {
   constructor(
-    private readonly usersService: UsersService,
+    private readonly prismaService: PrismaService,
     private readonly reflector: Reflector,
   ) {}
 
   private async canAccessResources(
-    userID: User['id'],
+    userID: string,
     action: Actions,
   ): Promise<boolean> {
-    const user = await this.usersService.getUserRole(userID);
+    let user: any = await this.prismaService.admin.findUnique({where: {id: userID}, select: {status: true, deletedAt: true}});
+    let role: UserRole = 'admin';
+    if (!user) { user = await this.prismaService.client.findUnique({where: {id: userID}, select: {status: true, deletedAt: true}}); role = 'client'; }
+    if (!user) { user = await this.prismaService.vendor.findUnique({where: {id: userID}, select: {status: true, deletedAt: true}}); role = 'vendor'; }
+    if (!user) { user = await this.prismaService.employee.findUnique({where: {id: userID}, select: {status: true, deletedAt: true}}); role = 'employee'; }
 
     if (!user || user.status !== 'active' || user.deletedAt) {
       return false;
     }
 
-    const allowedActions = ROLE_ACTION[user.role] ?? [];
+    const allowedActions = ROLE_ACTION[role] ?? [];
 
     return (
       allowedActions.includes(Actions.MANAGE) || allowedActions.includes(action)
@@ -99,9 +103,11 @@ export class AccessControlGuard implements CanActivate {
     );
 
     if (requiredRoles?.length) {
-      const currentUser = await this.usersService.getUserRole(
-        authenticatedUser.userID,
-      );
+      let currentUser: any = await this.prismaService.admin.findUnique({where: {id: authenticatedUser.userID}, select: {status: true, deletedAt: true}});
+      let role: UserRole = 'admin';
+      if (!currentUser) { currentUser = await this.prismaService.client.findUnique({where: {id: authenticatedUser.userID}, select: {status: true, deletedAt: true}}); role = 'client'; }
+      if (!currentUser) { currentUser = await this.prismaService.vendor.findUnique({where: {id: authenticatedUser.userID}, select: {status: true, deletedAt: true}}); role = 'vendor'; }
+      if (!currentUser) { currentUser = await this.prismaService.employee.findUnique({where: {id: authenticatedUser.userID}, select: {status: true, deletedAt: true}}); role = 'employee'; }
       if (
         !currentUser ||
         currentUser.status !== 'active' ||
@@ -109,7 +115,7 @@ export class AccessControlGuard implements CanActivate {
       ) {
         throw new UnauthorizedException('Tài khoản không còn hoạt động');
       }
-      authenticatedUser.role = currentUser.role;
+      authenticatedUser.role = role;
       if (
         !authenticatedUser.role ||
         !requiredRoles.includes(authenticatedUser.role)

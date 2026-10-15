@@ -5,9 +5,7 @@ import {
   SurveyResponseStatus,
   SurveyScope,
   SurveyStatus,
-  SurveyTriggerType,
-  UserRole,
-} from '@prisma/client';
+  SurveyTriggerType} from '@prisma/client';
 
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -21,7 +19,7 @@ describe('SurveysService', () => {
   const optionOneId = '55555555-5555-4555-8555-555555555555';
   const optionTwoId = '66666666-6666-4666-8666-666666666666';
 
-  const user = (userID: string, role: UserRole): UserInfo => ({
+  const user = (userID: string, role: 'admin' | 'client' | 'vendor'): UserInfo => ({
     userID,
     userEmail: `${role}@example.com`,
     fullName: role,
@@ -29,8 +27,7 @@ describe('SurveysService', () => {
     avatar: null,
     gender: null,
     address: null,
-    role,
-  });
+    role});
 
   const managementSurvey = (createdById = vendorId) => ({
     id: surveyId,
@@ -47,16 +44,14 @@ describe('SurveysService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
-    createdBy: { id: createdById, fullName: 'Vendor', role: UserRole.vendor },
+    createdBy: { id: createdById, fullName: 'Vendor', role: 'vendor' as any },
     questions: [],
-    _count: { responses: 0 },
-  });
+    _count: { responses: 0 }});
 
   it('creates a vendor survey as draft and assigns ownership from JWT', async () => {
     const create = jest.fn().mockResolvedValue(managementSurvey());
     const service = new SurveysService({
-      survey: { create },
-    } as unknown as PrismaService);
+      survey: { create }} as unknown as PrismaService);
 
     await service.create(
       {
@@ -68,11 +63,9 @@ describe('SurveysService', () => {
             type: SurveyQuestionType.rating,
             required: true,
             position: 0,
-            options: [],
-          },
-        ],
-      },
-      user(vendorId, UserRole.vendor),
+            options: []},
+        ]},
+      user(vendorId, 'vendor'),
     );
 
     expect(create).toHaveBeenCalledWith(
@@ -84,26 +77,21 @@ describe('SurveysService', () => {
             create: [
               expect.objectContaining({
                 type: SurveyQuestionType.rating,
-                required: true,
-              }),
-            ],
-          },
-        }),
-      }),
+                required: true}),
+            ]}})}),
     );
   });
 
   it('does not let an admin or another vendor edit survey content they did not create', async () => {
     const prisma = {
-      survey: { findFirst: jest.fn().mockResolvedValue(managementSurvey()) },
-    };
+      survey: { findFirst: jest.fn().mockResolvedValue(managementSurvey()) }};
     const service = new SurveysService(prisma as unknown as PrismaService);
 
     await expect(
       service.update(
         surveyId,
         { title: 'Nội dung đã sửa' },
-        user('77777777-7777-4777-8777-777777777777', UserRole.admin),
+        user('77777777-7777-4777-8777-777777777777', 'admin'),
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -129,28 +117,21 @@ describe('SurveysService', () => {
                 options: [
                   { id: optionOneId, content: 'Đen', position: 0 },
                   { id: optionTwoId, content: 'Trắng', position: 1 },
-                ],
-              },
-            ],
-          },
-        }),
-        update: jest.fn().mockResolvedValue({ id: 'response-id' }),
-      },
-      notification: { updateMany: jest.fn() },
-    };
+                ]},
+            ]}}),
+        update: jest.fn().mockResolvedValue({ id: 'response-id' })},
+      notification: { updateMany: jest.fn() }};
     const prisma = {
       $transaction: jest.fn(
         (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
-      ),
-    };
+      )};
     const service = new SurveysService(prisma as unknown as PrismaService);
 
     await service.submitResponse(
       '77777777-7777-4777-8777-777777777777',
       customerId,
       {
-        answers: [{ questionId, optionIds: [optionOneId, optionTwoId] }],
-      },
+        answers: [{ questionId, optionIds: [optionOneId, optionTwoId] }]},
     );
 
     expect(tx.surveyResponse.update).toHaveBeenCalledWith(
@@ -162,11 +143,7 @@ describe('SurveysService', () => {
               data: [
                 { questionId, optionId: optionOneId },
                 { questionId, optionId: optionTwoId },
-              ],
-            },
-          },
-        }),
-      }),
+              ]}}})}),
     );
   });
 
@@ -188,20 +165,14 @@ describe('SurveysService', () => {
                 type: SurveyQuestionType.text,
                 required: true,
                 position: 0,
-                options: [],
-              },
-            ],
-          },
-        }),
-        update: jest.fn(),
-      },
-      notification: { updateMany: jest.fn() },
-    };
+                options: []},
+            ]}}),
+        update: jest.fn()},
+      notification: { updateMany: jest.fn() }};
     const prisma = {
       $transaction: jest.fn(
         (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
-      ),
-    };
+      )};
     const service = new SurveysService(prisma as unknown as PrismaService);
 
     await expect(

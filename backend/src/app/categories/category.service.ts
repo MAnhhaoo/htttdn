@@ -1,8 +1,7 @@
 import {
   ConflictException,
   Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+  NotFoundException} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -47,8 +46,7 @@ export class CategoryService
   async getCategories({
     page = 1,
     itemPerPage = 10,
-    search,
-  }: GetCategoriesPaginationDto) {
+    search}: GetCategoriesPaginationDto) {
     const searchCondition = this.queryUtil.createStringSearchCondition(search, [
       'name',
       'slug',
@@ -56,27 +54,22 @@ export class CategoryService
 
     const where: Prisma.CategoryWhereInput = {
       deletedAt: null,
-      ...searchCondition,
-    };
+      ...searchCondition};
 
     const totalItems = await this.extended.count({
-      where,
-    });
+      where});
 
     const paging = this.paginationUtilService.paging({
       page,
       itemPerPage,
-      totalItems,
-    });
+      totalItems});
 
     const list = await this.extended.findMany({
       where,
       skip: paging.skip,
       take: itemPerPage,
       orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        createdAt: 'desc'}});
 
     return paging.format(list);
   }
@@ -95,23 +88,19 @@ export class CategoryService
 
       where: {
         deletedAt: null,
-        ...searchFields,
-      },
+        ...searchFields},
 
       take: limit,
 
       orderBy: {
-        name: 'asc',
-      },
-    });
+        name: 'asc'}});
   }
 
   async createCategory(createCategoryDto: CreateCategoryDto) {
     const slug = this.stringUtilService.toSlug(createCategoryDto.name);
 
     const existingCategory = await this.extended.findUnique({
-      where: { slug },
-    });
+      where: { slug }});
 
     if (existingCategory) {
       throw new ConflictException(
@@ -122,9 +111,7 @@ export class CategoryService
     return this.extended.create({
       data: {
         ...createCategoryDto,
-        slug,
-      },
-    });
+        slug}});
   }
   async updateCategory(params: {
     where: Prisma.CategoryWhereUniqueInput;
@@ -133,8 +120,7 @@ export class CategoryService
     const { where, data: dataUpdate } = params;
     const data = await this.extended.update({
       data: dataUpdate,
-      where,
-    });
+      where});
     return data;
   }
   async deleteCategory(where: Prisma.CategoryWhereUniqueInput) {

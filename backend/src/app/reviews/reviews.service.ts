@@ -2,8 +2,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+  NotFoundException} from '@nestjs/common';
 import { OrderStatus, ProductStatus } from '@prisma/client';
 
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -23,19 +22,16 @@ export class ReviewsService {
       skip: (page - 1) * itemPerPage,
       take: itemPerPage,
       include: {
-        user: { select: { id: true, fullName: true, email: true } },
-        product: { select: { id: true, name: true, slug: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        client: { select: { id: true, fullName: true, email: true } },
+        product: { select: { id: true, name: true, slug: true } }},
+      orderBy: { createdAt: 'desc' }});
 
     return {
       list,
       page,
       itemPerPage,
       totalItems,
-      totalPages: Math.ceil(totalItems / itemPerPage) || 1,
-    };
+      totalPages: Math.ceil(totalItems / itemPerPage) || 1};
   }
 
   listByProduct(productId: string) {
@@ -43,24 +39,19 @@ export class ReviewsService {
       where: {
         productId,
         deletedAt: null,
-        product: { deletedAt: null, status: ProductStatus.active },
-      },
-      include: { user: { select: { id: true, fullName: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
+        product: { deletedAt: null, status: ProductStatus.active }},
+      include: { client: { select: { id: true, fullName: true } } },
+      orderBy: { createdAt: 'desc' }});
   }
 
-  async create(userId: string, dto: CreateReviewDto) {
+  async create(clientId: string, dto: CreateReviewDto) {
     const detail = await this.prisma.orderDetail.findFirst({
       where: {
         id: dto.orderDetailId,
-        order: { userId, status: OrderStatus.completed },
-      },
+        order: { clientId, status: OrderStatus.completed }},
       include: {
         review: true,
-        productVariant: { include: { productColor: true } },
-      },
-    });
+        productVariant: { include: { productColor: true } }}});
     if (!detail)
       throw new ForbiddenException(
         'Chỉ được đánh giá sản phẩm trong đơn đã hoàn thành',
@@ -69,44 +60,38 @@ export class ReviewsService {
       throw new ConflictException('Sản phẩm trong đơn này đã được đánh giá');
     return this.prisma.review.create({
       data: {
-        userId,
+        clientId,
         orderDetailId: detail.id,
         productId: detail.productVariant.productColor.productId,
         rating: dto.rating,
-        content: dto.content,
-      },
-      include: { user: { select: { id: true, fullName: true } } },
-    });
+        content: dto.content},
+      include: { client: { select: { id: true, fullName: true } } }});
   }
 
-  async update(userId: string, id: string, dto: UpdateReviewDto) {
-    await this.getOwned(userId, id);
+  async update(clientId: string, id: string, dto: UpdateReviewDto) {
+    await this.getOwned(clientId, id);
     return this.prisma.review.update({ where: { id }, data: dto });
   }
 
-  async remove(userId: string, id: string) {
-    await this.getOwned(userId, id);
+  async remove(clientId: string, id: string) {
+    await this.getOwned(clientId, id);
     return this.prisma.review.update({
       where: { id },
-      data: { deletedAt: new Date() },
-    });
+      data: { deletedAt: new Date() }});
   }
 
   async moderateRemove(id: string) {
     const review = await this.prisma.review.findFirst({
-      where: { id, deletedAt: null },
-    });
+      where: { id, deletedAt: null }});
     if (!review) throw new NotFoundException('Đánh giá không tồn tại');
     return this.prisma.review.update({
       where: { id },
-      data: { deletedAt: new Date() },
-    });
+      data: { deletedAt: new Date() }});
   }
 
-  private async getOwned(userId: string, id: string) {
+  private async getOwned(clientId: string, id: string) {
     const review = await this.prisma.review.findFirst({
-      where: { id, userId, deletedAt: null },
-    });
+      where: { id, clientId, deletedAt: null }});
     if (!review) throw new NotFoundException('Đánh giá không tồn tại');
     return review;
   }

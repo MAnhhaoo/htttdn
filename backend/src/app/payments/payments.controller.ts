@@ -7,7 +7,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+
 
 import { User } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
@@ -20,13 +20,13 @@ export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Get('admin/all')
-  @Roles(UserRole.admin)
+  @Roles('admin')
   all() {
     return this.paymentsService.listAll();
   }
 
   @Get('order/:orderId')
-  @Roles(UserRole.customer, UserRole.vendor, UserRole.admin)
+  @Roles('client', 'vendor', 'admin')
   getByOrder(
     @Param('orderId', ParseUUIDPipe) orderId: string,
     @User() user: UserInfo,
@@ -35,7 +35,7 @@ export class PaymentsController {
   }
 
   @Patch(':id/status')
-  @Roles(UserRole.admin)
+  @Roles('admin')
   updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePaymentStatusDto,
@@ -44,7 +44,7 @@ export class PaymentsController {
   }
 
   @Post('demo/:id')
-  @Roles(UserRole.customer)
+  @Roles('client')
   async processDemoPayment(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('success') success: boolean,

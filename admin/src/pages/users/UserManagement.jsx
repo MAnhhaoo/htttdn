@@ -10,6 +10,7 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -27,6 +28,7 @@ export default function UserManagement() {
       const params = { page, itemPerPage: 10 };
       if (search) params.search = search;
       if (roleFilter) params.role = roleFilter;
+      if (statusFilter) params.status = statusFilter;
 
       const res = await usersApi.getUsers(params);
       const data = res.data;
@@ -38,7 +40,7 @@ export default function UserManagement() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, roleFilter]);
+  }, [page, search, roleFilter, statusFilter]);
 
   useEffect(() => {
     fetchUsers();
@@ -47,7 +49,7 @@ export default function UserManagement() {
   // Debounce search
   useEffect(() => {
     setPage(1);
-  }, [search, roleFilter]);
+  }, [search, roleFilter, statusFilter]);
 
   const getRoleBadge = (role) => {
     const styles = {
@@ -126,13 +128,24 @@ export default function UserManagement() {
           </div>
           <Select 
             options={[
-              { value: '', label: 'All Roles' },
-              { value: 'customer', label: 'Customer' },
-              { value: 'vendor', label: 'Vendor' },
-              { value: 'admin', label: 'Admin' }
+              { value: '', label: 'Tất cả vai trò' },
+              { value: 'customer', label: 'Customer (Khách hàng)' },
+              { value: 'vendor', label: 'Vendor (Người bán)' },
+              { value: 'admin', label: 'Admin (Quản trị)' }
             ]}
             value={roleFilter}
             onChange={e => setRoleFilter(e.target.value)}
+            className="w-48"
+          />
+          <Select 
+            options={[
+              { value: '', label: 'Tất cả trạng thái' },
+              { value: 'active', label: 'Active (Hoạt động)' },
+              { value: 'inactive', label: 'Inactive (Đã khóa)' }
+            ]}
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="w-48"
           />
         </div>
 

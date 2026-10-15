@@ -11,11 +11,13 @@ export const useOrders = (params = {}) => {
     enabled: isAuthenticated,
   });
 
+  const rawOrders = Array.isArray(query.data) ? query.data : (query.data?.list || []);
+
   return {
-    orders: query.data?.list || [],
+    orders: rawOrders,
     meta: {
-      totalItems: query.data?.totalItems || 0,
-      totalPages: query.data?.totalPages || 0,
+      totalItems: Array.isArray(query.data) ? query.data.length : (query.data?.totalItems || 0),
+      totalPages: Array.isArray(query.data) ? 1 : (query.data?.totalPages || 0),
     },
     isLoading: query.isLoading,
     isError: query.isError,

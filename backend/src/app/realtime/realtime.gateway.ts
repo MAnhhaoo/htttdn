@@ -1,15 +1,14 @@
 import { Logger } from '@nestjs/common';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserStatus } from '@prisma/client';
 import {
   OnGatewayConnection,
   OnGatewayInit,
   WebSocketGateway,
-  WebSocketServer,
-} from '@nestjs/websockets';
+  WebSocketServer} from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 
 import { AuthService } from 'src/app/auth/auth.service';
-import { UsersService } from 'src/app/users/users.service';
+import { PrismaService } from 'src/common/prisma/prisma.service';
 import { RealtimeService } from './realtime.service';
 
 @WebSocketGateway({
@@ -33,16 +32,14 @@ import { RealtimeService } from './realtime.service';
       }
       callback(new Error('Origin không được phép'));
     },
-    credentials: true,
-  },
-})
+    credentials: true}})
 export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
   @WebSocketServer() server: Server;
   private readonly logger = new Logger(RealtimeGateway.name);
 
   constructor(
     private readonly authService: AuthService,
-    private readonly usersService: UsersService,
+    private readonly prismaService: PrismaService,
     private readonly realtimeService: RealtimeService,
   ) {}
 
@@ -57,15 +54,17 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       const token =
         typeof raw === 'string' ? raw.replace(/^Bearer\s+/i, '') : '';
       const payload = await this.authService.verifyToken(token);
-      const user = await this.usersService.getUserRole(payload.userID);
+      let user: any = await this.prismaService.admin.findUnique({where: {id: payload.userID}});
+      if (!user) user = await this.prismaService.client.findUnique({where: {id: payload.userID}});
+      if (!user) user = await this.prismaService.vendor.findUnique({where: {id: payload.userID}});
       if (!user || user.status !== UserStatus.active || user.deletedAt) {
         throw new Error('Inactive user');
       }
 
       client.data.user = payload;
       await client.join(`user:${user.id}`);
-      if (user.role === UserRole.vendor) await client.join(`vendor:${user.id}`);
-      if (user.role === UserRole.admin) await client.join('admins');
+      if (user.role === 'vendor') await client.join(`vendor:${user.id}`);
+      if (user.role === 'admin') await client.join('admins');
       client.emit('realtime:ready', { userId: user.id, role: user.role });
     } catch {
       this.logger.warn(`Rejected socket ${client.id}`);

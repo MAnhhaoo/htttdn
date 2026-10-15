@@ -1,6 +1,6 @@
 import { PartialType, PickType } from '@nestjs/mapped-types';
 import { Auth } from '../entities/auth.entity';
-import { User } from '../../users/entities/user.entity';
+import { Client as User } from '../../clients/entities/client.entity';
 // import { UserInfo } from '../../../common/decorators/user.decorator';
 
 export class ForgotPasswordDto extends PartialType(

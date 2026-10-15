@@ -58,11 +58,14 @@ export default function OrderDetailModal({ isOpen, onClose, order, onStatusChang
             </div>
           </div>
           <div>
-            <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Customer Details</h4>
+            <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Điều Phối Giao Hàng &amp; Bảo Mật</h4>
             <div className="space-y-1">
-              <p className="text-sm"><span className="text-slate-500 dark:text-slate-400">Name:</span> <span className="font-medium text-slate-800 dark:text-slate-100">{order.receiverName || 'Unknown'}</span></p>
-              <p className="text-sm"><span className="text-slate-500 dark:text-slate-400">Phone:</span> <span className="font-medium text-slate-800 dark:text-slate-100">{order.receiverPhone || 'N/A'}</span></p>
-              <p className="text-sm"><span className="text-slate-500 dark:text-slate-400">Shipping Address:</span> <span className="font-medium text-slate-800 dark:text-slate-100">{order.shippingAddress || 'No address provided'}</span></p>
+              <p className="text-sm"><span className="text-slate-500 dark:text-slate-400">Kiện hàng:</span> <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{order.vendorOrder?.vendorOrderCode || `VO-${order.orderCode?.slice(-6) || 'MIVA'}`}</span></p>
+              <p className="text-sm"><span className="text-slate-500 dark:text-slate-400">Người nhận:</span> <span className="font-medium text-slate-800 dark:text-slate-100">Khách hàng MIVA (Bảo mật)</span></p>
+              <p className="text-sm"><span className="text-slate-500 dark:text-slate-400">Liên hệ:</span> <span className="font-medium text-slate-800 dark:text-slate-100">09******** (Bảo mật sàn)</span></p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">
+                * Đơn vị vận chuyển nội bộ MIVA tiếp nhận kiện hàng trực tiếp tại kho của bạn và giao tới khách hàng.
+              </p>
             </div>
           </div>
         </div>

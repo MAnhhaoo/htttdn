@@ -2,15 +2,15 @@ import {
   SurveyAudienceType,
   SurveyQuestionType,
   SurveyTriggerType,
-} from '@prisma/client';
+  SurveyScope,
+  SurveyStatus} from '@prisma/client';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 export const SurveyOptionInputSchema = z
   .object({
     content: z.string().trim().min(1).max(500),
-    position: z.number().int().nonnegative(),
-  })
+    position: z.number().int().nonnegative()})
   .strict();
 
 export const SurveyQuestionInputSchema = z
@@ -19,8 +19,7 @@ export const SurveyQuestionInputSchema = z
     type: z.enum(SurveyQuestionType),
     required: z.boolean().default(false),
     position: z.number().int().nonnegative(),
-    options: z.array(SurveyOptionInputSchema).max(100).default([]),
-  })
+    options: z.array(SurveyOptionInputSchema).max(100).default([])})
   .strict()
   .superRefine((data, context) => {
     const isChoice =
@@ -31,16 +30,14 @@ export const SurveyQuestionInputSchema = z
       context.addIssue({
         code: 'custom',
         path: ['options'],
-        message: 'Câu hỏi lựa chọn phải có ít nhất hai phương án',
-      });
+        message: 'Câu hỏi lựa chọn phải có ít nhất hai phương án'});
     }
 
     if (!isChoice && data.options.length > 0) {
       context.addIssue({
         code: 'custom',
         path: ['options'],
-        message: 'Câu hỏi text hoặc rating không được có phương án',
-      });
+        message: 'Câu hỏi text hoặc rating không được có phương án'});
     }
 
     const positions = data.options.map((option) => option.position);
@@ -48,8 +45,7 @@ export const SurveyQuestionInputSchema = z
       context.addIssue({
         code: 'custom',
         path: ['options'],
-        message: 'Vị trí phương án không được trùng nhau',
-      });
+        message: 'Vị trí phương án không được trùng nhau'});
     }
   });
 
@@ -57,14 +53,15 @@ export const SurveyFieldsSchema = z
   .object({
     title: z.string().trim().min(1).max(255),
     description: z.string().trim().max(10_000).nullable().optional(),
-    imageUrl: z.string().trim().url().max(1000).nullable().optional(),
+    imageUrl: z.string().trim().url().max(1000).nullable().optional().or(z.literal('')),
+    scope: z.enum(SurveyScope).optional(),
+    status: z.enum(SurveyStatus).optional(),
     audienceType: z.enum(SurveyAudienceType).optional(),
     triggerType: z.enum(SurveyTriggerType).default(SurveyTriggerType.manual),
-    startDate: z.iso.datetime({ offset: true }).nullable().optional(),
-    endDate: z.iso.datetime({ offset: true }).nullable().optional(),
-    questions: z.array(SurveyQuestionInputSchema).min(1).max(100),
-  })
-  .strict();
+    startDate: z.iso.datetime({ offset: true }).nullable().optional().or(z.literal('')),
+    endDate: z.iso.datetime({ offset: true }).nullable().optional().or(z.literal('')),
+    questions: z.array(SurveyQuestionInputSchema).min(1).max(100)})
+  .passthrough();
 
 export function validateSurveyFields(
   data: Partial<z.infer<typeof SurveyFieldsSchema>>,
@@ -78,8 +75,7 @@ export function validateSurveyFields(
     context.addIssue({
       code: 'custom',
       path: ['endDate'],
-      message: 'Ngày kết thúc phải sau ngày bắt đầu',
-    });
+      message: 'Ngày kết thúc phải sau ngày bắt đầu'});
   }
 
   if (data.questions) {
@@ -88,8 +84,7 @@ export function validateSurveyFields(
       context.addIssue({
         code: 'custom',
         path: ['questions'],
-        message: 'Vị trí câu hỏi không được trùng nhau',
-      });
+        message: 'Vị trí câu hỏi không được trùng nhau'});
     }
   }
 }

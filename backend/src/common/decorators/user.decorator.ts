@@ -1,7 +1,7 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
 
-import { User as UserEntity } from '../../app/users/entities/user.entity';
+
+
 
 /**
  * Thông tin người dùng được giải mã từ JWT token và gắn vào request.
@@ -9,14 +9,14 @@ import { User as UserEntity } from '../../app/users/entities/user.entity';
  * tất cả trường từ token đều có thể truy cập trong controller qua @User().
  */
 export interface UserInfo {
-  userID: UserEntity['id'];
-  userEmail: UserEntity['email'];
+  userID: string;
+  userEmail: string;
   fullName: string;
   phone: string | null;
   avatar: string | null;
   gender: string | null;
   address: string | null;
-  role: UserRole;
+  role: 'admin' | 'client' | 'vendor' | 'employee';
 }
 
 export const User = createParamDecorator(

@@ -1,17 +1,21 @@
 /**
  * OrderStatusHistory generator.
  * Builds a realistic transition log from 'pending' → current status,
- * respecting the valid transition graph from the backend.
+ * respecting the valid transition graph and attributing actors (Client, Employee, Vendor, Admin).
  */
 import { faker } from '../utils/faker';
 import { buildInsert, sqlSection } from '../utils/sqlBuilder';
 import type { GeneratedOrder } from './orders.generator';
-import type { GeneratedUser } from './users.generator';
+import type { GeneratedAdmin, GeneratedVendor, GeneratedClient } from './users.generator';
+import type { GeneratedEmployee } from './employees.generator';
 
 export interface GeneratedOrderStatusHistory {
   id: string;
   orderId: string;
-  actorId: string | null;
+  adminId: string | null;
+  clientId: string | null;
+  vendorId: string | null;
+  employeeId: string | null;
   fromStatus: string | null;
   toStatus: string;
   note: string | null;
@@ -30,11 +34,14 @@ const STATUS_PATHS: Record<string, string[]> = {
 
 export function generateOrderStatusHistory(
   orders: GeneratedOrder[],
-  admins: GeneratedUser[],
-  vendors: GeneratedUser[],
+  admins: GeneratedAdmin[],
+  vendors: GeneratedVendor[],
+  clients: GeneratedClient[],
+  employees?: GeneratedEmployee[],
 ) {
   const data: GeneratedOrderStatusHistory[] = [];
-  const staffUsers = [...admins, ...vendors];
+
+  const activeEmployees = employees?.filter((e) => e.status === 'active') || [];
 
   for (const order of orders) {
     const path = STATUS_PATHS[order.status] ?? ['pending'];
@@ -44,23 +51,61 @@ export function generateOrderStatusHistory(
       const fromStatus = i === 0 ? null : path[i - 1];
       const toStatus = path[i];
 
-      // First entry is by customer, subsequent by admin/vendor
-      const actorId = i === 0
-        ? order.userId
-        : faker.helpers.arrayElement(staffUsers).id;
+      let adminId: string | null = null;
+      let clientId: string | null = null;
+      let vendorId: string | null = null;
+      let employeeId: string | null = null;
+
+      // First entry is by customer
+      if (i === 0) {
+        clientId = order.clientId;
+      } else if (toStatus === 'confirmed' || toStatus === 'shipping') {
+        // Operational steps handled by employee (or admin)
+        if (activeEmployees.length > 0 && faker.datatype.boolean(0.75)) {
+          employeeId = faker.helpers.arrayElement(activeEmployees).id;
+        } else {
+          adminId = faker.helpers.arrayElement(admins).id;
+        }
+      } else if (toStatus === 'processing') {
+        // Preparation handled by vendor
+        vendorId = faker.helpers.arrayElement(vendors).id;
+      } else if (toStatus === 'completed') {
+        // Completion confirmed by delivery employee or client
+        if (activeEmployees.length > 0 && faker.datatype.boolean(0.7)) {
+          employeeId = faker.helpers.arrayElement(activeEmployees).id;
+        } else {
+          clientId = order.clientId;
+        }
+      } else if (toStatus === 'cancelled') {
+        if (faker.datatype.boolean(0.6)) {
+          clientId = order.clientId;
+        } else {
+          adminId = faker.helpers.arrayElement(admins).id;
+        }
+      } else {
+        adminId = faker.helpers.arrayElement(admins).id;
+      }
 
       const createdAt = new Date(lastTime + faker.number.int({ min: 60000, max: 86400000 }));
       lastTime = createdAt.getTime();
 
+      let noteText: string | null = null;
+      if (toStatus === 'confirmed') noteText = 'Nhân viên vận hành đã xác nhận đơn hàng';
+      else if (toStatus === 'processing') noteText = 'Vendor đã tiếp nhận và đang đóng gói sản phẩm';
+      else if (toStatus === 'shipping') noteText = 'Đơn hàng đã bàn giao cho đơn vị vận chuyển';
+      else if (toStatus === 'completed') noteText = 'Giao hàng thành công cho người nhận';
+      else if (toStatus === 'cancelled') noteText = 'Đơn hàng đã bị hủy';
+
       data.push({
         id: faker.string.uuid(),
         orderId: order.id,
-        actorId,
+        adminId,
+        clientId,
+        vendorId,
+        employeeId,
         fromStatus,
         toStatus,
-        note: i === 0 ? null : faker.datatype.boolean(0.3)
-          ? `Chuyển trạng thái sang ${toStatus}`
-          : null,
+        note: noteText,
         createdAt,
       });
     }

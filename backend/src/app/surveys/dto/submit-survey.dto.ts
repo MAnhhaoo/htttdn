@@ -5,14 +5,24 @@ export const SubmitSurveyAnswerSchema = z
   .object({
     questionId: z.uuid(),
     textAnswer: z.string().trim().min(1).max(10_000).optional(),
+    optionId: z.uuid().optional(),
     optionIds: z.array(z.uuid()).min(1).max(100).optional(),
     ratingValue: z.number().int().min(1).max(5).optional(),
   })
   .strict()
+  .transform((data) => {
+    if (data.optionId && !data.optionIds) {
+      return {
+        ...data,
+        optionIds: [data.optionId],
+      };
+    }
+    return data;
+  })
   .superRefine((data, context) => {
     const suppliedValues = [
       data.textAnswer !== undefined,
-      data.optionIds !== undefined,
+      data.optionIds !== undefined || data.optionId !== undefined,
       data.ratingValue !== undefined,
     ].filter(Boolean).length;
 

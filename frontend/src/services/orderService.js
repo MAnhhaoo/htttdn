@@ -11,5 +11,9 @@ export const orderService = {
 
   getOrderById: async (id) => {
     return await apiClient.get(`/orders/${id}`);
-  }
+  },
+
+  cancelOrder: async (id, note) => {
+    return await apiClient.patch(`/orders/${id}/status`, { status: 'cancelled', note });
+  },
 };

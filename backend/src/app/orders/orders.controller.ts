@@ -8,14 +8,15 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+
 
 import { User } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
 import { CheckoutDto } from './dto/checkout.dto';
-import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { UpdateOrderStatusDto, UpdateVendorOrderStatusDto } from './dto/update-order-status.dto';
+import { AssignOrderDto } from './dto/assign-order.dto';
 import { GetOrdersPaginationDto } from './dto/get-order.dto';
 import { OrdersService } from './orders.service';
 
@@ -24,37 +25,81 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post('checkout')
-  @Roles(UserRole.customer)
+  @Roles('client')
   checkout(@Body() dto: CheckoutDto, @User() user: UserInfo) {
     return this.ordersService.checkout(user.userID, dto);
   }
 
   @Get('mine')
-  @Roles(UserRole.customer)
+  @Roles('client')
   mine(@User() user: UserInfo) {
     return this.ordersService.listMine(user.userID);
   }
 
   @Get('vendor/mine')
-  @Roles(UserRole.vendor)
+  @Roles('vendor')
   vendor(@User() user: UserInfo) {
     return this.ordersService.listForVendor(user.userID);
   }
 
+  @Get('vendor/orders')
+  @Roles('vendor')
+  vendorOrders(@User() user: UserInfo) {
+    return this.ordersService.listVendorOrders(user.userID);
+  }
+
+  @Patch('vendor-orders/:id/status')
+  @Roles('vendor')
+  updateVendorOrderStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateVendorOrderStatusDto,
+    @User() user: UserInfo,
+  ) {
+    return this.ordersService.updateVendorOrderStatus(id, dto, user);
+  }
+
   @Get('admin/all')
-  @Roles(UserRole.admin)
-  all(@Query(new ParseParamsPaginationPipe()) query: GetOrdersPaginationDto) {
-    return this.ordersService.listAll(query);
+  @Roles('admin', 'employee')
+  all(
+    @Query(new ParseParamsPaginationPipe()) query: GetOrdersPaginationDto,
+    @User() user: UserInfo,
+  ) {
+    return this.ordersService.listAll(query, user);
+  }
+
+  @Post('admin/auto-assign-all')
+  @Roles('admin')
+  autoAssignAll(@User() user: UserInfo) {
+    return this.ordersService.autoAssignAll(user);
+  }
+
+  @Post(':id/auto-assign')
+  @Roles('admin')
+  autoAssignOrder(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: UserInfo,
+  ) {
+    return this.ordersService.autoAssignOrder(id, user);
+  }
+
+  @Patch(':id/assign')
+  @Roles('admin')
+  assignOrder(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AssignOrderDto,
+    @User() user: UserInfo,
+  ) {
+    return this.ordersService.assignOrder(id, dto, user);
   }
 
   @Get(':id')
-  @Roles(UserRole.customer, UserRole.vendor, UserRole.admin)
+  @Roles('client', 'vendor', 'admin', 'employee')
   get(@Param('id', ParseUUIDPipe) id: string, @User() user: UserInfo) {
     return this.ordersService.getById(id, user);
   }
 
   @Patch(':id/status')
-  @Roles(UserRole.customer, UserRole.vendor, UserRole.admin)
+  @Roles('client', 'vendor', 'admin', 'employee')
   updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateOrderStatusDto,

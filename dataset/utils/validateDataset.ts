@@ -75,20 +75,19 @@ SELECT COUNT(*) AS negative_stock FROM "ProductVariant" WHERE "stock" < 0;
 -- 19. Invalid prices (non-positive — should return 0)
 SELECT COUNT(*) AS bad_prices FROM "ProductVariant" WHERE "price" <= 0;
 
--- 20. Surveys by creator role
-SELECT u."role", COUNT(s."id") AS surveys FROM "Survey" s JOIN "User" u ON u."id" = s."createdById" GROUP BY u."role";
+-- 20. Surveys by scope and audience
+SELECT "scope", "audienceType", "status", COUNT(*) AS surveys FROM "Survey" WHERE "deletedAt" IS NULL GROUP BY "scope", "audienceType", "status" ORDER BY "scope", "audienceType";
 
 -- 21. Survey Questions by Type
 SELECT "type", COUNT(*) FROM "SurveyQuestion" GROUP BY "type";
 
--- 22. Survey Responses
-SELECT COUNT(*) AS total_responses FROM "SurveyResponse";
+-- 22. Survey Responses by Status
+SELECT "status", COUNT(*) AS total_responses FROM "SurveyResponse" GROUP BY "status";
 
 -- 23. Invalid Survey Responses (vendor_completed_buyers customer has no completed/shipping order from Vendor)
-SELECT sr."id" AS response_id, sr."userId" AS customer_id, s."createdById" AS vendor_id
+SELECT sr."id" AS response_id, sr."clientId" AS customer_id, s."vendorId"
 FROM "SurveyResponse" sr
 JOIN "Survey" s ON s."id" = sr."surveyId"
-JOIN "User" u ON u."id" = s."createdById"
 WHERE s."audienceType" = 'vendor_completed_buyers'
   AND NOT EXISTS (
     SELECT 1 FROM "Order" o
@@ -96,7 +95,7 @@ WHERE s."audienceType" = 'vendor_completed_buyers'
     JOIN "ProductVariant" pv ON pv."id" = od."productVariantId"
     JOIN "ProductColor" pc ON pc."id" = pv."productColorId"
     JOIN "Product" p ON p."id" = pc."productId"
-    WHERE o."userId" = sr."userId" AND p."vendorId" = s."createdById" AND o."status" IN ('completed', 'shipping')
+    WHERE o."clientId" = sr."clientId" AND p."vendorId" = s."vendorId" AND o."status" IN ('completed', 'shipping')
   );
 
 -- 24. Invalid Survey Answers (Option doesn't belong to Question)
@@ -105,8 +104,29 @@ FROM "SurveyAnswer" sa
 JOIN "SurveyOption" so ON so."id" = sa."optionId"
 WHERE sa."optionId" IS NOT NULL AND so."questionId" != sa."questionId";
 
--- 25. Summary report
-SELECT 'Users' AS entity, COUNT(*) AS count FROM "User"
+-- 25. Employees by status (active/inactive)
+SELECT "status", COUNT(*) AS count FROM "Employee" WHERE "deletedAt" IS NULL GROUP BY "status" ORDER BY "status";
+
+-- 26. Employees by department and position
+SELECT "department", "position", COUNT(*) AS count, AVG("salary") AS avg_salary
+FROM "Employee" WHERE "deletedAt" IS NULL
+GROUP BY "department", "position" ORDER BY "department", "position";
+
+-- 27. Employee salary stats (Min, Avg, Max)
+SELECT MIN("salary") AS min_salary, ROUND(AVG("salary"), 0) AS avg_salary, MAX("salary") AS max_salary FROM "Employee";
+
+-- 28. Duplicate employee codes or emails (should return 0)
+SELECT "employeeCode", COUNT(*) FROM "Employee" GROUP BY "employeeCode" HAVING COUNT(*) > 1;
+SELECT "email", COUNT(*) FROM "Employee" GROUP BY "email" HAVING COUNT(*) > 1;
+
+-- 29. Invalid foreign keys — Employees referencing non-existent Admins (should return 0)
+SELECT e."id" FROM "Employee" e LEFT JOIN "Admin" a ON a."id" = e."adminId" WHERE e."adminId" IS NOT NULL AND a."id" IS NULL;
+
+-- 30. Summary report
+SELECT 'Admins' AS entity, COUNT(*) AS count FROM "Admin"
+UNION ALL SELECT 'Employees', COUNT(*) FROM "Employee"
+UNION ALL SELECT 'Clients', COUNT(*) FROM "Client"
+UNION ALL SELECT 'Vendors', COUNT(*) FROM "Vendor"
 UNION ALL SELECT 'Categories', COUNT(*) FROM "Category"
 UNION ALL SELECT 'Products', COUNT(*) FROM "Product"
 UNION ALL SELECT 'ProductColors', COUNT(*) FROM "ProductColor"

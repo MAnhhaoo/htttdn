@@ -1,0 +1,338 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, ShipmentStatus } from '@prisma/client';
+import type { UserInfo } from 'src/common/decorators/user.decorator';
+import { PrismaService } from 'src/common/prisma/prisma.service';
+import {
+  AssignCarrierDto,
+  GetShipmentsQueryDto,
+  UpdateShipmentStatusDto,
+} from './dto/shipping.dto';
+
+@Injectable()
+export class ShippingService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async listShipments(query: GetShipmentsQueryDto) {
+    const { page = 1, itemPerPage = 10, q, status, carrierId } = query;
+    const skip = (page - 1) * itemPerPage;
+
+    const where: Prisma.ShipmentWhereInput = {
+      ...(status ? { status: status as ShipmentStatus } : {}),
+      ...(carrierId ? { carrierId } : {}),
+      ...(q
+        ? {
+            OR: [
+              { trackingNumber: { contains: q, mode: 'insensitive' } },
+              { receiverName: { contains: q, mode: 'insensitive' } },
+              { receiverPhone: { contains: q, mode: 'insensitive' } },
+              { order: { orderCode: { contains: q, mode: 'insensitive' } } },
+              {
+                vendorOrder: {
+                  vendorOrderCode: { contains: q, mode: 'insensitive' },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [totalItems, list] = await Promise.all([
+      this.prisma.shipment.count({ where }),
+      this.prisma.shipment.findMany({
+        where,
+        skip,
+        take: itemPerPage,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          carrier: {
+            select: {
+              id: true,
+              fullName: true,
+              employeeCode: true,
+              phone: true,
+              department: true,
+            },
+          },
+          order: {
+            select: {
+              id: true,
+              orderCode: true,
+              status: true,
+              totalAmount: true,
+              createdAt: true,
+            },
+          },
+          vendorOrder: {
+            select: {
+              id: true,
+              vendorOrderCode: true,
+              status: true,
+              totalAmount: true,
+              vendor: {
+                select: {
+                  id: true,
+                  storeName: true,
+                  fullName: true,
+                },
+              },
+            },
+          },
+          events: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+      }),
+    ]);
+
+    return {
+      list,
+      totalItems,
+      totalPages: Math.ceil(totalItems / itemPerPage) || 1,
+      currentPage: page,
+    };
+  }
+
+  async getShipmentById(id: string) {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id },
+      include: {
+        carrier: {
+          select: {
+            id: true,
+            fullName: true,
+            employeeCode: true,
+            phone: true,
+            department: true,
+          },
+        },
+        order: {
+          include: {
+            payment: true,
+            details: {
+              include: {
+                productVariant: {
+                  include: {
+                    productColor: {
+                      include: {
+                        product: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        vendorOrder: {
+          include: {
+            vendor: {
+              select: {
+                id: true,
+                storeName: true,
+                fullName: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        events: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException('Không tìm thấy vận đơn');
+    }
+
+    return shipment;
+  }
+
+  async updateShipmentStatus(
+    id: string,
+    dto: UpdateShipmentStatusDto,
+    user: UserInfo,
+  ) {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id },
+      include: { 
+        order: { include: { payment: true } },
+        carrier: true,
+      },
+    });
+
+    if (!shipment) {
+      throw new NotFoundException('Không tìm thấy vận đơn');
+    }
+
+    const defaultDescriptions: Record<string, string> = {
+      pending: 'Vận đơn đang chờ tiếp nhận',
+      assigned: 'Đã phân công nhân viên điều phối vận chuyển',
+      picking_up: 'Nhân viên đang lấy hàng tại kho nhà bán hàng (Vendor)',
+      in_transit: 'Kiện hàng đang được luân chuyển tại Hub phân loại MIVA',
+      out_for_delivery: 'Nhân viên đang trên đường giao hàng đến người nhận',
+      delivered: 'Kiện hàng đã giao thành công cho khách hàng',
+      failed: `Giao hàng không thành công: ${dto.failedReason || 'Không liên lạc được người nhận'}`,
+      returned: 'Kiện hàng đã được hoàn trả về kho',
+    };
+
+    const isDelivered = dto.status === 'delivered';
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const updatedShipment = await tx.shipment.update({
+        where: { id },
+        data: {
+          status: dto.status as ShipmentStatus,
+          notes: dto.notes !== undefined ? dto.notes : shipment.notes,
+          failedReason: dto.failedReason || null,
+          deliveredAt: isDelivered ? new Date() : shipment.deliveredAt,
+        },
+      });
+
+      await tx.shipmentEvent.create({
+        data: {
+          shipmentId: id,
+          status: dto.status as ShipmentStatus,
+          location: dto.location || 'MIVA Logistics Hub',
+          description: dto.description || defaultDescriptions[dto.status] || 'Cập nhật trạng thái vận đơn',
+          actorRole: user.role,
+          actorId: user.userID,
+        },
+      });
+
+      // Update parent Order if all shipments delivered
+      if (isDelivered) {
+        if (shipment.vendorOrderId) {
+          await tx.vendorOrder.update({
+            where: { id: shipment.vendorOrderId },
+            data: { status: 'delivered' },
+          });
+        }
+
+        const allShipments = await tx.shipment.findMany({
+          where: { orderId: shipment.orderId },
+        });
+
+        const allDelivered = allShipments.every(
+          (s) => s.id === id || s.status === ShipmentStatus.delivered,
+        );
+
+        if (allDelivered) {
+          await tx.order.update({
+            where: { id: shipment.orderId },
+            data: { status: OrderStatus.completed },
+          });
+
+          if (
+            shipment.order.payment?.method === PaymentMethod.cod &&
+            shipment.order.payment.status === PaymentStatus.pending
+          ) {
+            await tx.payment.update({
+              where: { orderId: shipment.orderId },
+              data: { status: PaymentStatus.paid, paidAt: new Date() },
+            });
+          }
+
+          let carrierDisplay = 'nhân viên vận chuyển';
+          if (shipment.carrier?.fullName) {
+            carrierDisplay = `${shipment.carrier.fullName} / ${shipment.carrier.employeeCode || shipment.carrier.id.slice(0, 8)}`;
+          } else if (user.role === 'employee') {
+            const emp = await tx.employee.findUnique({ where: { id: user.userID } });
+            if (emp) {
+              carrierDisplay = `${emp.fullName} / ${emp.employeeCode}`;
+            } else {
+              carrierDisplay = user.fullName || user.userID;
+            }
+          } else {
+            carrierDisplay = user.fullName || user.userID;
+          }
+
+          await tx.orderStatusHistory.create({
+            data: {
+              orderId: shipment.orderId,
+              fromStatus: shipment.order.status,
+              toStatus: OrderStatus.completed,
+              note: `Toàn bộ các kiện hàng đã được giao thành công bởi nhân viên [${carrierDisplay}]`,
+              ...(user.role === 'admin' ? { adminId: user.userID } : {}),
+              ...(user.role === 'employee' ? { employeeId: user.userID } : {}),
+            },
+          });
+        }
+      } else if (dto.status === 'out_for_delivery' || dto.status === 'in_transit') {
+        if (shipment.vendorOrderId) {
+          await tx.vendorOrder.update({
+            where: { id: shipment.vendorOrderId },
+            data: { status: 'shipping' },
+          });
+        }
+        if (shipment.order.status === OrderStatus.confirmed || shipment.order.status === OrderStatus.processing) {
+          await tx.order.update({
+            where: { id: shipment.orderId },
+            data: { status: OrderStatus.shipping },
+          });
+        }
+      } else if (dto.status === 'returned') {
+        if (shipment.vendorOrderId) {
+          await tx.vendorOrder.update({
+            where: { id: shipment.vendorOrderId },
+            data: { status: 'cancelled' },
+          });
+        }
+      }
+
+      return updatedShipment;
+    });
+
+    return result;
+  }
+
+  async assignCarrier(id: string, dto: AssignCarrierDto, user: UserInfo) {
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id },
+    });
+    if (!shipment) {
+      throw new NotFoundException('Không tìm thấy vận đơn');
+    }
+
+    const carrier = await this.prisma.employee.findUnique({
+      where: { id: dto.carrierId },
+      select: { id: true, fullName: true, employeeCode: true, phone: true },
+    });
+
+    if (!carrier) {
+      throw new NotFoundException('Không tìm thấy nhân viên vận chuyển');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const s = await tx.shipment.update({
+        where: { id },
+        data: {
+          carrierId: carrier.id,
+          carrierType: dto.carrierType || 'employee',
+          status: ShipmentStatus.assigned,
+          notes: dto.notes ? `${shipment.notes ? shipment.notes + '\n' : ''}${dto.notes}` : shipment.notes,
+        },
+      });
+
+      await tx.shipmentEvent.create({
+        data: {
+          shipmentId: id,
+          status: ShipmentStatus.assigned,
+          location: 'Văn phòng điều phối MIVA',
+          description: `Đã phân công vận chuyển cho nhân sự ${carrier.fullName} (${carrier.employeeCode})`,
+          actorRole: user.role,
+          actorId: user.userID,
+        },
+      });
+
+      return s;
+    });
+
+    return updated;
+  }
+}

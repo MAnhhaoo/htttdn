@@ -21,26 +21,36 @@ export default function Analytics() {
     const fetchAnalytics = async () => {
       try {
         setLoading(true);
-        const [productsRes, orders] = await Promise.all([
+        const [productsRes, ordersRes] = await Promise.all([
           dashboardService.getProducts(),
           dashboardService.getOrders()
         ]);
         
-        const products = productsRes.list || [];
+        const products = Array.isArray(productsRes) ? productsRes : (productsRes?.list || []);
+        const orders = Array.isArray(ordersRes) ? ordersRes : (ordersRes?.list || []);
         setAllProducts(products);
 
-        // Fetch reviews for rating calculation
+        // Fetch reviews for rating calculation in parallel
         let reviewsData = [];
-        for (const product of products) {
-          const prodReviews = await reviewService.getReviewsByProduct(product.id);
-          reviewsData = [...reviewsData, ...(prodReviews || [])];
-        }
+        const reviewResults = await Promise.allSettled(
+          products.slice(0, 30).map(product => reviewService.getReviewsByProduct(product.id))
+        );
+        reviewResults.forEach(res => {
+          if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+            reviewsData = [...reviewsData, ...res.value];
+          }
+        });
         setAllReviews(reviewsData);
 
+        const currentVendorId = user?.id || user?.userID;
         const vendorOrderDetails = [];
         orders.forEach(order => {
-          order.details.forEach(detail => {
-            if (detail.productVariant?.productColor?.product?.vendorId === user?.id) {
+          (order.details || []).forEach(detail => {
+            const matchesVendor = !currentVendorId ||
+              detail.productVariant?.productColor?.product?.vendorId === currentVendorId ||
+              order.vendorOrders?.some(vo => vo.vendorId === currentVendorId);
+
+            if (matchesVendor) {
               vendorOrderDetails.push({ ...detail, order });
             }
           });
@@ -55,7 +65,7 @@ export default function Analytics() {
     };
 
     fetchAnalytics();
-  }, [user?.id]);
+  }, [user?.id, user?.userID]);
 
   const { stats, revenueData, topProductsData } = useMemo(() => {
     if (!allProducts.length && !allVendorOrders.length) {

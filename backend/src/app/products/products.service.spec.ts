@@ -12,8 +12,7 @@ describe('ProductService', () => {
   const productDelegate = {
     count: jest.fn(),
     findMany: jest.fn(),
-    findFirst: jest.fn(),
-  };
+    findFirst: jest.fn()};
 
   const service = new ProductService(
     { extended: { product: productDelegate } } as unknown as PrismaService,
@@ -36,8 +35,7 @@ describe('ProductService', () => {
     category: {
       id: '88888888-8888-4888-8888-888888888888',
       name: 'Shoes',
-      slug: 'shoes',
-    },
+      slug: 'shoes'},
     colors: [
       {
         id: '44444444-4444-4444-8444-444444444444',
@@ -56,8 +54,7 @@ describe('ProductService', () => {
             price: new Prisma.Decimal('150.50'),
             createdAt: new Date('2026-01-01T00:00:00.000Z'),
             updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-            deletedAt: null,
-          },
+            deletedAt: null},
           {
             id: '66666666-6666-4666-8666-666666666666',
             productColorId: '44444444-4444-4444-8444-444444444444',
@@ -66,12 +63,9 @@ describe('ProductService', () => {
             price: new Prisma.Decimal('200'),
             createdAt: new Date('2026-01-01T00:00:00.000Z'),
             updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-            deletedAt: null,
-          },
-        ],
-      },
-    ],
-  };
+            deletedAt: null},
+        ]},
+    ]};
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -83,24 +77,20 @@ describe('ProductService', () => {
   it('returns only active public products with catalog summary fields', async () => {
     const result = await service.getProducts({
       page: 1,
-      itemPerPage: 10,
-    });
+      itemPerPage: 10});
 
     expect(productDelegate.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           deletedAt: null,
           status: ProductStatus.active,
-          category: { deletedAt: null },
-        },
-      }),
+          category: { deletedAt: null }}}),
     );
     expect(result.list[0]).toMatchObject({
       thumbnail: '/uploads/products/sneaker.webp',
       minPrice: '150.5',
       maxPrice: '200',
-      totalStock: 5,
-    });
+      totalStock: 5});
   });
 
   it('lets a vendor filter their own products by status', async () => {
@@ -114,9 +104,7 @@ describe('ProductService', () => {
         where: {
           deletedAt: null,
           vendorId: product.vendorId,
-          status: ProductStatus.inactive,
-        },
-      }),
+          status: ProductStatus.inactive}}),
     );
   });
 
@@ -129,9 +117,7 @@ describe('ProductService', () => {
           id: product.id,
           deletedAt: null,
           status: ProductStatus.active,
-          category: { deletedAt: null },
-        },
-      }),
+          category: { deletedAt: null }}}),
     );
 
     productDelegate.findFirst.mockResolvedValueOnce(null);

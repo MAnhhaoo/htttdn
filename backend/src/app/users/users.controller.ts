@@ -6,144 +6,61 @@ import {
   Param,
   Patch,
   Query,
-  UsePipes,
 } from '@nestjs/common';
-
-import { UserRole } from '@prisma/client';
-
 import { Roles } from '../../common/guards/access-control/roles.decorator';
-
-import { User as CurrentUser } from '../../common/decorators/user.decorator';
-
-import type { UserInfo } from '../../common/decorators/user.decorator';
-
-import { ParseParamsOptionPipe } from '../../common/pipes/parse-params-option.pipe';
-
-import type { GetOptionsParams } from '../../common/query/options.interface';
-
+import { User, type UserInfo } from '../../common/decorators/user.decorator';
 import { UsersService } from './users.service';
-
-import { UpdateProfileDto, UpdateUserDto } from './dto/update-user.dto';
-
-import { GetUsersPaginationDto } from './dto/get-user.dto';
-
-import type { User as UserEntity } from './entities/user.entity';
+import { UpdateProfileDto } from '../clients/dto/update-client.dto';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  /**
-   * Danh sách user:
-   * - phân trang
-   * - tìm kiếm
-   * - lọc status
-   * - lọc role
-   */
   @Get()
-  @Roles(UserRole.admin)
-  getUsers(@Query() query: GetUsersPaginationDto) {
-    return this.usersService.getUsers(query);
-  }
-
-  /**
-   * Danh sách user rút gọn.
-   * Dùng cho dropdown/select.
-   *
-   * Phải đặt trước @Get(':id').
-   */
-  @Get('options')
-  @Roles(UserRole.admin)
-  @UsePipes(ParseParamsOptionPipe)
-  getUserOptions(
-    @Query()
-    query: GetOptionsParams<UserEntity>,
+  @Roles('admin')
+  getUsers(
+    @Query('page') page?: number,
+    @Query('itemPerPage') itemPerPage?: number,
+    @Query('role') role?: string,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
   ) {
-    return this.usersService.getOptions(query);
+    return this.usersService.getUsers({
+      page,
+      itemPerPage,
+      role,
+      search,
+      status,
+    });
   }
 
-  /**
-   * Lấy thông tin người dùng
-   * đang đăng nhập.
-   */
   @Get('profile')
-  getProfile(
-    @CurrentUser()
-    user: UserInfo,
-  ) {
-    return this.usersService.getUser({
-      id: user.userID,
-    });
+  @Roles('admin', 'client', 'vendor', 'employee')
+  getProfile(@User() user: UserInfo) {
+    return this.usersService.getUser(user.userID);
   }
 
-  /**
-   * Cập nhật thông tin người dùng
-   * đang đăng nhập.
-   */
   @Patch('profile')
-  @Roles(UserRole.customer, UserRole.vendor, UserRole.admin)
-  updateProfile(
-    @CurrentUser()
-    user: UserInfo,
-
-    @Body()
-    updateUserDto: UpdateProfileDto,
-  ) {
-    return this.usersService.updateUser({
-      where: {
-        id: user.userID,
-      },
-
-      data: updateUserDto,
-    });
+  @Roles('admin', 'client', 'vendor', 'employee')
+  updateProfile(@User() user: UserInfo, @Body() data: UpdateProfileDto) {
+    return this.usersService.updateUser(user.userID, data);
   }
 
-  /**
-   * Admin lấy một user theo ID.
-   */
   @Get(':id')
-  @Roles(UserRole.admin)
-  getUser(
-    @Param('id')
-    id: string,
-  ) {
-    return this.usersService.getUser({
-      id,
-    });
+  @Roles('admin')
+  getUser(@Param('id') id: string) {
+    return this.usersService.getUser(id);
   }
 
-  /**
-   * Admin cập nhật user theo ID.
-   */
   @Patch(':id')
-  @Roles(UserRole.admin)
-  updateUser(
-    @Param('id')
-    id: string,
-
-    @Body()
-    updateUserDto: UpdateUserDto,
-  ) {
-    return this.usersService.updateUser({
-      where: {
-        id,
-      },
-
-      data: updateUserDto,
-    });
+  @Roles('admin')
+  updateUser(@Param('id') id: string, @Body() data: any) {
+    return this.usersService.updateUser(id, data);
   }
 
-  /**
-   * Admin vô hiệu hóa user.
-   */
   @Delete(':id')
-  @Roles(UserRole.admin)
-  deleteUser(
-    @Param('id')
-    id: string,
-  ) {
-    return this.usersService.deleteUser({
-      id,
-    });
+  @Roles('admin')
+  deleteUser(@Param('id') id: string) {
+    return this.usersService.deleteUser(id);
   }
 }

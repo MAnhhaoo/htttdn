@@ -1,24 +1,54 @@
 /**
- * Users generator — Admin, Vendor, Customer users.
+ * Users generator — Admin, Vendor, Client users.
  */
 import { faker, vnPhone, vnAddress, vnFullName } from '../utils/faker';
 import { buildInsert, sqlSection } from '../utils/sqlBuilder';
 import { CONFIG } from '../config/dataset.config';
 import bcrypt from 'bcryptjs';
 
-export interface GeneratedUser {
+export interface GeneratedAdmin {
   id: string;
   fullName: string;
   email: string;
   password: string;
-  address: string | null;
   phone: string | null;
-  role: 'customer' | 'vendor' | 'admin';
+  avatarUrl: string | null;
+  department: string | null;
   status: 'active' | 'inactive';
   createdAt: Date;
   updatedAt: Date;
   deletedAt: null;
-  createdBy: string | null;
+}
+
+export interface GeneratedVendor {
+  id: string;
+  fullName: string;
+  email: string;
+  password: string;
+  phone: string | null;
+  avatarUrl: string | null;
+  storeName: string | null;
+  taxId: string | null;
+  status: 'active' | 'inactive';
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: null;
+}
+
+export interface GeneratedClient {
+  id: string;
+  fullName: string;
+  email: string;
+  password: string;
+  phone: string | null;
+  avatarUrl: string | null;
+  dateOfBirth: Date | null;
+  gender: 'male' | 'female' | 'other' | 'prefer_not_to_say' | null;
+  loyaltyPoints: number;
+  status: 'active' | 'inactive';
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: null;
 }
 
 const VENDOR_NAMES = [
@@ -35,49 +65,50 @@ const VENDOR_NAMES = [
 
 export function generateUsers() {
   const passwordHash = bcrypt.hashSync(CONFIG.defaultPassword, 10);
-  const users: GeneratedUser[] = [];
   const baseDate = CONFIG.dateRange.start;
 
   // ── Admins ──
+  const admins: GeneratedAdmin[] = [];
   for (let i = 1; i <= CONFIG.counts.adminUsers; i++) {
     const created = faker.date.between({ from: baseDate, to: new Date('2025-03-01') });
-    users.push({
+    admins.push({
       id: faker.string.uuid(),
       fullName: `Admin ${i}`,
       email: `admin${i}@miva.vn`,
       password: passwordHash,
-      address: vnAddress(),
       phone: vnPhone(),
-      role: 'admin',
+      avatarUrl: faker.image.avatar(),
+      department: 'System',
       status: 'active',
       createdAt: created,
       updatedAt: created,
       deletedAt: null,
-      createdBy: null,
     });
   }
 
   // ── Vendors ──
+  const vendors: GeneratedVendor[] = [];
   for (let i = 0; i < CONFIG.counts.vendorUsers; i++) {
     const created = faker.date.between({ from: baseDate, to: new Date('2025-06-01') });
-    users.push({
+    vendors.push({
       id: faker.string.uuid(),
       fullName: VENDOR_NAMES[i],
       email: `vendor${i + 1}@miva.vn`,
       password: passwordHash,
-      address: vnAddress(),
       phone: vnPhone(),
-      role: 'vendor',
+      avatarUrl: faker.image.avatar(),
+      storeName: VENDOR_NAMES[i],
+      taxId: `TAX${faker.number.int({ min: 100000, max: 999999 })}`,
       status: 'active',
       createdAt: created,
       updatedAt: created,
       deletedAt: null,
-      createdBy: null,
     });
   }
 
-  // ── Customers ──
-  const usedEmails = new Set(users.map((u) => u.email));
+  // ── Clients ──
+  const clients: GeneratedClient[] = [];
+  const usedEmails = new Set();
   for (let i = 0; i < CONFIG.counts.customerUsers; i++) {
     let email: string;
     do {
@@ -86,27 +117,27 @@ export function generateUsers() {
     usedEmails.add(email);
 
     const created = faker.date.between({ from: new Date('2025-03-01'), to: CONFIG.dateRange.end });
-    users.push({
+    clients.push({
       id: faker.string.uuid(),
       fullName: vnFullName(),
       email,
       password: passwordHash,
-      address: faker.datatype.boolean(0.8) ? vnAddress() : null,
       phone: faker.datatype.boolean(0.9) ? vnPhone() : null,
-      role: 'customer',
+      avatarUrl: faker.image.avatar(),
+      dateOfBirth: faker.date.past({ years: 30 }),
+      gender: faker.helpers.arrayElement(['male', 'female']),
+      loyaltyPoints: faker.number.int({ min: 0, max: 1000 }),
       status: faker.datatype.boolean(0.95) ? 'active' : 'inactive',
       createdAt: created,
       updatedAt: created,
       deletedAt: null,
-      createdBy: null,
     });
   }
 
-  const admins = users.filter((u) => u.role === 'admin');
-  const vendors = users.filter((u) => u.role === 'vendor');
-  const customers = users.filter((u) => u.role === 'customer');
+  let sql = '';
+  sql += sqlSection('Admins', admins.length) + buildInsert('Admin', admins);
+  sql += sqlSection('Clients', clients.length) + buildInsert('Client', clients);
+  sql += sqlSection('Vendors', vendors.length) + buildInsert('Vendor', vendors);
 
-  const sql = sqlSection('Users', users.length) + buildInsert('User', users);
-
-  return { data: users, admins, vendors, customers, sql };
+  return { admins, vendors, clients, sql };
 }

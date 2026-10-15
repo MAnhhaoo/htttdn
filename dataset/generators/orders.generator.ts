@@ -20,7 +20,7 @@ import type { GeneratedProductVariant } from './productVariants.generator';
 export interface GeneratedOrder {
   id: string;
   orderCode: string;
-  userId: string;
+  clientId: string;
   subtotalAmount: number;
   discountAmount: number;
   shippingFee: number;
@@ -35,6 +35,8 @@ export interface GeneratedOrder {
   cancelledAt: Date | null;
 }
 
+import type { GeneratedClientAddress } from './clientAddresses.generator';
+
 export interface GeneratedOrderDetail {
   id: string;
   orderId: string;
@@ -45,6 +47,7 @@ export interface GeneratedOrderDetail {
   colorName: string | null;
   sizeName: string | null;
   imageUrl: string | null;
+  vendorOrderId?: string | null;
 }
 
 export interface GeneratedPayment {
@@ -67,6 +70,7 @@ export function generateOrders(
   products: GeneratedProduct[],
   colors: GeneratedProductColor[],
   variants: GeneratedProductVariant[],
+  addresses?: GeneratedClientAddress[],
 ) {
   const orders: GeneratedOrder[] = [];
   const orderDetails: GeneratedOrderDetail[] = [];
@@ -79,6 +83,16 @@ export function generateOrders(
   // Build lookups
   const colorById = new Map(colors.map((c) => [c.id, c]));
   const productById = new Map(products.map((p) => [p.id, p]));
+
+  // Build client address lookup (prefer default address)
+  const addressByClient = new Map<string, GeneratedClientAddress>();
+  if (addresses) {
+    for (const addr of addresses) {
+      if (addr.isDefault || !addressByClient.has(addr.clientId)) {
+        addressByClient.set(addr.clientId, addr);
+      }
+    }
+  }
 
   // ── Determine status for each order ──
   const statuses = distributeStatuses(CONFIG.counts.orders, CONFIG.orderStatusDistribution);
@@ -98,7 +112,7 @@ export function generateOrders(
 
     const created = faker.date.between({
       from: new Date('2025-06-01'),
-      to: CONFIG.dateRange.end,
+      to: new Date('2026-10-12'),
     });
 
     const orderId = faker.string.uuid();
@@ -139,6 +153,7 @@ export function generateOrders(
         colorName: color?.color ?? null,
         sizeName: variant.size,
         imageUrl: color?.imageUrls[0] ?? null,
+        vendorOrderId: null,
       });
     }
 
@@ -146,14 +161,17 @@ export function generateOrders(
     const discountAmount = 0; // will be filled if voucher applied later
     const totalAmount = Math.max(0, subtotal - discountAmount + shippingFee);
 
+    const clientAddr = addressByClient.get(customer.id);
     const receiverName = customer.fullName;
-    const receiverPhone = customer.phone ?? `090${faker.string.numeric(7)}`;
-    const receiverAddr = `${faker.number.int({ min: 1, max: 200 })} ${faker.helpers.arrayElement(VN_STREETS)}, ${faker.helpers.arrayElement(VN_CITIES)}`;
+    const receiverPhone = customer.phone ?? clientAddr?.phone ?? `090${faker.string.numeric(7)}`;
+    const receiverAddr = clientAddr
+      ? `${clientAddr.addressLine}, ${clientAddr.ward}, ${clientAddr.district}, ${clientAddr.province}`
+      : `${faker.number.int({ min: 1, max: 200 })} ${faker.helpers.arrayElement(VN_STREETS)}, ${faker.helpers.arrayElement(VN_CITIES)}`;
 
     orders.push({
       id: orderId,
       orderCode,
-      userId: customer.id,
+      clientId: customer.id,
       subtotalAmount: subtotal,
       discountAmount,
       shippingFee,
@@ -205,12 +223,11 @@ export function generateOrders(
     }
   }
 
-  const sql =
-    sqlSection('Orders', orders.length) + buildInsert('Order', orders) + '\n' +
-    sqlSection('OrderDetails', orderDetails.length) + buildInsert('OrderDetail', orderDetails) + '\n' +
-    sqlSection('Payments', payments.length) + buildInsert('Payment', payments);
+  const ordersSql = sqlSection('Orders', orders.length) + buildInsert('Order', orders);
+  const getOrderDetailsSql = () => sqlSection('OrderDetails', orderDetails.length) + buildInsert('OrderDetail', orderDetails);
+  const paymentsSql = sqlSection('Payments', payments.length) + buildInsert('Payment', payments);
 
-  return { orders, orderDetails, payments, sql };
+  return { orders, orderDetails, payments, ordersSql, getOrderDetailsSql, paymentsSql };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────

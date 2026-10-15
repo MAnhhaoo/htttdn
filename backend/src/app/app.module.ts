@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { UserModule } from './users/users.module';
+import { AdminModule } from './admins/admins.module';
+import { ClientModule } from './clients/clients.module';
+import { VendorModule } from './vendors/vendors.module';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { LoggingInterceptor } from 'src/logger/logging.interceptor';
 import { CatchEverythingFilter } from 'src/catch-everything/carch-everything.filter';
@@ -29,6 +31,10 @@ import { SurveysModule } from './surveys/surveys.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
 import { AddressesModule } from './addresses/addresses.module';
+import { UsersModule } from './users/users.module';
+import { EmployeesModule } from './employees/employees.module';
+import { ShippingModule } from './shipping/shipping.module';
+import { PayrollModule } from './payroll/payroll.module';
 
 @Module({
   imports: [
@@ -38,7 +44,10 @@ import { AddressesModule } from './addresses/addresses.module';
       validate: validate,
     }),
     PrismaModule,
-    UserModule,
+    AdminModule,
+    ClientModule,
+    VendorModule,
+    UsersModule,
     ApiUtilModule,
     AuthModule,
     CategoryModule,
@@ -56,6 +65,9 @@ import { AddressesModule } from './addresses/addresses.module';
     NotificationsModule,
     ReportsModule,
     AddressesModule,
+    EmployeesModule,
+    ShippingModule,
+    PayrollModule,
   ],
   controllers: [AppController],
   providers: [

@@ -7,6 +7,7 @@ import { AppModule } from './app/app.module';
 import { initApp } from './init';
 import { LoggerModule } from './logger/logger.module';
 
+// Bootstrap backend application
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: LoggerModule.createLogger(),
