@@ -401,7 +401,7 @@ export default function VendorManagement() {
                     <span className="text-slate-400 block mb-0.5">Chiết khấu sàn:</span>
                     <strong className="text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
                       <Percent className="w-3 h-3" />
-                      {selectedVendor.commissionRate || 5.0}% / đơn hoàn tất
+                      {selectedVendor.commissionRate || 8.0}% / đơn hoàn tất
                     </strong>
                   </div>
 

@@ -97,14 +97,17 @@ export class AuthService {
   }
 
   private async registerVendor(signUpDto: SignUpDto) {
-    const { email, password, ...otherInformation } = signUpDto;
+    const { email, password, address: _addr, ...otherInformation } = signUpDto;
     const existingVendor = await this.vendorsService.getVendorByEmail(email);
     if (existingVendor) {
       throw new BadRequestException('Email đã được sử dụng');
     }
     const passwordHashed = await this.stringUtilService.hash(password);
+    const storeName = (otherInformation as any).storeName || otherInformation.fullName;
     const userCreated = await this.vendorsService.createVendor({
       ...otherInformation,
+      storeName,
+      commissionRate: 8.0,
       email,
       password: passwordHashed,
     } as any);

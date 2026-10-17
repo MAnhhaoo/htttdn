@@ -80,6 +80,7 @@ export class UsersService {
       return {
         list: list.map((v) => ({
           ...v,
+          userCode: `VND-${v.id.slice(0, 8).toUpperCase()}`,
           vendorCode: `VND-${v.id.slice(0, 8).toUpperCase()}`,
           storeCode: `VND-${v.id.slice(0, 8).toUpperCase()}`,
           role: 'vendor',
@@ -127,7 +128,12 @@ export class UsersService {
       ]);
 
       return {
-        list: list.map((a) => ({ ...a, role: 'admin', address: '' })),
+        list: list.map((a) => ({
+          ...a,
+          userCode: `ADM-${a.id.slice(0, 8).toUpperCase()}`,
+          role: 'admin',
+          address: '',
+        })),
         page,
         itemPerPage,
         totalItems,
@@ -175,7 +181,11 @@ export class UsersService {
       ]);
 
       return {
-        list: list.map((e) => ({ ...e, role: 'employee' })),
+        list: list.map((e) => ({
+          ...e,
+          userCode: e.employeeCode || `EMP-${e.id.slice(0, 8).toUpperCase()}`,
+          role: 'employee',
+        })),
         page,
         itemPerPage,
         totalItems,
@@ -248,6 +258,8 @@ export class UsersService {
 
         return {
           id: c.id,
+          userCode: `CUS-${c.id.slice(0, 8).toUpperCase()}`,
+          clientCode: `CUS-${c.id.slice(0, 8).toUpperCase()}`,
           fullName: c.fullName,
           email: c.email,
           phone: c.phone,
@@ -310,6 +322,8 @@ export class UsersService {
         : '';
       return {
         id: client.id,
+        userCode: `CUS-${client.id.slice(0, 8).toUpperCase()}`,
+        clientCode: `CUS-${client.id.slice(0, 8).toUpperCase()}`,
         fullName: client.fullName,
         email: client.email,
         phone: client.phone,
@@ -341,6 +355,8 @@ export class UsersService {
     if (vendor) {
       return {
         ...vendor,
+        userCode: `VND-${vendor.id.slice(0, 8).toUpperCase()}`,
+        vendorCode: `VND-${vendor.id.slice(0, 8).toUpperCase()}`,
         address: vendor.storeName || '',
         role: 'vendor',
       };
@@ -358,7 +374,13 @@ export class UsersService {
         createdAt: true,
       },
     });
-    if (admin) return { ...admin, address: '', role: 'admin' };
+    if (admin)
+      return {
+        ...admin,
+        userCode: `ADM-${admin.id.slice(0, 8).toUpperCase()}`,
+        address: '',
+        role: 'admin',
+      };
 
     const employee = await this.prisma.employee.findUnique({
       where: { id },
@@ -377,7 +399,12 @@ export class UsersService {
         createdAt: true,
       },
     });
-    if (employee) return { ...employee, role: 'employee' };
+    if (employee)
+      return {
+        ...employee,
+        userCode: employee.employeeCode || `EMP-${employee.id.slice(0, 8).toUpperCase()}`,
+        role: 'employee',
+      };
 
     throw new NotFoundException('Người dùng không tồn tại');
   }

@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 
 
 import { User } from 'src/common/decorators/user.decorator';
@@ -11,6 +11,23 @@ import { ReportsService } from './reports.service';
 @Controller()
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
+
+  @Get('admin/reports/finance-config')
+  @Roles('admin')
+  getFinanceConfig() {
+    return {
+      current: this.reportsService.getCurrentFinanceConfig(),
+      history: this.reportsService.getFinanceConfigHistory(),
+    };
+  }
+
+  @Post('admin/reports/finance-config')
+  @Roles('admin')
+  updateFinanceConfig(
+    @Body() dto: { commissionTaxRate: number; vendorRegistrationFee: number; note?: string },
+  ) {
+    return this.reportsService.saveNewFinanceConfig(dto);
+  }
 
   @Get('admin/reports/analytics')
   @Roles('admin')

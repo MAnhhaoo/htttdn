@@ -9,11 +9,36 @@ import {
   Send, 
   ShieldAlert, 
   Search,
-  Eye
+  Eye,
+  Check
 } from 'lucide-react';
+import { ordersApi } from '../../api/axiosClient';
 
 export const VendorTrackingPage = ({ orders, onOpenDetail, onOpenException }) => {
   const [searchVendor, setSearchVendor] = useState('');
+  const [urgingOrderId, setUrgingOrderId] = useState(null);
+  const [urgedSuccessMap, setUrgedSuccessMap] = useState({});
+
+  const handleUrgeVendor = async (order) => {
+    try {
+      setUrgingOrderId(order.id);
+      const vendorName = order.assignedVendor?.name || 'Đối tác';
+      await ordersApi.updateStatus(order.id, {
+        status: order.status,
+        note: `[Đốc thúc xuất kho] Nhân viên yêu cầu kho ${vendorName} ưu tiên xuất kiện hàng ngay!`,
+        notifyTarget: 'vendor',
+        title: `[Khẩn cấp] Đốc thúc xuất kho đơn #${order.orderCode || order.id.slice(0, 8)}`,
+      });
+      setUrgedSuccessMap((prev) => ({ ...prev, [order.id]: true }));
+      setTimeout(() => {
+        setUrgedSuccessMap((prev) => ({ ...prev, [order.id]: false }));
+      }, 4000);
+    } catch (err) {
+      alert(`Lỗi gửi đốc thúc Vendor: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setUrgingOrderId(null);
+    }
+  };
 
   // Orders that are currently managed by Vendor
   const vendorOrders = orders.filter(
@@ -171,11 +196,25 @@ export const VendorTrackingPage = ({ orders, onOpenDetail, onOpenException }) =>
               {/* Action Toolbar */}
               <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                 <button
-                  onClick={() => alert(`Đã gửi thông báo đốc thúc ưu tiên đến kho ${order.assignedVendor?.name}!`)}
-                  className="px-3 py-1.5 font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition flex items-center space-x-1"
+                  onClick={() => handleUrgeVendor(order)}
+                  disabled={urgingOrderId === order.id}
+                  className={`px-3 py-1.5 font-semibold rounded-lg transition flex items-center space-x-1 ${
+                    urgedSuccessMap[order.id]
+                      ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                      : 'text-blue-700 bg-blue-50 hover:bg-blue-100'
+                  }`}
                 >
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>Đốc thúc kho xuất hàng</span>
+                  {urgedSuccessMap[order.id] ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Đã báo thông báo đến Shop!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Phone className="w-3.5 h-3.5" />
+                      <span>{urgingOrderId === order.id ? 'Đang gửi...' : 'Đốc thúc kho xuất hàng'}</span>
+                    </>
+                  )}
                 </button>
 
                 <button

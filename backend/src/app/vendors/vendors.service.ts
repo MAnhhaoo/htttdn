@@ -169,8 +169,9 @@ export class VendorsService
   }
 
   async createVendor(createVendorDto: CreateVendorDto) {
+    const { address, ...vendorData } = createVendorDto as any;
     return this.extended.create({
-      data: createVendorDto});
+      data: vendorData});
   }
 
   async getVendorByEmail(email: string) {
@@ -196,9 +197,10 @@ export class VendorsService
     data: UpdateVendorDto;
   }) {
     const { where, data: dataUpdate } = params;
+    const { address, ...vendorData } = dataUpdate as any;
 
     const data = await this.extended.update({
-      data: dataUpdate,
+      data: vendorData,
       where,
       omit: { password: true }});
 
@@ -409,7 +411,7 @@ export class VendorsService
     const plan = data?.plan || vendor.renewalPlan || vendor.subscriptionPlan || '1_year';
     const years = plan === '2_years' ? 2 : 1;
     const fee = plan === '2_years' ? 2000000 : 1200000;
-    const commissionRate = data?.commissionRate !== undefined ? data.commissionRate : (vendor.commissionRate || 5.00);
+    const commissionRate = data?.commissionRate !== undefined ? data.commissionRate : (vendor.commissionRate || 8.00);
 
     let newExpiresAt: Date;
     if (vendor.renewalRequested && vendor.subscriptionExpiresAt && vendor.subscriptionExpiresAt > now) {

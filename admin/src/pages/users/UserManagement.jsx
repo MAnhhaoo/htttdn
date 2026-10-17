@@ -163,6 +163,7 @@ export default function UserManagement() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Mã người dùng</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">User</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Email</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Role</th>
@@ -172,8 +173,15 @@ export default function UserManagement() {
                 </tr>
               </thead>
               <tbody>
-                {users.map(user => (
+                {users.map(user => {
+                  const code = user.userCode || (user.role === 'vendor' ? `VND-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'admin' ? `ADM-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'employee' ? (user.employeeCode || `EMP-${user.id.slice(0, 8).toUpperCase()}`) : `CUS-${user.id.slice(0, 8).toUpperCase()}`);
+                  return (
                   <tr key={user.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-xs font-bold px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">
+                        {code}
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center">
                         <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-600 dark:text-slate-400 mr-3">
@@ -202,7 +210,8 @@ export default function UserManagement() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

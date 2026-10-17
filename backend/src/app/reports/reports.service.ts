@@ -1,14 +1,111 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus, Prisma} from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
 
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { CustomerReportQueryDto } from './dto/customer-report.dto';
 import { AnalyticsReportQueryDto } from './dto/analytics-report.dto';
 
+export interface FinanceConfigTier {
+  id: string;
+  effectiveFrom: string;
+  commissionTaxRate: number;
+  vendorRegistrationFee: number;
+  note?: string;
+}
+
 @Injectable()
 export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private getFinanceConfigFile(): string {
+    return path.join(process.cwd(), 'data', 'finance-config.json');
+  }
+
+  getFinanceConfigHistory(): FinanceConfigTier[] {
+    try {
+      const filePath = this.getFinanceConfigFile();
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed?.history) && parsed.history.length > 0) {
+          return parsed.history.sort(
+            (a: FinanceConfigTier, b: FinanceConfigTier) =>
+              new Date(a.effectiveFrom).getTime() - new Date(b.effectiveFrom).getTime(),
+          );
+        }
+      }
+    } catch (e) {
+      console.error('Error reading finance config history:', e);
+    }
+    return [
+      {
+        id: 'init-config-2020',
+        effectiveFrom: '2020-01-01T00:00:00.000Z',
+        commissionTaxRate: 8,
+        vendorRegistrationFee: 2000000,
+        note: 'Cấu hình tài chính khởi tạo ban đầu (8% thuế sàn, 2tr phí đăng ký vendor)',
+      },
+    ];
+  }
+
+  getCurrentFinanceConfig(): FinanceConfigTier {
+    const history = this.getFinanceConfigHistory();
+    return history[history.length - 1];
+  }
+
+  getFinanceTierForDate(date: Date | string, history: FinanceConfigTier[]): FinanceConfigTier {
+    const targetTime = new Date(date).getTime();
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (new Date(history[i].effectiveFrom).getTime() <= targetTime) {
+        return history[i];
+      }
+    }
+    return history[0];
+  }
+
+  saveNewFinanceConfig(dto: {
+    commissionTaxRate: number;
+    vendorRegistrationFee: number;
+    note?: string;
+  }): { current: FinanceConfigTier; history: FinanceConfigTier[] } {
+    const history = this.getFinanceConfigHistory();
+    const current = history[history.length - 1];
+
+    const newTier: FinanceConfigTier = {
+      id: `config-${Date.now()}`,
+      effectiveFrom: new Date().toISOString(),
+      commissionTaxRate: Math.max(
+        0,
+        Math.min(100, Number(dto.commissionTaxRate) || current.commissionTaxRate),
+      ),
+      vendorRegistrationFee: Math.max(
+        0,
+        Number(dto.vendorRegistrationFee) || current.vendorRegistrationFee,
+      ),
+      note:
+        dto.note ||
+        `Điều chỉnh cấu hình mới: Thuế sàn ${dto.commissionTaxRate}%, Phí đăng ký vendor ${dto.vendorRegistrationFee}đ`,
+    };
+
+    history.push(newTier);
+    const dir = path.dirname(this.getFinanceConfigFile());
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(
+      this.getFinanceConfigFile(),
+      JSON.stringify({ history }, null, 2),
+      'utf-8',
+    );
+
+    return {
+      current: newTier,
+      history,
+    };
+  }
 
   async customerReport(user: UserInfo, query: CustomerReportQueryDto) {
     const vendorId = user.role === 'vendor' ? user.userID : undefined;
@@ -139,8 +236,10 @@ export class ReportsService {
   }
 
   async analyticsOverview(query: AnalyticsReportQueryDto) {
-    const feePerVendor = Number(query.vendorRegistrationFee) || 2000000;
-    const taxRatePercent = Number(query.commissionTaxRate) || 8;
+    const financeHistory = this.getFinanceConfigHistory();
+    const currentTier = financeHistory[financeHistory.length - 1];
+    const feePerVendor = query.vendorRegistrationFee ? Number(query.vendorRegistrationFee) : currentTier.vendorRegistrationFee;
+    const taxRatePercent = query.commissionTaxRate ? Number(query.commissionTaxRate) : currentTier.commissionTaxRate;
 
     const orderDateRange = await this.prisma.order.aggregate({
       _min: { createdAt: true },
@@ -402,6 +501,7 @@ export class ReportsService {
 
     let totalGmv = 0;
     let totalCashIn = 0;
+    let orderTaxRevenueTotal = 0;
     let completedOrdersCount = 0;
     let cancelledOrdersCount = 0;
     const bucketMap = new Map(chartBuckets.map((b) => [b.key, b]));
@@ -414,6 +514,7 @@ export class ReportsService {
         sales: number;
         orderCount: Set<string>;
         itemsSold: number;
+        tax: number;
       }
     >();
     const productMap = new Map<
@@ -464,7 +565,13 @@ export class ReportsService {
       if (order.status === OrderStatus.completed) {
         completedOrdersCount++;
         totalGmv += orderAmount;
-        const tax = Math.round((orderAmount * taxRatePercent) / 100);
+
+        // Apply tax rate effective at order creation time
+        const effectiveTier = this.getFinanceTierForDate(order.createdAt, financeHistory);
+        const effectiveTaxRate = effectiveTier.commissionTaxRate;
+        const tax = Math.round((orderAmount * effectiveTaxRate) / 100);
+        orderTaxRevenueTotal += tax;
+
         if (bucket) {
           bucket.completedOrders += 1;
           bucket.gmv += orderAmount;
@@ -497,10 +604,13 @@ export class ReportsService {
                 sales: 0,
                 orderCount: new Set(),
                 itemsSold: 0,
+                tax: 0,
               };
-              vItem.sales += Number(detail.price || 0) * (detail.quantity || 1);
+              const itemRevenue = Number(detail.price || 0) * (detail.quantity || 1);
+              vItem.sales += itemRevenue;
               vItem.orderCount.add(order.id);
               vItem.itemsSold += detail.quantity || 1;
+              vItem.tax += Math.round((itemRevenue * effectiveTaxRate) / 100);
               vendorMap.set(vId, vItem);
             }
           }
@@ -514,9 +624,33 @@ export class ReportsService {
     }
 
     const isAllTime = period === 'all';
-    const vendorFeeRevenue =
-      (isAllTime ? activeVendorsCount : newVendorsInPeriod) * feePerVendor;
-    const orderTaxRevenue = Math.round((totalGmv * taxRatePercent) / 100);
+    const periodVendors = await this.prisma.vendor.findMany({
+      where: {
+        deletedAt: null,
+        ...(isAllTime ? {} : { createdAt: { gte: startDate, lte: endDate } }),
+      },
+      select: { id: true, createdAt: true, subscriptionFee: true },
+    });
+
+    let vendorFeeRevenue = 0;
+    for (const v of periodVendors) {
+      const vTier = this.getFinanceTierForDate(v.createdAt, financeHistory);
+      const fee = Number(v.subscriptionFee) || vTier.vendorRegistrationFee;
+      vendorFeeRevenue += fee;
+    }
+
+    const allVendors = await this.prisma.vendor.findMany({
+      where: { deletedAt: null },
+      select: { id: true, createdAt: true, subscriptionFee: true },
+    });
+    let allTimeVendorFeeRevenue = 0;
+    for (const v of allVendors) {
+      const vTier = this.getFinanceTierForDate(v.createdAt, financeHistory);
+      const fee = Number(v.subscriptionFee) || vTier.vendorRegistrationFee;
+      allTimeVendorFeeRevenue += fee;
+    }
+
+    const orderTaxRevenue = orderTaxRevenueTotal;
     const totalAdminRevenue = vendorFeeRevenue + orderTaxRevenue;
     const vendorNetRevenue = totalGmv - orderTaxRevenue;
 
@@ -527,8 +661,8 @@ export class ReportsService {
         sales: v.sales,
         orderCount: v.orderCount.size,
         itemsSold: v.itemsSold,
-        tax: Math.round((v.sales * taxRatePercent) / 100),
-        netEarnings: v.sales - Math.round((v.sales * taxRatePercent) / 100),
+        tax: v.tax,
+        netEarnings: v.sales - v.tax,
       }))
       .sort((a, b) => b.sales - a.sales)
       .slice(0, 5);
@@ -548,13 +682,14 @@ export class ReportsService {
       financeConfig: {
         vendorRegistrationFee: feePerVendor,
         commissionTaxRate: taxRatePercent,
+        history: financeHistory,
       },
       summary: {
         totalGmv,
         totalCashIn,
         totalAdminRevenue,
         vendorFeeRevenue,
-        allTimeVendorFeeRevenue: activeVendorsCount * feePerVendor,
+        allTimeVendorFeeRevenue,
         newVendorsInPeriod,
         orderTaxRevenue,
         vendorNetRevenue,

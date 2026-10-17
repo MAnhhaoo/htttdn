@@ -34,9 +34,13 @@ export const useAuth = () => {
   const registerMutation = useMutation({
     mutationFn: (data) => authService.register(data),
     onSuccess: async () => {
-      const userData = await authService.getProfile();
-      dispatch(setCredentials(userData));
-      navigate('/');
+      try {
+        const userData = await authService.getProfile();
+        dispatch(setCredentials(userData));
+        navigate('/');
+      } catch {
+        navigate('/login');
+      }
     }
   });
 

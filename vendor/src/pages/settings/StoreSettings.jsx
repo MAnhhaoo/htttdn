@@ -163,7 +163,7 @@ export default function StoreSettings() {
             </h2>
 
             <p className="text-slate-300 text-sm max-w-2xl leading-relaxed">
-              Theo quy định nền tảng, đối tác đóng phí đăng ký theo gói thời hạn (1 năm / 2 năm). Sau khi đơn hàng giao thành công, sàn áp dụng mức chiết khấu cố định <strong>{subscription?.commissionRate || 5}%</strong> trên giá trị đơn.
+              Theo quy định nền tảng, đối tác đóng phí đăng ký theo gói thời hạn (1 năm / 2 năm). Sau khi đơn hàng giao thành công, sàn áp dụng mức chiết khấu cố định <strong>{subscription?.commissionRate || 8}%</strong> trên giá trị đơn.
             </p>
           </div>
 
@@ -210,7 +210,7 @@ export default function StoreSettings() {
               <Percent className="w-3.5 h-3.5 text-indigo-400" /> Chiết khấu hoa hồng
             </div>
             <div className="text-sm font-semibold text-emerald-400">
-              {subscription?.commissionRate ? `${subscription.commissionRate}%` : '5.00%'}
+              {subscription?.commissionRate ? `${subscription.commissionRate}%` : '8.00%'}
               <span className="text-[11px] text-slate-400 font-normal ml-1">/ đơn hoàn tất</span>
             </div>
           </div>
@@ -354,7 +354,7 @@ export default function StoreSettings() {
                   3. Chiết khấu đơn hàng thành công
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Khi đơn hàng được giao thành công tới người mua, hệ thống sẽ tự động trích <strong>{subscription?.commissionRate || 5}%</strong> hoa hồng dịch vụ sàn MIVA.
+                  Khi đơn hàng được giao thành công tới người mua, hệ thống sẽ tự động trích <strong>{subscription?.commissionRate || 8}%</strong> hoa hồng dịch vụ sàn MIVA.
                 </p>
               </div>
             </div>

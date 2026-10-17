@@ -47,6 +47,18 @@ const SignUpSchema = z
       .max(500, 'Địa chỉ không được vượt quá 500 ký tự')
       .nullable()
       .optional(),
+    storeName: z
+      .string({ error: 'Tên cửa hàng phải là chuỗi' })
+      .trim()
+      .max(255, 'Tên cửa hàng không được vượt quá 255 ký tự')
+      .nullable()
+      .optional(),
+    taxId: z
+      .string({ error: 'Mã số thuế phải là chuỗi' })
+      .trim()
+      .max(100, 'Mã số thuế không được vượt quá 100 ký tự')
+      .nullable()
+      .optional(),
   })
   .strict();
 

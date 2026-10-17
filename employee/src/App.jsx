@@ -215,27 +215,39 @@ const AppContent = () => {
     }
   };
 
-  // 4. Resolve Exception within Scope (Real DB Audit Note)
+  // 4. Resolve Exception within Scope (Real DB Audit Note & Notify Vendor)
   const handleResolveException = async (orderId, resolveData) => {
     try {
       const targetOrder = orders.find((o) => o.id === orderId);
       if (!targetOrder) return;
       const note = `[Xử lý sự cố trong thẩm quyền] Loại: ${resolveData.type}. Kết quả: ${resolveData.note}`;
-      await ordersApi.updateStatus(orderId, { status: targetOrder.status, note });
+      await ordersApi.updateStatus(orderId, {
+        status: targetOrder.status,
+        note,
+        notifyTarget: 'vendor',
+        title: `[Xử lý sự cố] Đơn hàng #${targetOrder.orderCode || targetOrder.id.slice(0, 8)}`,
+      });
       await fetchRealOrders();
+      alert('Đã cập nhật xử lý sự cố & gửi thông báo thành công đến Vendor đối tác!');
     } catch (err) {
       alert(`Lỗi cập nhật sự cố: ${err.response?.data?.message || err.message}`);
     }
   };
 
-  // 5. Escalate Exception to Admin (Real DB Audit Note)
+  // 5. Escalate Exception to Admin (Real DB Audit Note & Notify Admin)
   const handleEscalateException = async (orderId, escalateData) => {
     try {
       const targetOrder = orders.find((o) => o.id === orderId);
       if (!targetOrder) return;
       const note = `[Chuyển tiếp Admin xử lý] Ưu tiên: ${escalateData.priority}. Lý do: ${escalateData.reason}. Nội dung: ${escalateData.note}`;
-      await ordersApi.updateStatus(orderId, { status: targetOrder.status, note });
+      await ordersApi.updateStatus(orderId, {
+        status: targetOrder.status,
+        note,
+        notifyTarget: 'admin',
+        title: `[Báo cáo sự cố] Đơn hàng #${targetOrder.orderCode || targetOrder.id.slice(0, 8)}`,
+      });
       await fetchRealOrders();
+      alert('Đã chuyển tiếp báo cáo sự cố & gửi thông báo thành công đến Ban Quản Trị (Admin)!');
     } catch (err) {
       alert(`Lỗi chuyển tiếp sự cố: ${err.response?.data?.message || err.message}`);
     }

@@ -43,7 +43,7 @@ export default function VendorRegistrationManagement() {
 
   // Approve Form State
   const [approvePlan, setApprovePlan] = useState('1_year');
-  const [approveCommission, setApproveCommission] = useState(5.0);
+  const [approveCommission, setApproveCommission] = useState(8.0);
   const [approveNote, setApproveNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -81,7 +81,7 @@ export default function VendorRegistrationManagement() {
   const openApproveModal = (vendor) => {
     setSelectedVendor(vendor);
     setApprovePlan(vendor.renewalPlan || vendor.subscriptionPlan || '1_year');
-    setApproveCommission(vendor.commissionRate || 5.0);
+    setApproveCommission(vendor.commissionRate || 8.0);
     setApproveNote('');
     setApproveModalOpen(true);
   };
@@ -350,7 +350,7 @@ export default function VendorRegistrationManagement() {
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
                           <Percent className="w-3.5 h-3.5" />
-                          {vendor.commissionRate ? `${vendor.commissionRate}%` : '5.00%'}
+                          {vendor.commissionRate ? `${vendor.commissionRate}%` : '8.00%'}
                         </div>
                         <div className="text-[11px] text-slate-400">/ đơn giao thành công</div>
                       </td>
@@ -603,7 +603,7 @@ export default function VendorRegistrationManagement() {
                     {selectedVendor.subscriptionPlan === '2_years' ? 'Gói 2 Năm' : 'Gói 1 Năm'}
                   </span>
                   <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium">
-                    Hoa hồng sàn: {selectedVendor.commissionRate || 5}%
+                    Hoa hồng sàn: {selectedVendor.commissionRate || 8}%
                   </span>
                 </div>
               </div>

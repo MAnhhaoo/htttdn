@@ -103,26 +103,51 @@ export default function Analytics() {
   }, [period, selectedYear, selectedMonth, selectedQuarter, startDate, endDate, financeConfig]);
 
   useEffect(() => {
+    reportsApi.getFinanceConfig()
+      .then((res) => {
+        if (res.data?.current) {
+          setFinanceConfig({
+            vendorRegistrationFee: res.data.current.vendorRegistrationFee,
+            commissionTaxRate: res.data.current.commissionTaxRate,
+          });
+        }
+      })
+      .catch((err) => console.error('Error fetching finance config:', err));
+  }, []);
+
+  useEffect(() => {
     fetchAnalytics();
   }, [fetchAnalytics]);
 
   // Lưu cấu hình phí & thuế
-  const handleSaveConfig = () => {
+  const handleSaveConfig = async () => {
     const newConfig = {
       vendorRegistrationFee: Math.max(0, Number(tempFee) || 0),
       commissionTaxRate: Math.max(0, Math.min(100, Number(tempRate) || 0)),
+      note: `Cập nhật từ Quản trị viên: Thuế sàn ${tempRate}%, Phí đăng ký ${tempFee}đ`,
     };
-    setFinanceConfig(newConfig);
     try {
+      await reportsApi.updateFinanceConfig(newConfig);
+      setFinanceConfig(newConfig);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
-    } catch (e) {
-      console.error(e);
+      setConfigSuccessMsg('Đã lưu cấu hình mới! Hệ thống tính theo mốc thời gian cho đơn hàng và đối tác tiếp theo.');
+      setTimeout(() => {
+        setConfigSuccessMsg('');
+        setIsConfigOpen(false);
+        fetchAnalytics();
+      }, 1200);
+    } catch (err) {
+      console.error('Lỗi lưu cấu hình:', err);
+      // Fallback local update
+      setFinanceConfig(newConfig);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
+      setConfigSuccessMsg('Đã lưu cấu hình cục bộ!');
+      setTimeout(() => {
+        setConfigSuccessMsg('');
+        setIsConfigOpen(false);
+        fetchAnalytics();
+      }, 1000);
     }
-    setConfigSuccessMsg('Đã cập nhật cấu hình phí & thuế thành công!');
-    setTimeout(() => {
-      setConfigSuccessMsg('');
-      setIsConfigOpen(false);
-    }, 1000);
   };
 
   const handleResetDefault = () => {
@@ -815,6 +840,16 @@ export default function Analytics() {
             </p>
             <p>
               <strong>Doanh thu Admin</strong> = (Số Vendor × Phí Đăng Ký) + (Tổng GMV Đơn Thành Công × % Thuế Sàn)
+            </p>
+          </div>
+
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-900 dark:text-amber-200 space-y-1">
+            <p className="font-semibold flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              Quy tắc tính lũy tiến (Timeline Logic):
+            </p>
+            <p>
+              Khi điều chỉnh mức phí hoặc thuế sàn, hệ thống <strong>chỉ áp dụng cho các đơn hàng và đối tác mới phát sinh từ thời điểm này trở đi</strong>. Doanh thu và thuế của các đơn hàng trong quá khứ được bảo lưu và giữ nguyên hoàn toàn.
             </p>
           </div>
 

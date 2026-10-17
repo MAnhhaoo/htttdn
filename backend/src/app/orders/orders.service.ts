@@ -12,7 +12,8 @@ import {
   ShipmentStatus,
   SurveyResponseStatus,
   SurveyTriggerType,
-  VendorOrderStatus} from '@prisma/client';
+  VendorOrderStatus,
+  VoucherScope} from '@prisma/client';
 
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -139,148 +140,282 @@ export class OrdersService {
         async (tx) => {
           const cart = await tx.cart.findUnique({
             where: { clientId },
-            include: { items: true }});
-          if (!cart?.items.length)
+            include: {
+              items: {
+                include: {
+                  productVariant: {
+                    include: {
+                      productColor: {
+                        include: {
+                          product: {
+                            include: {
+                              vendor: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+          if (!cart?.items.length) {
             throw new BadRequestException('Giỏ hàng đang trống');
+          }
 
-          const calculated = await this.vouchersService.calculate(
-            dto.voucherCodes,
-            clientId,
-            cart.items.map((item) => ({
-              productVariantId: item.productVariantId,
-              quantity: item.quantity})),
-            tx,
-          );
+          // 1. Determine target items to checkout
+          let targetItems = cart.items;
+          if (dto.cartItemIds && dto.cartItemIds.length > 0) {
+            targetItems = targetItems.filter((i) => dto.cartItemIds!.includes(i.id));
+          } else if (dto.vendorId) {
+            targetItems = targetItems.filter(
+              (i) => i.productVariant?.productColor?.product?.vendorId === dto.vendorId,
+            );
+          }
 
-          const order = await tx.order.create({
-            data: {
+          if (!targetItems.length) {
+            throw new BadRequestException('Không tìm thấy sản phẩm hợp lệ để đặt hàng');
+          }
+
+          // 2. Multi-Vendor Order Splitting: Group items by Vendor
+          // Mỗi đơn hàng chỉ thuộc về 1 vendor duy nhất để vendor tự đóng gói và giao hàng
+          const vendorGroups = new Map<string, typeof targetItems>();
+          for (const item of targetItems) {
+            const vId = item.productVariant?.productColor?.product?.vendorId || 'platform';
+            if (!vendorGroups.has(vId)) {
+              vendorGroups.set(vId, []);
+            }
+            vendorGroups.get(vId)!.push(item);
+          }
+
+          const createdOrders: any[] = [];
+          const allSurveyNotifications: any[] = [];
+          const now = new Date();
+          const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+          for (const [vId, vendorItems] of vendorGroups.entries()) {
+            // Filter applicable vouchers for this vendor (platform scope or vendor scope matching vId)
+            let applicableVoucherCodes: string[] = [];
+            if (dto.voucherCodes && dto.voucherCodes.length > 0) {
+              const matchingVouchers = await tx.voucher.findMany({
+                where: {
+                  code: { in: dto.voucherCodes },
+                  deletedAt: null,
+                  OR: [
+                    { scope: VoucherScope.platform },
+                    ...(vId !== 'platform' ? [{ scope: VoucherScope.vendor, vendorId: vId }] : []),
+                  ],
+                },
+                select: { code: true },
+              });
+              applicableVoucherCodes = matchingVouchers.map((v) => v.code);
+            }
+
+            const calculated = await this.vouchersService.calculate(
+              applicableVoucherCodes,
               clientId,
-              subtotalAmount: calculated.subtotalAmount,
-              discountAmount: calculated.discountAmount,
-              shippingFee: 0,
-              totalAmount: calculated.totalAmount,
-              receiverName: dto.receiverName,
-              receiverPhone: dto.receiverPhone,
-              shippingAddress: dto.shippingAddress,
-              notes: dto.notes}});
-
-          for (const item of calculated.items) {
-            const changed = await tx.productVariant.updateMany({
-              where: {
-                id: item.productVariantId,
-                deletedAt: null,
-                stock: { gte: item.quantity }},
-              data: { stock: { decrement: item.quantity } }});
-            if (!changed.count)
-              throw new ConflictException(
-                'Tồn kho vừa thay đổi, vui lòng thử lại',
-              );
-
-            await tx.orderDetail.create({
-              data: {
-                orderId: order.id,
+              vendorItems.map((item) => ({
                 productVariantId: item.productVariantId,
                 quantity: item.quantity,
-                price: item.variant.price,
-                productName: item.variant.productColor.product.name,
-                colorName: item.variant.productColor.color,
-                sizeName: item.variant.size,
-                imageUrl: item.variant.productColor.imageUrls[0]}});
-          }
+              })),
+              tx,
+            );
 
-          for (const application of calculated.applications) {
-            const reserved = await tx.voucher.updateMany({
-              where: {
-                id: application.voucherId,
-                usedQuantity: application.expectedUsedQuantity,
-                quantity: { gt: application.expectedUsedQuantity },
-                status: 'active'},
-              data: { usedQuantity: { increment: 1 } }});
-            if (!reserved.count)
-              throw new ConflictException('Voucher vừa hết lượt sử dụng');
-            await tx.voucherDetail.create({
+            // Create dedicated Order for this vendor
+            const order = await tx.order.create({
               data: {
-                voucherId: application.voucherId,
+                clientId,
+                subtotalAmount: calculated.subtotalAmount,
+                discountAmount: calculated.discountAmount,
+                shippingFee: 0,
+                totalAmount: calculated.totalAmount,
+                receiverName: dto.receiverName,
+                receiverPhone: dto.receiverPhone,
+                shippingAddress: dto.shippingAddress,
+                notes: dto.notes,
+              },
+            });
+
+            // Decrement variant stock & create OrderDetail records
+            for (const item of calculated.items) {
+              const changed = await tx.productVariant.updateMany({
+                where: {
+                  id: item.productVariantId,
+                  deletedAt: null,
+                  stock: { gte: item.quantity },
+                },
+                data: { stock: { decrement: item.quantity } },
+              });
+              if (!changed.count) {
+                throw new ConflictException(
+                  `Sản phẩm "${item.variant.productColor.product.name}" vừa thay đổi tồn kho, vui lòng thử lại`,
+                );
+              }
+
+              await tx.orderDetail.create({
+                data: {
+                  orderId: order.id,
+                  productVariantId: item.productVariantId,
+                  quantity: item.quantity,
+                  price: item.variant.price,
+                  productName: item.variant.productColor.product.name,
+                  colorName: item.variant.productColor.color,
+                  sizeName: item.variant.size,
+                  imageUrl: item.variant.productColor.imageUrls[0],
+                },
+              });
+            }
+
+            // Immediately create VendorOrder for this vendor
+            let vOrder: any = null;
+            if (vId !== 'platform') {
+              const randomCode = Math.floor(1000 + Math.random() * 9000);
+              vOrder = await tx.vendorOrder.create({
+                data: {
+                  orderId: order.id,
+                  vendorId: vId,
+                  vendorOrderCode: `VO-${yearMonth}-${randomCode}`,
+                  subtotalAmount: calculated.subtotalAmount,
+                  shippingFee: 0,
+                  totalAmount: calculated.totalAmount,
+                  status: VendorOrderStatus.pending,
+                  notes: 'Kiện hàng đóng gói riêng cho gian hàng đối tác',
+                },
+              });
+
+              await tx.orderDetail.updateMany({
+                where: { orderId: order.id },
+                data: { vendorOrderId: vOrder.id },
+              });
+            }
+
+            // Apply vouchers if any
+            for (const application of calculated.applications) {
+              const reserved = await tx.voucher.updateMany({
+                where: {
+                  id: application.voucherId,
+                  usedQuantity: application.expectedUsedQuantity,
+                  quantity: { gt: application.expectedUsedQuantity },
+                  status: 'active',
+                },
+                data: { usedQuantity: { increment: 1 } },
+              });
+              if (!reserved.count) {
+                throw new ConflictException('Voucher vừa hết lượt sử dụng');
+              }
+              await tx.voucherDetail.create({
+                data: {
+                  voucherId: application.voucherId,
+                  orderId: order.id,
+                  eligibleAmount: application.eligibleAmount,
+                  discountAmount: application.discountAmount,
+                  sequence: application.sequence,
+                },
+              });
+            }
+
+            // Create Payment for this order
+            await tx.payment.create({
+              data: {
                 orderId: order.id,
-                eligibleAmount: application.eligibleAmount,
-                discountAmount: application.discountAmount,
-                sequence: application.sequence}});
-          }
+                method: dto.paymentMethod,
+                amount: calculated.totalAmount,
+              },
+            });
 
-          await tx.payment.create({
-            data: {
-              orderId: order.id,
-              method: dto.paymentMethod,
-              amount: calculated.totalAmount}});
-          await tx.orderStatusHistory.create({
-            data: {
-              orderId: order.id,
-              clientId: clientId,
-              toStatus: OrderStatus.pending}});
-          await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+            // Create OrderStatusHistory record
+            await tx.orderStatusHistory.create({
+              data: {
+                orderId: order.id,
+                clientId: clientId,
+                toStatus: OrderStatus.pending,
+              },
+            });
 
-          // Hệ thống tự động phân công đơn hàng cho nhân viên ngay khi khách đặt hàng
-          const autoEmp = await this.findBestAvailableEmployee(tx);
-          if (autoEmp) {
-            const now = new Date();
-            const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+            // Automatic employee assignment & shipment creation for this order
+            const autoEmp = await this.findBestAvailableEmployee(tx);
             const tracking = `SHIP-${yearMonth}-${Math.floor(1000 + Math.random() * 9000)}`;
 
             const s = await tx.shipment.create({
               data: {
                 trackingNumber: tracking,
                 orderId: order.id,
-                carrierId: autoEmp.id,
+                vendorOrderId: vOrder ? vOrder.id : undefined,
+                carrierId: autoEmp ? autoEmp.id : null,
                 carrierType: 'employee',
-                status: ShipmentStatus.assigned,
+                status: autoEmp ? ShipmentStatus.assigned : ShipmentStatus.pending,
                 shippingAddress: order.shippingAddress,
                 receiverName: order.receiverName,
                 receiverPhone: order.receiverPhone,
-                notes: `Hệ thống tự động phân công cho nhân viên ${autoEmp.fullName} (${autoEmp.employeeCode})`,
+                notes: autoEmp
+                  ? `Hệ thống tự động phân công cho nhân viên ${autoEmp.fullName} (${autoEmp.employeeCode})`
+                  : 'Kiện hàng đã được điều phối và tạo vận đơn nội bộ',
               },
             });
 
-            await tx.shipmentEvent.create({
-              data: {
-                shipmentId: s.id,
-                status: ShipmentStatus.assigned,
-                location: 'Trung tâm điều phối MIVA Hub',
-                description: `Hệ thống tự động phân công xử lý cho nhân sự ${autoEmp.fullName} (${autoEmp.employeeCode})`,
-                actorRole: 'system',
-              },
+            if (autoEmp) {
+              await tx.shipmentEvent.create({
+                data: {
+                  shipmentId: s.id,
+                  status: ShipmentStatus.assigned,
+                  location: 'Trung tâm điều phối MIVA Hub',
+                  description: `Hệ thống tự động phân công xử lý cho nhân sự ${autoEmp.fullName} (${autoEmp.employeeCode})`,
+                  actorRole: 'system',
+                },
+              });
+
+              await tx.orderStatusHistory.create({
+                data: {
+                  orderId: order.id,
+                  employeeId: autoEmp.id,
+                  fromStatus: OrderStatus.pending,
+                  toStatus: OrderStatus.pending,
+                  note: `[Tự động phân công] Hệ thống tự động phân công đơn hàng cho nhân viên [${autoEmp.fullName} / ${autoEmp.employeeCode}] phụ trách xử lý`,
+                },
+              });
+            }
+
+            // Deliver survey notifications if applicable
+            const surveyNotifications = await this.surveysService.deliverForOrder(
+              tx,
+              order.id,
+              SurveyTriggerType.after_checkout,
+            );
+            allSurveyNotifications.push(...surveyNotifications);
+
+            const createdOrder = await tx.order.findUniqueOrThrow({
+              where: { id: order.id },
+              include: orderInclude,
             });
 
-            await tx.orderStatusHistory.create({
-              data: {
+            const surveyPrompts = await tx.surveyResponse.findMany({
+              where: {
                 orderId: order.id,
-                employeeId: autoEmp.id,
-                fromStatus: OrderStatus.pending,
-                toStatus: OrderStatus.pending,
-                note: `[Tự động phân công] Hệ thống tự động phân công đơn hàng cho nhân viên [${autoEmp.fullName} / ${autoEmp.employeeCode}] phụ trách xử lý`,
+                clientId,
+                status: SurveyResponseStatus.pending,
               },
+              select: surveyPromptSelect,
+              orderBy: { createdAt: 'asc' },
             });
+
+            createdOrders.push({ ...createdOrder, surveyPrompts });
           }
 
-          const surveyNotifications = await this.surveysService.deliverForOrder(
-            tx,
-            order.id,
-            SurveyTriggerType.after_checkout,
-          );
-
-          const createdOrder = await tx.order.findUniqueOrThrow({
-            where: { id: order.id },
-            include: orderInclude});
-          const surveyPrompts = await tx.surveyResponse.findMany({
+          // Delete only the checked out cart items
+          const checkedOutItemIds = targetItems.map((i) => i.id);
+          await tx.cartItem.deleteMany({
             where: {
-              orderId: order.id,
-              clientId,
-              status: SurveyResponseStatus.pending},
-            select: surveyPromptSelect,
-            orderBy: { createdAt: 'asc' }});
+              id: { in: checkedOutItemIds },
+            },
+          });
 
           return {
-            order: { ...createdOrder, surveyPrompts },
-            surveyNotifications};
+            orders: createdOrders,
+            order: createdOrders[0],
+            surveyNotifications: allSurveyNotifications,
+          };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       )
@@ -296,9 +431,17 @@ export class OrdersService {
         throw error;
       });
 
-    this.emitOrder(result.order, 'order:created');
+    for (const o of result.orders) {
+      this.emitOrder(o, 'order:created');
+    }
     this.surveysService.emitNotifications(result.surveyNotifications);
-    return result.order;
+
+    return {
+      ...result.order,
+      orders: result.orders,
+      orderIds: result.orders.map((o) => o.id),
+      totalOrders: result.orders.length,
+    };
   }
 
   listMine(clientId: string) {
@@ -903,6 +1046,91 @@ export class OrdersService {
       } else if (user.role === 'employee') {
         actorData.employeeId = user.userID;
         auditNote = auditNote ? `[Nhân viên] ${auditNote}` : '[Nhân viên xử lý]';
+
+        // Tạo thông báo thực tế cho Vendor và Admin khi nhân viên xử lý / báo cáo sự cố
+        const employee = await tx.employee.findUnique({
+          where: { id: user.userID },
+          select: { id: true, fullName: true, employeeCode: true },
+        });
+        const empName = employee
+          ? `${employee.fullName} (${employee.employeeCode || 'NV'})`
+          : 'Nhân viên điều phối';
+        const orderCodeStr = current.orderCode || current.id.slice(0, 8).toUpperCase();
+
+        const rawNote = dto.note || '';
+        const noteLower = rawNote.toLowerCase();
+
+        const shouldNotifyAdmin =
+          dto.notifyTarget === 'admin' ||
+          dto.notifyTarget === 'both' ||
+          (!dto.notifyTarget &&
+            (noteLower.includes('admin') ||
+              noteLower.includes('chuyển tiếp') ||
+              noteLower.includes('phê duyệt') ||
+              noteLower.includes('báo cáo sự cố')));
+
+        const shouldNotifyVendor =
+          dto.notifyTarget === 'vendor' ||
+          dto.notifyTarget === 'both' ||
+          (!dto.notifyTarget &&
+            (noteLower.includes('vendor') ||
+              noteLower.includes('kho') ||
+              noteLower.includes('đốc thúc') ||
+              noteLower.includes('xử lý sự cố') ||
+              noteLower.includes('sla')));
+
+        if (shouldNotifyAdmin) {
+          const admins = await tx.admin.findMany({
+            where: { status: 'active', deletedAt: null },
+            select: { id: true },
+          });
+          const adminTitle = dto.title || `[Báo cáo sự cố] Đơn hàng #${orderCodeStr}`;
+          for (const adm of admins) {
+            await tx.notification.create({
+              data: {
+                adminId: adm.id,
+                type: 'order_update',
+                title: adminTitle,
+                content: `Nhân viên ${empName} đã lập báo cáo sự cố / chuyển tiếp: ${rawNote}`,
+                data: {
+                  orderId: id,
+                  orderCode: orderCodeStr,
+                  employeeId: user.userID,
+                  employeeName: empName,
+                  type: 'employee_incident_report',
+                },
+              },
+            });
+          }
+        }
+
+        if (shouldNotifyVendor) {
+          const vendorIds: string[] = Array.from(
+            new Set(
+              current.details
+                .map((d: any) => d.productVariant?.productColor?.product?.vendorId)
+                .filter((id: any): id is string => Boolean(id)),
+            ),
+          );
+          const vendorTitle = dto.title || `[Thông báo sự cố đơn hàng] #${orderCodeStr}`;
+          for (const vId of vendorIds) {
+            await tx.notification.create({
+              data: {
+                vendorId: vId,
+                type: 'order_update',
+                title: vendorTitle,
+                content: `Nhân viên điều phối ${empName} gửi thông báo xử lý đơn hàng: ${rawNote}`,
+                data: {
+                  orderId: id,
+                  orderCode: orderCodeStr,
+                  employeeId: user.userID,
+                  employeeName: empName,
+                  type: 'employee_incident_action',
+                },
+              },
+            });
+          }
+        }
       }
 
       await tx.orderStatusHistory.create({

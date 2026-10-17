@@ -1,0 +1,11 @@
+{
+  "history": [
+    {
+      "id": "init-config-2020",
+      "effectiveFrom": "2020-01-01T00:00:00.000Z",
+      "commissionTaxRate": 8,
+      "vendorRegistrationFee": 2000000,
+      "note": "Cấu hình tài chính khởi tạo ban đầu (8% hoa hồng sàn, 2.000.000đ phí đăng ký vendor)"
+    }
+  ]
+}
