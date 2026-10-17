@@ -264,7 +264,7 @@ model Vendor {
   subscriptionPlan      String?    @default("1_year") @db.VarChar(50)
   subscriptionFee       Decimal?   @default(1200000) @db.Decimal(12, 2)
   subscriptionExpiresAt DateTime?  @db.Timestamp(6)
-  commissionRate        Decimal    @default(5.0) @db.Decimal(5, 2)
+  commissionRate        Decimal    @default(8.0) @db.Decimal(5, 2)
   approvalStatus        String     @default("approved") @db.VarChar(50)
   approvedAt            DateTime?
   approvedBy            String?    @db.VarChar(255)

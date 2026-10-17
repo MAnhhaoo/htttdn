@@ -19,7 +19,12 @@ export default function UserDetailModal({ isOpen, onClose, user }) {
           </div>
           <div>
             <h3 className="text-lg font-bold text-slate-800 dark:text-white">{user.fullName}</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 capitalize">{user.role}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="font-mono text-xs font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">
+                {user.userCode || (user.role === 'vendor' ? `VND-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'admin' ? `ADM-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'employee' ? (user.employeeCode || `EMP-${user.id.slice(0, 8).toUpperCase()}`) : `CUS-${user.id.slice(0, 8).toUpperCase()}`)}
+              </span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">• {user.role}</p>
+            </div>
           </div>
         </div>
 

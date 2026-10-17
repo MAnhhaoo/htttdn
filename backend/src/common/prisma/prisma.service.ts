@@ -32,27 +32,6 @@ export class PrismaService
     this.initExtended();
   }
 
-  private getCurrentUser(value) {
-    return (
-      value.user?.userEmail ??
-      value.user?.email ??
-      value.email ??
-      value.userEmail
-    );
-  }
-
-  private setCreatedBy(value: any): any {
-    const isArray = Array.isArray(value);
-    if (isArray) {
-      const result = value.map((value: Record<string, any>) => {
-        const user = this.getCurrentUser(value);
-        return { ...value, createdBy: user };
-      });
-      return result;
-    }
-    return { ...value, createdBy: this.getCurrentUser(value) };
-  }
-
   private omitData(value: any, excludeFields: string[] = []) {
     const isArray = Array.isArray(value);
     if (isArray) {
@@ -65,8 +44,7 @@ export class PrismaService
   }
 
   private transferDataCreate(value) {
-    const dataCreatedBy = this.setCreatedBy(value);
-    const data: any = this.omitData(dataCreatedBy, ['user', 'id']);
+    const data: any = this.omitData(value, ['user', 'id', 'createdBy']);
     return data;
   }
 

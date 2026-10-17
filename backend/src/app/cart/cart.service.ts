@@ -16,7 +16,25 @@ const cartInclude = {
           productColor: {
             include: {
               product: {
-                include: { category: true }}}}}}}}};
+                include: {
+                  category: true,
+                  vendor: {
+                    select: {
+                      id: true,
+                      fullName: true,
+                      storeName: true,
+                      avatarUrl: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
 
 @Injectable()
 export class CartService {

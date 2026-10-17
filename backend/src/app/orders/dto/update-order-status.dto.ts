@@ -5,7 +5,10 @@ import { z } from 'zod';
 export const UpdateOrderStatusSchema = z
   .object({
     status: z.enum(OrderStatus),
-    note: z.string().trim().max(1000).optional()})
+    note: z.string().trim().max(1000).optional(),
+    notifyTarget: z.enum(['vendor', 'admin', 'both', 'none']).optional(),
+    title: z.string().trim().max(255).optional(),
+  })
   .strict();
 
 export class UpdateOrderStatusDto extends createZodDto(

@@ -24,6 +24,7 @@ export default function VendorRegister() {
     try {
       await register({
         fullName: formData.storeName,
+        storeName: formData.storeName,
         email: formData.email,
         password: formData.password
       });

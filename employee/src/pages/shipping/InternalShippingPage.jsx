@@ -115,8 +115,10 @@ export const InternalShippingPage = () => {
       await ordersApi.updateStatus(escalateShipment.orderId, {
         status: escalateShipment.order?.status || 'shipping',
         note,
+        notifyTarget: 'admin',
+        title: `[Báo cáo sự cố bưu tá] Vận đơn #${escalateShipment.trackingNumber || escalateShipment.id}`,
       });
-      alert('Đã lập báo cáo sự cố & chuyển tiếp lên Admin phê duyệt hủy đơn thành công!');
+      alert('Đã lập báo cáo sự cố & gửi thông báo thành công đến Admin!');
       setEscalateShipment(null);
       fetchShipments();
     } catch (err) {

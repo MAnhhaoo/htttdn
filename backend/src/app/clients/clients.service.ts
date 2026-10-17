@@ -125,24 +125,74 @@ export class ClientsService
   async getClient(where: Prisma.ClientWhereUniqueInput) {
     const client = await this.extended.findUnique({
       where,
-      omit: { password: true }});
+      omit: { password: true },
+      include: {
+        addresses: {
+          where: { deletedAt: null },
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+        },
+      },
+    });
 
     if (!client) {
       throw new NotFoundException('Client not found');
     }
 
-    return client;
+    const { addresses, ...rest } = client as any;
+    return {
+      ...rest,
+      address: addresses?.[0]?.addressLine || null,
+    };
   }
 
   async createClient(createClientDto: CreateClientDto) {
-    return this.extended.create({
-      data: createClientDto});
+    const { address, ...clientData } = createClientDto as any;
+    const client = await this.extended.create({
+      data: clientData,
+    });
+
+    if (address && String(address).trim()) {
+      await this.prismaService.clientAddress.create({
+        data: {
+          clientId: client.id,
+          receiverName: client.fullName,
+          phone: client.phone || '',
+          addressLine: String(address).trim(),
+          isDefault: true,
+        },
+      }).catch((err) => {
+        console.error('Failed to create initial client address:', err);
+      });
+    }
+
+    return {
+      ...client,
+      address: address ? String(address).trim() : null,
+    };
   }
 
   async getClientByEmail(email: string) {
-    return this.extended.findUnique({
+    const client = await this.extended.findUnique({
       where: {
-        email}});
+        email,
+      },
+      include: {
+        addresses: {
+          where: { deletedAt: null },
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+        },
+      },
+    });
+
+    if (!client) return null;
+
+    const { addresses, ...rest } = client as any;
+    return {
+      ...rest,
+      address: addresses?.[0]?.addressLine || null,
+    };
   }
 
   async getstring(clientID: string) {
@@ -162,13 +212,38 @@ export class ClientsService
     data: UpdateClientDto;
   }) {
     const { where, data: dataUpdate } = params;
+    const { address, ...clientData } = dataUpdate as any;
 
     const data = await this.extended.update({
-      data: dataUpdate,
+      data: clientData,
       where,
       omit: { password: true }});
 
-    return data;
+    if (address !== undefined && where.id) {
+      if (address) {
+        const defaultAddr = await this.prismaService.clientAddress.findFirst({
+          where: { clientId: where.id, isDefault: true, deletedAt: null },
+        });
+        if (defaultAddr) {
+          await this.prismaService.clientAddress.update({
+            where: { id: defaultAddr.id },
+            data: { addressLine: address },
+          });
+        } else {
+          await this.prismaService.clientAddress.create({
+            data: {
+              clientId: where.id,
+              receiverName: data.fullName,
+              phone: data.phone || '',
+              addressLine: address,
+              isDefault: true,
+            },
+          });
+        }
+      }
+    }
+
+    return { ...data, address: address ?? null };
   }
 
   async deleteClient(where: Prisma.ClientWhereUniqueInput) {

@@ -26,8 +26,38 @@ export class AuthController {
    */
   @Post('sign-up')
   @SkipAuth()
-  signUp(@Body() signUpDto: SignUpDto) {
-    return this.authService.signUp(signUpDto);
+  async signUp(
+    @Body() signUpDto: SignUpDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const user = await this.authService.signUp(signUpDto);
+
+    try {
+      const result = await this.authService.signIn({
+        email: signUpDto.email,
+        password: signUpDto.password,
+      });
+
+      const appRole = request.headers['x-app-role'] as string;
+      const suffix = appRole ? `_${appRole}` : '';
+      const accessKey = `${TokenKeys.ACCESS_TOKEN_KEY}${suffix}`;
+      const refreshKey = `${TokenKeys.REFRESH_TOKEN_KEY}${suffix}`;
+
+      response.cookie(accessKey, result.data.accessToken, {
+        ...COOKIE_CONFIG_DEFAULT,
+        maxAge: ms(CookiesToken.ACCESS_TOKEN_EXPIRE_IN),
+      });
+
+      response.cookie(refreshKey, result.data.refreshToken, {
+        ...COOKIE_CONFIG_DEFAULT,
+        maxAge: ms(CookiesToken.REFRESH_TOKEN_EXPIRE_IN),
+      });
+    } catch {
+      // If auto-login fails, proceed with returning user
+    }
+
+    return user;
   }
 
   /**
@@ -35,8 +65,41 @@ export class AuthController {
    */
   @Post('sign-up/vendor')
   @SkipAuth()
-  signUpVendor(@Body() signUpDto: SignUpDto) {
-    return this.authService.signUpVendor(signUpDto);
+  async signUpVendor(
+    @Body() signUpDto: SignUpDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const user = await this.authService.signUpVendor(signUpDto);
+
+    try {
+      const result = await this.authService.signIn({
+        email: signUpDto.email,
+        password: signUpDto.password,
+      });
+
+      const appRole = (request.headers['x-app-role'] as string) || 'vendor';
+      const suffix = appRole ? `_${appRole}` : '';
+      const accessKey = `${TokenKeys.ACCESS_TOKEN_KEY}${suffix}`;
+      const refreshKey = `${TokenKeys.REFRESH_TOKEN_KEY}${suffix}`;
+
+      response.cookie(accessKey, result.data.accessToken, {
+        ...COOKIE_CONFIG_DEFAULT,
+        maxAge: ms(CookiesToken.ACCESS_TOKEN_EXPIRE_IN),
+      });
+
+      response.cookie(refreshKey, result.data.refreshToken, {
+        ...COOKIE_CONFIG_DEFAULT,
+        maxAge: ms(CookiesToken.REFRESH_TOKEN_EXPIRE_IN),
+      });
+    } catch {
+      // If auto-login fails, proceed with returning user
+    }
+
+    return {
+      message: 'Đăng ký gian hàng thành công',
+      user,
+    };
   }
 
   /**

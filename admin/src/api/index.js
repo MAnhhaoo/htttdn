@@ -94,6 +94,8 @@ export const reportsApi = {
   getAnalytics: (params = {}) => axiosClient.get('/admin/reports/analytics', { params }),
   getCustomerReport: (params = {}) => axiosClient.get('/admin/reports/customers', { params }),
   getCustomerAnalytics: (params = {}) => axiosClient.get('/admin/reports/customer-analytics', { params }),
+  getFinanceConfig: () => axiosClient.get('/admin/reports/finance-config'),
+  updateFinanceConfig: (data) => axiosClient.post('/admin/reports/finance-config', data),
 };
 
 // ==================== EMPLOYEES ====================
