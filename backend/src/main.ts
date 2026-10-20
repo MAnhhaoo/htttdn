@@ -15,7 +15,7 @@ async function bootstrap() {
 
   const {
     PORT = 3000,
-    HOST = 'localhost',
+    HOST = '0.0.0.0',
     APP_PREFIX = '/api',
     APP_NAME = 'nestjs_ecommerce',
     NODE_ENV = 'development',

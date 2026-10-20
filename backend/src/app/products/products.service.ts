@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException} from '@nestjs/common';
@@ -16,14 +17,28 @@ import { UpdateProductDto } from './dto/update-product.dto';
 
 const productRelations = {
   category: {
-    select: { id: true, name: true, slug: true }},
+    select: { id: true, name: true, slug: true },
+  },
+  vendor: {
+    select: {
+      id: true,
+      storeName: true,
+      fullName: true,
+      avatarUrl: true,
+      createdAt: true,
+    },
+  },
   colors: {
     where: { deletedAt: null },
     orderBy: { createdAt: 'asc' },
     include: {
       variants: {
         where: { deletedAt: null },
-        orderBy: { createdAt: 'asc' }}}}} satisfies Prisma.ProductInclude;
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  },
+} satisfies Prisma.ProductInclude;
 
 type ProductWithRelations = Prisma.ProductGetPayload<{
   include: typeof productRelations;
@@ -40,7 +55,7 @@ export class ProductService extends PrismaBaseService<'product'> {
     super(prismaService, 'product');
   }
 
-  async createProduct(createProductDto: CreateProductDto, vendorId: string) {
+  async createProduct(createProductDto: CreateProductDto, vendorId?: string) {
     const slug = this.stringUtilService.toSlug(createProductDto.name);
 
     const existingProduct = await this.extended.findUnique({
@@ -52,17 +67,45 @@ export class ProductService extends PrismaBaseService<'product'> {
       );
     }
 
+    const categoryConnect = createProductDto.category ?? (createProductDto.categoryId ? {
+      connect: { id: createProductDto.categoryId },
+    } : undefined);
+
+    if (!categoryConnect) {
+      throw new BadRequestException('Vui lòng chọn danh mục sản phẩm');
+    }
+
+    const hasColors = createProductDto.colors && createProductDto.colors.length > 0;
+
     return this.extended.create({
       data: {
         name: createProductDto.name,
         description: createProductDto.description,
         status: createProductDto.status,
-        category: createProductDto.category,
-        vendor: { connect: { id: vendorId } },
-        slug}});
+        category: categoryConnect,
+        ...(vendorId && { vendor: { connect: { id: vendorId } } }),
+        slug,
+        ...(hasColors && {
+          colors: {
+            create: createProductDto.colors!.map((c) => ({
+              color: c.color,
+              imageUrls: c.imageUrls || [],
+              variants: {
+                create: (c.variants || []).map((v) => ({
+                  size: v.size,
+                  price: v.price,
+                  stock: v.stock ?? 0,
+                })),
+              },
+            })),
+          },
+        }),
+      },
+      include: productRelations,
+    });
   }
   async getProducts(query: GetProductsPaginationDto) {
-    const { category, status, ...rest } = query as any;
+    const { category, status, vendorId, ...rest } = query as any;
     const isStatusAll = status === 'all';
     const isValidStatus = status && Object.values(ProductStatus).includes(status);
     const targetStatus = isStatusAll ? undefined : (isValidStatus ? status : (status ? undefined : ProductStatus.active));
@@ -80,16 +123,119 @@ export class ProductService extends PrismaBaseService<'product'> {
 
     return this.findProducts(rest, {
       ...(targetStatus ? { status: targetStatus } : {}),
+      ...(vendorId ? { vendorId } : {}),
       category: categoryCondition,
     });
+  }
+
+  async getBestSellingProducts(limit = 4) {
+    const topVariants = await this.prismaService.orderDetail.groupBy({
+      by: ['productVariantId'],
+      where: {
+        order: {
+          status: { not: 'cancelled' },
+        },
+      },
+      _sum: {
+        quantity: true,
+      },
+      orderBy: {
+        _sum: {
+          quantity: 'desc',
+        },
+      },
+    });
+
+    const variantIds = topVariants.map((tv) => tv.productVariantId);
+    const variants = await this.prismaService.productVariant.findMany({
+      where: { id: { in: variantIds } },
+      select: {
+        id: true,
+        productColor: {
+          select: {
+            productId: true,
+          },
+        },
+      },
+    });
+
+    const variantToProduct = new Map<string, string>();
+    for (const v of variants) {
+      if (v.productColor?.productId) {
+        variantToProduct.set(v.id, v.productColor.productId);
+      }
+    }
+
+    const productQuantityMap = new Map<string, number>();
+    for (const item of topVariants) {
+      const productId = variantToProduct.get(item.productVariantId);
+      if (productId) {
+        const current = productQuantityMap.get(productId) || 0;
+        productQuantityMap.set(productId, current + (item._sum.quantity || 0));
+      }
+    }
+
+    const sortedProductIds = Array.from(productQuantityMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([productId]) => productId);
+
+    const products = await this.extended.findMany({
+      where: {
+        id: { in: sortedProductIds.slice(0, limit * 2) },
+        deletedAt: null,
+        status: ProductStatus.active,
+        category: { deletedAt: null },
+      },
+      include: productRelations,
+    });
+
+    const productMap = new Map(products.map((p) => [p.id, p]));
+    const result: any[] = [];
+    for (const id of sortedProductIds) {
+      if (result.length >= limit) break;
+      const p = productMap.get(id);
+      if (p) {
+        const catalogProd = this.toCatalogProduct(p);
+        result.push({
+          ...catalogProd,
+          soldQuantity: productQuantityMap.get(id) || 0,
+        });
+      }
+    }
+
+    if (result.length < limit) {
+      const remainingCount = limit - result.length;
+      const existingIds = result.map((r) => r.id);
+      const fillerProducts = await this.extended.findMany({
+        where: {
+          id: { notIn: existingIds },
+          deletedAt: null,
+          status: ProductStatus.active,
+          category: { deletedAt: null },
+        },
+        take: remainingCount,
+        orderBy: { createdAt: 'desc' },
+        include: productRelations,
+      });
+      for (const p of fillerProducts) {
+        result.push({
+          ...this.toCatalogProduct(p),
+          soldQuantity: 0,
+        });
+      }
+    }
+
+    return result;
   }
 
   async getProductsByCategory(
     categorySlug: string,
     query: GetProductsPaginationDto,
   ) {
-    return this.findProducts(query, {
+    const { vendorId, ...rest } = query as any;
+    return this.findProducts(rest, {
       status: ProductStatus.active,
+      ...(vendorId ? { vendorId } : {}),
       category: { slug: categorySlug, deletedAt: null },
     });
   }
@@ -249,25 +395,107 @@ export class ProductService extends PrismaBaseService<'product'> {
       maxPrice: maxPrice?.toString() ?? null,
       totalStock: variants.reduce((total, variant) => total + variant.stock, 0)};
   }
-  async updateProduct(id: string, data: UpdateProductDto, vendorId: string) {
-    await this.getOwnedProduct(id, vendorId);
+  async updateProduct(
+    id: string,
+    data: UpdateProductDto,
+    vendorId?: string,
+    isAdmin = false,
+  ) {
+    if (!isAdmin) {
+      await this.getOwnedProduct(id, vendorId!);
+    } else {
+      const prod = await this.extended.findFirst({ where: { id } });
+      if (!prod) {
+        throw new NotFoundException('Sản phẩm không tồn tại');
+      }
+    }
 
-    return this.extended.update({
-      where: { id, vendorId, deletedAt: null },
+    const categoryConnect = data.category ?? (data.categoryId ? {
+      connect: { id: data.categoryId },
+    } : undefined);
+
+    const updated = await this.prismaService.product.update({
+      where: { id },
       data: {
-        name: data.name,
-        description: data.description,
-        status: data.status,
-        category: data.category}});
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.status !== undefined && { status: data.status }),
+        ...(categoryConnect !== undefined && { category: categoryConnect }),
+      },
+    });
+
+    if (data.colors && Array.isArray(data.colors)) {
+      for (const c of data.colors) {
+        if (c.id && !c.id.startsWith('temp-')) {
+          await this.prismaService.productColor.update({
+            where: { id: c.id },
+            data: {
+              color: c.color,
+              imageUrls: c.imageUrls || [],
+            },
+          });
+          if (c.variants && Array.isArray(c.variants)) {
+            for (const v of c.variants) {
+              if (v.id && !v.id.startsWith('temp-')) {
+                await this.prismaService.productVariant.update({
+                  where: { id: v.id },
+                  data: {
+                    size: v.size,
+                    price: v.price,
+                    stock: v.stock ?? 0,
+                  },
+                });
+              } else {
+                await this.prismaService.productVariant.create({
+                  data: {
+                    productColorId: c.id,
+                    size: v.size,
+                    price: v.price,
+                    stock: v.stock ?? 0,
+                  },
+                });
+              }
+            }
+          }
+        } else {
+          await this.prismaService.productColor.create({
+            data: {
+              productId: id,
+              color: c.color,
+              imageUrls: c.imageUrls || [],
+              variants: {
+                create: (c.variants || []).map((v) => ({
+                  size: v.size,
+                  price: v.price,
+                  stock: v.stock ?? 0,
+                })),
+              },
+            },
+          });
+        }
+      }
+    }
+
+    return updated;
   }
 
-  async deleteProduct(id: string, vendorId: string) {
-    await this.getOwnedProduct(id, vendorId);
+  async deleteProduct(id: string, vendorId?: string, isAdmin = false) {
+    if (!isAdmin) {
+      await this.getOwnedProduct(id, vendorId!);
+    } else {
+      const prod = await this.extended.findFirst({ where: { id } });
+      if (!prod) {
+        throw new NotFoundException('Sản phẩm không tồn tại');
+      }
+    }
 
-    return this.extended.update({
-      where: { id, vendorId, deletedAt: null },
+    return this.prismaService.product.update({
+      where: { id },
       data: {
-        status: 'inactive'}});
+        status: 'inactive',
+        deletedAt: new Date(),
+      },
+    });
   }
 
   private async getOwnedProduct(id: string, vendorId: string) {

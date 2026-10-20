@@ -19,5 +19,16 @@ export const productService = {
   
   deleteProduct: async (id) => {
     return apiClient.delete(`/products/${id}`);
-  }
+  },
+
+  uploadImage: async (file) => {
+    const formData = new FormData();
+    formData.append('images', file);
+    return apiClient.post('/products/upload-image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
 };
+

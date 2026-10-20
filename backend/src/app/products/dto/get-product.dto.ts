@@ -11,6 +11,7 @@ const GetProductsPaginationSchema = PaginationQuerySchema.extend({
   status: z.string().optional(),
   q: z.string().optional(),
   search: z.string().optional(),
+  vendorId: z.string().optional(),
 }).strict();
 
 const GetVendorProductsPaginationSchema = PaginationQuerySchema.extend({

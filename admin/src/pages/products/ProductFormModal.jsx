@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Loader2, Upload, X, Image as ImageIcon } from 'lucide-react';
 import { Modal, Button, Input, Select, Badge } from '../../components/ui';
+import { productsApi } from '../../api';
 
 export default function ProductFormModal({ isOpen, onClose, productToEdit, onSave, categories = [] }) {
   // --- Form State ---
@@ -12,6 +13,7 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
     colors: [] 
   });
   const [saving, setSaving] = useState(false);
+  const [uploadingColorId, setUploadingColorId] = useState(null);
 
   const [expandedColorId, setExpandedColorId] = useState(null);
 
@@ -38,7 +40,7 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
     const newColor = {
       id: `temp-color-${Date.now()}`,
       colorName: '',
-      imageUrls: [''],
+      imageUrls: [],
       variants: []
     };
     setFormData(prev => ({ ...prev, colors: [...prev.colors, newColor] }));
@@ -56,6 +58,62 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
     setFormData(prev => ({
       ...prev,
       colors: prev.colors.filter(c => c.id !== colorId)
+    }));
+  };
+
+  const handleFileUpload = async (colorId, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingColorId(colorId);
+      const res = await productsApi.uploadImage(file);
+      const uploadedUrl = res.data?.url || res.data?.urls?.[0];
+      if (uploadedUrl) {
+        setFormData(prev => ({
+          ...prev,
+          colors: prev.colors.map(c => {
+            if (c.id === colorId) {
+              const currentUrls = c.imageUrls || [];
+              return { ...c, imageUrls: [...currentUrls, uploadedUrl] };
+            }
+            return c;
+          })
+        }));
+      }
+    } catch (err) {
+      console.error('Lỗi tải ảnh:', err);
+      alert('Không thể tải ảnh lên. Vui lòng kiểm tra định dạng và kích thước.');
+    } finally {
+      setUploadingColorId(null);
+      e.target.value = '';
+    }
+  };
+
+  const handleAddUrlImage = (colorId, url) => {
+    if (!url || !url.trim()) return;
+    setFormData(prev => ({
+      ...prev,
+      colors: prev.colors.map(c => {
+        if (c.id === colorId) {
+          const currentUrls = c.imageUrls || [];
+          return { ...c, imageUrls: [...currentUrls, url.trim()], inputUrl: '' };
+        }
+        return c;
+      })
+    }));
+  };
+
+  const handleRemoveImage = (colorId, imgIndex) => {
+    setFormData(prev => ({
+      ...prev,
+      colors: prev.colors.map(c => {
+        if (c.id === colorId) {
+          const currentUrls = c.imageUrls || [];
+          return { ...c, imageUrls: currentUrls.filter((_, idx) => idx !== imgIndex) };
+        }
+        return c;
+      })
     }));
   };
 
@@ -220,19 +278,89 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
                   {/* Color Content */}
                   {expandedColorId === color.id && (
                     <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <Input 
-                          label="Tên màu" 
-                          placeholder="VD: Trắng/Đỏ"
-                          value={color.colorName || color.color || ''}
-                          onChange={e => handleUpdateColor(color.id, 'colorName', e.target.value)}
-                        />
-                        <Input 
-                          label="Image URL" 
-                          placeholder="https://..."
-                          value={color.imageUrls?.[0] || ''}
-                          onChange={e => handleUpdateColor(color.id, 'imageUrls', [e.target.value])}
-                        />
+                      <div className="space-y-4 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Input 
+                            label="Tên màu *" 
+                            placeholder="VD: Trắng/Đỏ, Xanh Navy..."
+                            value={color.colorName || color.color || ''}
+                            onChange={e => handleUpdateColor(color.id, 'colorName', e.target.value)}
+                          />
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                              Hình ảnh sản phẩm
+                            </label>
+                            <label className={`flex items-center justify-center gap-2 px-3 py-2 border border-dashed border-blue-400 dark:border-blue-600 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer transition-colors ${uploadingColorId === color.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                              {uploadingColorId === color.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                              ) : (
+                                <Upload className="w-4 h-4" />
+                              )}
+                              <span>{uploadingColorId === color.id ? 'Đang tải ảnh lên...' : 'Thêm ảnh từ máy'}</span>
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                className="hidden" 
+                                onChange={(e) => handleFileUpload(color.id, e)}
+                                disabled={uploadingColorId === color.id}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Image URL Input Alternative */}
+                        <div className="flex gap-2 items-center">
+                          <div className="flex-1">
+                            <Input 
+                              placeholder="Hoặc dán URL ảnh trực tiếp (https://...)" 
+                              value={color.inputUrl || ''}
+                              onChange={e => handleUpdateColor(color.id, 'inputUrl', e.target.value)}
+                            />
+                          </div>
+                          <Button 
+                            variant="secondary" 
+                            size="sm"
+                            className="h-[38px] text-xs shrink-0"
+                            onClick={() => handleAddUrlImage(color.id, color.inputUrl)}
+                          >
+                            <Plus className="w-3.5 h-3.5 mr-1" /> Thêm URL
+                          </Button>
+                        </div>
+
+                        {/* Image Thumbnails Gallery */}
+                        {color.imageUrls && color.imageUrls.length > 0 && (
+                          <div>
+                            <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                              Ảnh đã thêm ({color.imageUrls.length}):
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              {color.imageUrls.map((url, imgIdx) => (
+                                <div key={imgIdx} className="relative group w-16 h-16 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800">
+                                  <img 
+                                    src={url} 
+                                    alt={`Ảnh ${imgIdx + 1}`} 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                  />
+                                  <div className="hidden w-full h-full items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400">
+                                    <ImageIcon className="w-4 h-4" />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveImage(color.id, imgIdx)}
+                                    className="absolute top-1 right-1 p-0.5 bg-red-600 text-white rounded-full opacity-80 hover:opacity-100 transition shadow"
+                                    title="Xóa ảnh này"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* LEVEL 3: VARIANTS */}

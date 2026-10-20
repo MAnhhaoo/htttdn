@@ -11,6 +11,7 @@ import {
   UsePipes} from '@nestjs/common';
 
 import { Roles } from '../../common/guards/access-control/roles.decorator';
+import { SkipAuth } from '../auth/auth.decorator';
 
 import { User } from '../../common/decorators/user.decorator';
 
@@ -148,6 +149,15 @@ export class VendorsController {
     @Body() body: { reason?: string },
   ) {
     return this.vendorsService.rejectRegistration(id, user, body?.reason || '');
+  }
+
+  /**
+   * Khách hàng / người dùng xem thông tin công khai của người bán
+   */
+  @Get('public/:id')
+  @SkipAuth()
+  getPublicVendorProfile(@Param('id') id: string) {
+    return this.vendorsService.getPublicVendorProfile(id);
   }
 
   /**

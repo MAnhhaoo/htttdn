@@ -105,5 +105,17 @@ export const vendorsApi = {
   },
 };
 
+export const notificationsApi = {
+  getMyNotifications: async () => {
+    return axiosClient.get('/employees/notifications/mine');
+  },
+  markRead: async (notifId) => {
+    return axiosClient.patch(`/employees/notifications/${notifId}/read`);
+  },
+  markAllRead: async () => {
+    return axiosClient.patch('/employees/notifications/read-all');
+  },
+};
+
 
 

@@ -1,4 +1,4 @@
-import { UserCircle, Moon, Sun } from 'lucide-react';
+import { UserCircle, Moon, Sun, Clock, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import NotificationDropdown from './NotificationDropdown';
@@ -9,7 +9,26 @@ export default function Header() {
 
   return (
     <header className="h-16 bg-white dark:bg-slate-900 flex items-center justify-between px-6 transition-colors shadow-sm dark:shadow-none">
-      <div>{/* Empty div to keep flex space-between structure if needed, or remove and change justify-between to justify-end */}</div>
+      <div>
+        {user?.approvalStatus === 'pending_approval' && (
+          <div className="flex items-center gap-1.5 text-xs px-3 py-1 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-full font-medium">
+            <Clock className="w-3.5 h-3.5 animate-pulse" />
+            <span>ĐKKD: Đang chờ xét duyệt</span>
+          </div>
+        )}
+        {user?.approvalStatus === 'approved' && (
+          <div className="flex items-center gap-1.5 text-xs px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 rounded-full font-medium">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Gian hàng đã xác thực ĐKKD</span>
+          </div>
+        )}
+        {user?.approvalStatus === 'rejected' && (
+          <div className="flex items-center gap-1.5 text-xs px-3 py-1 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-full font-medium" title={user?.rejectedReason || ''}>
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>ĐKKD chưa được duyệt</span>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center space-x-4">
         <button 

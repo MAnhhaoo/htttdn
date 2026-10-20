@@ -39,6 +39,13 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
           orders_reject: false,
           orders_issue_handle: false,
           shipping_manage: true,
+          schedule: {
+            shiftName: 'Ca hành chính',
+            shiftStart: '08:30',
+            shiftEnd: '16:30',
+            shiftHours: 8,
+            note: 'Ca tiêu chuẩn',
+          },
         },
       };
     }
@@ -62,6 +69,13 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
         orders_reject: false,
         orders_issue_handle: false,
         shipping_manage: true,
+        schedule: {
+          shiftName: 'Ca hành chính',
+          shiftStart: '08:30',
+          shiftEnd: '16:30',
+          shiftHours: 8,
+          note: 'Ca tiêu chuẩn ban đầu',
+        },
       },
     };
   });

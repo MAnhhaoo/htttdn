@@ -3,12 +3,14 @@ import {
   Users, UserPlus, Search, Filter, Shield, MoreHorizontal, 
   Lock, Unlock, Edit, Trash2, TrendingUp, CheckCircle, XCircle, 
   Clock, DollarSign, Briefcase, RefreshCw, Loader2, ChevronLeft, ChevronRight,
-  ShieldCheck, AlertCircle
+  ShieldCheck, AlertCircle, Bell, Calendar
 } from 'lucide-react';
 import { employeesApi } from '../../api';
 import { Button, Input, Badge } from '../../components/ui';
 import EmployeeFormModal from './EmployeeFormModal';
 import SalaryHistoryModal from './SalaryHistoryModal';
+import AssignScheduleModal from './AssignScheduleModal';
+import SendNotificationModal from './SendNotificationModal';
 
 export default function EmployeeManagement() {
   const [employees, setEmployees] = useState([]);
@@ -28,6 +30,10 @@ export default function EmployeeManagement() {
   const [employeeToEdit, setEmployeeToEdit] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [employeeForHistory, setEmployeeForHistory] = useState(null);
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [employeeForSchedule, setEmployeeForSchedule] = useState(null);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [employeeForNotif, setEmployeeForNotif] = useState(null);
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -119,6 +125,17 @@ export default function EmployeeManagement() {
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Làm mới
+          </Button>
+
+          <Button
+            onClick={() => {
+              setEmployeeForNotif(null);
+              setIsNotifOpen(true);
+            }}
+            className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-200 dark:shadow-none"
+          >
+            <Bell className="w-4 h-4" />
+            Gửi Thông Báo / Cảnh Báo
           </Button>
 
           <Button
@@ -257,6 +274,7 @@ export default function EmployeeManagement() {
                   <th className="py-3 px-4">Nhân viên</th>
                   <th className="py-3 px-4">Phòng ban &amp; Vị trí</th>
                   <th className="py-3 px-4">Loại hợp đồng</th>
+                  <th className="py-3 px-4">Ca làm việc</th>
                   <th className="py-3 px-4">Mức lương hiện tại</th>
                   <th className="py-3 px-4 text-center">Trạng thái</th>
                   <th className="py-3 px-4 text-center">Phân quyền</th>
@@ -267,6 +285,7 @@ export default function EmployeeManagement() {
                 {employees.map((emp) => {
                   const perms = emp.permissions || {};
                   const activePermCount = Object.values(perms).filter(Boolean).length;
+                  const sch = perms.schedule || {};
 
                   return (
                     <tr key={emp.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
@@ -308,6 +327,20 @@ export default function EmployeeManagement() {
                         >
                           {emp.employmentType === 'part_time' ? 'Part-time' : 'Full-time'}
                         </Badge>
+                      </td>
+                      <td className="py-3 px-4">
+                        {sch.shiftStart ? (
+                          <div className="font-mono text-[11px]">
+                            <span className="text-indigo-600 font-bold block">{sch.shiftName || 'Ca phân công'}</span>
+                            <span className="text-slate-700 dark:text-slate-300">{sch.shiftStart} - {sch.shiftEnd}</span>
+                            <span className="text-slate-400 ml-1">({sch.shiftHours || 8}h)</span>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-slate-400">
+                            <span>08:30 - 16:30</span>
+                            <span className="block text-[10px] italic text-slate-400">(Mặc định 8h)</span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-100">
                         {emp.employmentType === 'part_time' ? (
@@ -351,6 +384,28 @@ export default function EmployeeManagement() {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => {
+                              setEmployeeForSchedule(emp);
+                              setIsScheduleOpen(true);
+                            }}
+                            title="Phân công lịch làm việc"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            <Clock className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setEmployeeForNotif(emp);
+                              setIsNotifOpen(true);
+                            }}
+                            title="Gửi thông báo / Cảnh báo"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            <Bell className="w-4 h-4" />
+                          </button>
+
                           <button
                             onClick={() => {
                               setEmployeeForHistory(emp);
@@ -444,6 +499,27 @@ export default function EmployeeManagement() {
           isOpen={isHistoryOpen}
           onClose={() => setIsHistoryOpen(false)}
           employee={employeeForHistory}
+        />
+      )}
+
+      {/* Assign Schedule Modal */}
+      {isScheduleOpen && (
+        <AssignScheduleModal
+          isOpen={isScheduleOpen}
+          onClose={() => setIsScheduleOpen(false)}
+          employee={employeeForSchedule}
+          onSaved={fetchEmployees}
+        />
+      )}
+
+      {/* Send Notification Modal */}
+      {isNotifOpen && (
+        <SendNotificationModal
+          isOpen={isNotifOpen}
+          onClose={() => setIsNotifOpen(false)}
+          allEmployees={employees}
+          selectedEmployee={employeeForNotif}
+          onSent={fetchEmployees}
         />
       )}
     </div>

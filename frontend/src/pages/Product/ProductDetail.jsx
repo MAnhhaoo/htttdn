@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Minus, Plus, ShoppingCart, Heart, ChevronRight, ChevronLeft, Package } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, Heart, ChevronRight, ChevronLeft, Package, Store, ShieldCheck } from 'lucide-react';
 import { useProductById, useProducts } from '../../hooks/useProducts';
 import { useCart } from '../../hooks/useCart';
 import { useAuth } from '../../hooks/useAuth';
@@ -10,6 +10,7 @@ import Loading from '../../components/common/Loading/Loading';
 import EmptyState from '../../components/common/EmptyState/EmptyState';
 import ProductCard from '../../components/product/ProductCard/ProductCard';
 import ProductCardSkeleton from '../../components/product/ProductCard/ProductCardSkeleton';
+import { vendorService } from '../../services/vendorService';
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -25,6 +26,16 @@ export default function ProductDetail() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [mainImgError, setMainImgError] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [vendorProfile, setVendorProfile] = useState(null);
+
+  // Fetch vendor public statistics
+  useEffect(() => {
+    if (product?.vendor?.id) {
+      vendorService.getPublicProfile(product.vendor.id)
+        .then(res => setVendorProfile(res))
+        .catch(console.error);
+    }
+  }, [product?.vendor?.id]);
 
   // Derived image state from selected color
   const images = selectedColor?.imageUrls || [];
@@ -373,6 +384,84 @@ export default function ProductDetail() {
           </div>
         </div>
       </div>
+
+      {/* ── Vendor / Seller Card (Shopee Style) ── */}
+      {product?.vendor && (
+        <div className="mt-8 bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl p-6 sm:p-7 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            
+            {/* Left: Avatar + Store Name + View Shop Button */}
+            <div className="flex items-center gap-4 sm:gap-5 min-w-[260px]">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden border-2 border-primary/20 bg-gray-100 dark:bg-dark-surface shadow-sm flex items-center justify-center shrink-0">
+                {product.vendor.avatarUrl ? (
+                  <img 
+                    src={product.vendor.avatarUrl} 
+                    alt={product.vendor.storeName || product.vendor.fullName} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=150&auto=format&fit=crop&q=80';
+                    }}
+                  />
+                ) : (
+                  <Store className="w-8 h-8 text-primary" />
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="font-bold text-base sm:text-lg text-light-text dark:text-dark-text tracking-tight">
+                  {product.vendor.storeName || product.vendor.fullName || 'Cửa hàng đối tác'}
+                </h3>
+
+                <div>
+                  <Link
+                    to={`/shop/${product.vendor.id}`}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-light-border dark:border-dark-border text-light-text dark:text-dark-text hover:bg-light-surface dark:hover:bg-dark-surface text-xs font-semibold transition-colors"
+                  >
+                    <Store className="w-3.5 h-3.5 text-primary" />
+                    Xem Shop
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* Middle Divider */}
+            <div className="hidden lg:block w-[1px] h-16 bg-light-border dark:bg-dark-border" />
+
+            {/* Right: Stats Grid */}
+            <div className="grid grid-cols-2 gap-y-3.5 gap-x-8 sm:gap-x-12 text-xs text-light-muted dark:text-dark-muted flex-1 lg:max-w-md">
+              <div className="flex items-center justify-between gap-3">
+                <span>Đánh Giá</span>
+                <span className="font-semibold text-red-500 dark:text-red-400">
+                  {vendorProfile?.stats?.rating || 5.0} ★ ({vendorProfile?.stats?.reviewCount || 0})
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <span>Tỉ Lệ Phản Hồi</span>
+                <span className="font-semibold text-red-500 dark:text-red-400">
+                  {vendorProfile?.stats?.responseRate || '100%'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <span>Sản Phẩm</span>
+                <span className="font-semibold text-red-500 dark:text-red-400">
+                  {vendorProfile?.stats?.totalProducts || 0}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <span>Tham Gia</span>
+                <span className="font-semibold text-red-500 dark:text-red-400">
+                  {vendorProfile?.stats?.joinedText || 'Gần đây'}
+                </span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* ── Recommended Products ── */}
       {product?.category?.slug && (

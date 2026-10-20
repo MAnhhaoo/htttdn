@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,7 +9,13 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { AnyFilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+
 import { ProductService } from './products.service';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 
@@ -28,13 +35,60 @@ import { SkipAuth } from 'src/app/auth/auth.decorator';
 export class ProductsController {
   constructor(private readonly productService: ProductService) {}
 
+  @Post('upload-image')
+  @Roles('vendor', 'admin')
+  @UseInterceptors(
+    AnyFilesInterceptor({
+      storage: diskStorage({
+        destination: './uploads/products',
+        filename: (_req, file, callback) => {
+          const fileName =
+            `${Date.now()}-${Math.round(Math.random() * 1e9)}` +
+            extname(file.originalname);
+          callback(null, fileName);
+        },
+      }),
+      fileFilter: (_req, file, callback) => {
+        const allowedTypes = [
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'image/gif',
+          'image/jpg',
+        ];
+        if (!allowedTypes.includes(file.mimetype)) {
+          return callback(
+            new BadRequestException('Chỉ chấp nhận ảnh JPEG, PNG, WEBP hoặc GIF'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+        files: 10,
+      },
+    }),
+  )
+  uploadProductImage(@UploadedFiles() files: Express.Multer.File[]) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('Vui lòng chọn ít nhất một file ảnh');
+    }
+    const urls = files.map((file) => `/uploads/products/${file.filename}`);
+    return {
+      urls,
+      url: urls[0],
+    };
+  }
+
   @Post()
-  @Roles('vendor')
+  @Roles('vendor', 'admin')
   createProduct(
     @Body() createProductDto: CreateProductDto,
     @CurrentUser() user: UserInfo,
   ) {
-    return this.productService.createProduct(createProductDto, user.userID);
+    const vendorId = user.role === 'vendor' ? user.userID : undefined;
+    return this.productService.createProduct(createProductDto, vendorId);
   }
 
   @Get('vendor/mine')
@@ -89,26 +143,44 @@ export class ProductsController {
   ) {
     return this.productService.removeFavorite(id, user.userID);
   }
+  @Get('best-sellers')
+  @SkipAuth()
+  getBestSellers(@Query('limit') limit?: string) {
+    const limitNum = limit ? parseInt(limit, 10) : 4;
+    return this.productService.getBestSellingProducts(
+      isNaN(limitNum) ? 4 : limitNum,
+    );
+  }
+
   @Get(':id')
   @SkipAuth()
   getProductById(@Param('id', ParseUUIDPipe) id: string) {
     return this.productService.getProductById(id);
   }
   @Patch(':id')
-  @Roles('vendor')
+  @Roles('vendor', 'admin')
   updateProduct(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateProductDto: UpdateProductDto,
     @CurrentUser() user: UserInfo,
   ) {
-    return this.productService.updateProduct(id, updateProductDto, user.userID);
+    return this.productService.updateProduct(
+      id,
+      updateProductDto,
+      user.userID,
+      user.role === 'admin',
+    );
   }
   @Delete(':id')
-  @Roles('vendor')
+  @Roles('vendor', 'admin')
   deleteProduct(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserInfo,
   ) {
-    return this.productService.deleteProduct(id, user.userID);
+    return this.productService.deleteProduct(
+      id,
+      user.userID,
+      user.role === 'admin',
+    );
   }
 }
