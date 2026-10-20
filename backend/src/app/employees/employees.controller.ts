@@ -37,6 +37,33 @@ export class EmployeesController {
     return this.employeesService.updateEmployeeProfile(user.userID, body);
   }
 
+  @Post('notifications/send')
+  @Roles('admin')
+  sendNotification(@User() user: UserInfo, @Body() body: any) {
+    return this.employeesService.sendNotification(user.userID, body);
+  }
+
+  @Get('notifications/mine')
+  @Roles('employee')
+  getMyNotifications(@User() user: UserInfo) {
+    return this.employeesService.getMyNotifications(user.userID);
+  }
+
+  @Patch('notifications/read-all')
+  @Roles('employee')
+  markAllNotificationsRead(@User() user: UserInfo) {
+    return this.employeesService.markAllNotificationsRead(user.userID);
+  }
+
+  @Patch('notifications/:notifId/read')
+  @Roles('employee')
+  markNotificationRead(
+    @User() user: UserInfo,
+    @Param('notifId') notifId: string,
+  ) {
+    return this.employeesService.markNotificationRead(user.userID, notifId);
+  }
+
   @Get()
   @Roles('admin')
   getEmployees(@Query() query: GetEmployeesPaginationDto) {
@@ -63,6 +90,12 @@ export class EmployeesController {
     @Body() dto: UpdateEmployeeDto,
   ) {
     return this.employeesService.updateEmployee(user.userID, id, dto);
+  }
+
+  @Patch(':id/schedule')
+  @Roles('admin')
+  updateSchedule(@Param('id') id: string, @Body() body: any) {
+    return this.employeesService.updateSchedule(id, body);
   }
 
   @Patch(':id/status')

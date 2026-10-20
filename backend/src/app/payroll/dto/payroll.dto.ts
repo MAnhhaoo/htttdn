@@ -28,5 +28,8 @@ export class RecordAttendanceDto extends createZodDto(
     hoursWorked: z.coerce.number().min(0).max(24).optional().nullable(),
     status: z.enum(['present', 'absent', 'late', 'leave']).default('present'),
     note: z.string().max(500).optional().nullable(),
+    shiftStart: z.string().optional().nullable(),
+    shiftEnd: z.string().optional().nullable(),
+    lateReason: z.string().optional().nullable(),
   }),
 ) {}

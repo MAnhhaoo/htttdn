@@ -328,4 +328,188 @@ export class EmployeesService {
     const { password: _p, ...safeEmployee } = updated;
     return safeEmployee;
   }
+
+  async updateSchedule(id: string, scheduleData: any) {
+    const employee = await this.prisma.employee.findUnique({ where: { id } });
+    if (!employee || employee.deletedAt) {
+      throw new NotFoundException('Không tìm thấy thông tin nhân viên');
+    }
+
+    const currentPermissions = (employee.permissions as Record<string, any>) || {};
+    const newSchedule = {
+      shiftName: scheduleData.shiftName || 'Ca hành chính',
+      shiftStart: scheduleData.shiftStart || '08:30',
+      shiftEnd: scheduleData.shiftEnd || '16:30',
+      shiftHours: Number(scheduleData.shiftHours || 8),
+      workDays: scheduleData.workDays || ['T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
+      note: scheduleData.note || '',
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updated = await this.prisma.employee.update({
+      where: { id },
+      data: {
+        permissions: {
+          ...currentPermissions,
+          schedule: newSchedule,
+        },
+      },
+    });
+
+    return {
+      message: 'Cập nhật lịch phân công ca làm việc thành công',
+      schedule: newSchedule,
+      employee: {
+        id: updated.id,
+        fullName: updated.fullName,
+        employeeCode: updated.employeeCode,
+      },
+    };
+  }
+
+  async sendNotification(adminId: string, dto: { employeeId?: string; type?: string; title: string; content: string }) {
+    let senderName = 'Ban Quản Trị MIVA';
+    try {
+      const admin = await this.prisma.admin.findUnique({ where: { id: adminId }, select: { fullName: true } });
+      if (admin?.fullName) senderName = admin.fullName;
+    } catch {
+      // fallback
+    }
+
+    const newNotif = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      type: dto.type || 'info', // 'info' | 'warning' | 'alert' | 'urgent'
+      title: dto.title,
+      content: dto.content,
+      sender: senderName,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (!dto.employeeId || dto.employeeId === 'all') {
+      const employees = await this.prisma.employee.findMany({
+        where: { status: 'active', deletedAt: null },
+      });
+
+      for (const emp of employees) {
+        const perms = (emp.permissions as Record<string, any>) || {};
+        const notifications = Array.isArray(perms.notifications) ? perms.notifications : [];
+        const updatedNotifs = [newNotif, ...notifications].slice(0, 50);
+
+        await this.prisma.employee.update({
+          where: { id: emp.id },
+          data: {
+            permissions: {
+              ...perms,
+              notifications: updatedNotifs,
+            },
+          },
+        });
+      }
+
+      return {
+        message: `Đã gửi thông báo thành công tới ${employees.length} nhân viên`,
+        recipientCount: employees.length,
+        notification: newNotif,
+      };
+    } else {
+      const emp = await this.prisma.employee.findUnique({
+        where: { id: dto.employeeId },
+      });
+
+      if (!emp || emp.deletedAt) {
+        throw new NotFoundException('Không tìm thấy nhân viên');
+      }
+
+      const perms = (emp.permissions as Record<string, any>) || {};
+      const notifications = Array.isArray(perms.notifications) ? perms.notifications : [];
+      const updatedNotifs = [newNotif, ...notifications].slice(0, 50);
+
+      await this.prisma.employee.update({
+        where: { id: emp.id },
+        data: {
+          permissions: {
+            ...perms,
+            notifications: updatedNotifs,
+          },
+        },
+      });
+
+      return {
+        message: `Đã gửi thông báo tới nhân viên ${emp.fullName}`,
+        notification: newNotif,
+      };
+    }
+  }
+
+  async getMyNotifications(employeeId: string) {
+    const emp = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { permissions: true },
+    });
+
+    if (!emp) {
+      throw new NotFoundException('Không tìm thấy nhân viên');
+    }
+
+    const perms = (emp.permissions as Record<string, any>) || {};
+    const notifications: any[] = Array.isArray(perms.notifications) ? perms.notifications : [];
+    const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+    return {
+      list: notifications,
+      unreadCount,
+    };
+  }
+
+  async markNotificationRead(employeeId: string, notifId: string) {
+    const emp = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { permissions: true },
+    });
+
+    if (!emp) throw new NotFoundException('Không tìm thấy nhân viên');
+
+    const perms = (emp.permissions as Record<string, any>) || {};
+    const notifications: any[] = Array.isArray(perms.notifications) ? perms.notifications : [];
+    const updatedNotifs = notifications.map((n) => (n.id === notifId ? { ...n, isRead: true, readAt: new Date().toISOString() } : n));
+
+    await this.prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        permissions: {
+          ...perms,
+          notifications: updatedNotifs,
+        },
+      },
+    });
+
+    return { success: true };
+  }
+
+  async markAllNotificationsRead(employeeId: string) {
+    const emp = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { permissions: true },
+    });
+
+    if (!emp) throw new NotFoundException('Không tìm thấy nhân viên');
+
+    const perms = (emp.permissions as Record<string, any>) || {};
+    const notifications: any[] = Array.isArray(perms.notifications) ? perms.notifications : [];
+    const now = new Date().toISOString();
+    const updatedNotifs = notifications.map((n) => ({ ...n, isRead: true, readAt: now }));
+
+    await this.prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        permissions: {
+          ...perms,
+          notifications: updatedNotifs,
+        },
+      },
+    });
+
+    return { success: true, count: updatedNotifs.length };
+  }
 }

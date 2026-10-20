@@ -59,6 +59,18 @@ const SignUpSchema = z
       .max(100, 'Mã số thuế không được vượt quá 100 ký tự')
       .nullable()
       .optional(),
+    subscriptionPlan: z
+      .string({ error: 'Gói đăng ký phải là chuỗi' })
+      .trim()
+      .max(50, 'Gói đăng ký không được vượt quá 50 ký tự')
+      .nullable()
+      .optional(),
+    businessType: z
+      .string({ error: 'Loại hình kinh doanh phải là chuỗi' })
+      .trim()
+      .max(100, 'Loại hình kinh doanh không được vượt quá 100 ký tự')
+      .nullable()
+      .optional(),
   })
   .strict();
 

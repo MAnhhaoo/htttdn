@@ -5,6 +5,7 @@ import {
   DollarSign, CheckCircle2, Calculator, ArrowUpRight
 } from 'lucide-react';
 import { profileApi, payrollApi } from '../../api/axiosClient';
+import { AttendanceCheckInModal } from '../../components/attendance/AttendanceCheckInModal';
 
 const PAYROLL_STATUS_CONFIG = {
   draft: { label: 'Bản nháp (Đang duyệt)', color: 'bg-amber-100 text-amber-800 border-amber-200' },
@@ -19,6 +20,7 @@ export const MyProfilePage = () => {
   const [attendances, setAttendances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'payslips' | 'attendance'
+  const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
 
   // Edit profile state
   const [editing, setEditing] = useState(false);
@@ -498,28 +500,48 @@ export const MyProfilePage = () => {
       {/* TAB 3: ATTENDANCE */}
       {activeTab === 'attendance' && (
         <div className="space-y-4">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm">Nhật Ký Chấm Công Hàng Ngày</h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Ghi nhận số giờ làm việc thực tế dùng để tính lương Part-time &amp; chuyên cần
-              </p>
-            </div>
+          {/* Shift Schedule Info Card */}
+          {(() => {
+            const sch = profile?.permissions?.schedule || {};
+            const sName = sch.shiftName || 'Ca hành chính tiêu chuẩn';
+            const sStart = sch.shiftStart || '08:30';
+            const sEnd = sch.shiftEnd || '16:30';
+            const sHours = Number(sch.shiftHours || 8);
 
-            <button
-              onClick={handleCheckInToday}
-              disabled={checkingIn}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              {checkingIn ? 'Đang điểm danh...' : 'Điểm danh hôm nay (8h)'}
-            </button>
-          </div>
+            return (
+              <div className="bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50 border border-indigo-200 rounded-2xl p-5 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-600 text-white shadow-xs">
+                        Lịch Phân Công Hiện Tại
+                      </span>
+                      <span className="font-bold text-indigo-900 text-sm">{sName}</span>
+                    </div>
+                    <p className="text-xs text-slate-600">
+                      Ca trực từ <span className="font-mono font-bold text-slate-900">{sStart}</span> đến <span className="font-mono font-bold text-slate-900">{sEnd}</span> ({sHours} tiếng/ngày).
+                    </p>
+                    <p className="text-[11px] text-amber-700 italic">
+                      ⚠️ Lưu ý: Nếu chấm công sau {sStart}, hệ thống yêu cầu nhập lý do đi trễ và tiền lương sẽ được tính theo số giờ làm thực tế.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setIsCheckInModalOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition shrink-0"
+                  >
+                    <Clock className="w-4 h-4" />
+                    Chấm Công Vào Ca
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {attendances.length === 0 ? (
             <div className="bg-white p-12 text-center text-slate-400 rounded-2xl border border-slate-200">
               <Calendar className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-              Chưa có dữ liệu chấm công. Bấm nút "Điểm danh hôm nay" để bắt đầu ghi nhận.
+              Chưa có dữ liệu chấm công. Bấm nút "Chấm Công Vào Ca" để bắt đầu ghi nhận.
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -527,36 +549,57 @@ export const MyProfilePage = () => {
                 <thead className="bg-slate-50 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-100">
                   <tr>
                     <th className="px-5 py-3">Ngày</th>
+                    <th className="px-5 py-3">Giờ vào</th>
                     <th className="px-5 py-3">Trạng thái</th>
-                    <th className="px-5 py-3 text-center">Số giờ ghi nhận</th>
-                    <th className="px-5 py-3">Ghi chú</th>
+                    <th className="px-5 py-3 text-center">Số giờ thực tế</th>
+                    <th className="px-5 py-3">Ghi chú &amp; Lý do trễ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {attendances.map((att) => (
-                    <tr key={att.id} className="hover:bg-slate-50">
-                      <td className="px-5 py-3.5 font-bold text-slate-800">
-                        {new Date(att.date).toLocaleDateString('vi-VN')}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {att.status === 'present' ? 'Có mặt' : att.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-center font-mono font-bold text-indigo-600">
-                        {Number(att.hoursWorked || 0).toFixed(1)} giờ
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-500">
-                        {att.note || '---'}
-                      </td>
-                    </tr>
-                  ))}
+                  {attendances.map((att) => {
+                    const isLateAtt = att.status === 'late';
+                    return (
+                      <tr key={att.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-5 py-3.5 font-bold text-slate-800">
+                          {new Date(att.date).toLocaleDateString('vi-VN')}
+                        </td>
+                        <td className="px-5 py-3.5 font-mono text-slate-600">
+                          {att.checkIn ? new Date(att.checkIn).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '---'}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          {isLateAtt ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-300 inline-flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 text-amber-600" /> Đi trễ
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Đúng giờ
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 text-center font-mono font-bold text-indigo-600">
+                          {Number(att.hoursWorked || 0).toFixed(1)} giờ
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-600">
+                          {att.note || '---'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </div>
       )}
+
+      {/* Attendance Check In Modal */}
+      <AttendanceCheckInModal
+        isOpen={isCheckInModalOpen}
+        onClose={() => setIsCheckInModalOpen(false)}
+        profile={profile}
+        onSuccess={fetchProfileAndData}
+      />
     </div>
   );
 };

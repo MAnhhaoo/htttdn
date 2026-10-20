@@ -46,6 +46,13 @@ export const productsApi = {
   createProduct: (data) => axiosClient.post('/products', data),
   updateProduct: (id, data) => axiosClient.patch(`/products/${id}`, data),
   deleteProduct: (id) => axiosClient.delete(`/products/${id}`),
+  uploadImage: (file) => {
+    const formData = new FormData();
+    formData.append('files', file);
+    return axiosClient.post('/products/upload-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 // ==================== PRODUCT COLORS ====================
@@ -108,6 +115,8 @@ export const employeesApi = {
   updateStatus: (id, status) => axiosClient.patch(`/employees/${id}/status`, { status }),
   deleteEmployee: (id) => axiosClient.delete(`/employees/${id}`),
   getSalaryHistory: (id) => axiosClient.get(`/employees/${id}/salary-history`),
+  updateSchedule: (id, data) => axiosClient.patch(`/employees/${id}/schedule`, data),
+  sendNotification: (data) => axiosClient.post('/employees/notifications/send', data),
 };
 
 // ==================== SHIPPING ====================

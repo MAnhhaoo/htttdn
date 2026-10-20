@@ -52,37 +52,52 @@ export class PayrollService {
       let deductions = 0;
       let bonus = 0;
       let netSalary = 0;
+      let lateSummaryNote = '';
+
+      // Fetch attendance hours for the month
+      const attendances = await this.prisma.employeeAttendance.findMany({
+        where: {
+          employeeId: emp.id,
+          date: {
+            gte: startOfMonth,
+            lte: endOfMonth,
+          },
+        },
+      });
+
+      const recordedHours = attendances.reduce(
+        (sum, a) => sum + Number(a.hoursWorked || 0),
+        0,
+      );
 
       if (isFullTime) {
         baseSalary = Number(emp.salary || 0);
-        netSalary = baseSalary + allowances - deductions + bonus;
-      } else {
-        hourlyRate = Number(emp.hourlyRate || 35000);
+        const hourlyEquivalent = baseSalary > 0 ? (baseSalary / 26) / 8 : 0;
 
-        // Fetch attendance hours
-        const attendances = await this.prisma.employeeAttendance.findMany({
-          where: {
-            employeeId: emp.id,
-            date: {
-              gte: startOfMonth,
-              lte: endOfMonth,
-            },
-          },
-        });
-
-        let recordedHours = attendances.reduce(
-          (sum, a) => sum + Number(a.hoursWorked || 0),
-          0,
-        );
-
-        // If no attendance recorded yet, assign 88 hours benchmark for simulation
-        if (recordedHours === 0) {
-          recordedHours = 88;
+        let totalMissingHours = 0;
+        for (const att of attendances) {
+          const worked = Number(att.hoursWorked || 0);
+          if (att.status === 'late' || worked < 8) {
+            const missing = Math.max(0, 8 - worked);
+            totalMissingHours += missing;
+          }
         }
 
-        totalHours = recordedHours;
+        if (totalMissingHours > 0 && hourlyEquivalent > 0) {
+          const lateDeduction = Math.round(totalMissingHours * hourlyEquivalent);
+          deductions += lateDeduction;
+          lateSummaryNote = ` (Trừ ${totalMissingHours.toFixed(1)}h đi trễ/thiếu giờ: -${lateDeduction.toLocaleString('vi-VN')} đ)`;
+        }
+
+        totalHours = recordedHours > 0 ? recordedHours : 208;
+        netSalary = Math.max(0, baseSalary + allowances - deductions + bonus);
+      } else {
+        hourlyRate = Number(emp.hourlyRate || 35000);
+        totalHours = recordedHours > 0 ? recordedHours : 88;
         netSalary = Math.round(totalHours * hourlyRate) + allowances - deductions + bonus;
       }
+
+      const notes = `Bảng tính lương tháng ${month}/${year}${lateSummaryNote}`;
 
       const payroll = await this.prisma.employeePayroll.upsert({
         where: {
@@ -105,13 +120,17 @@ export class PayrollService {
           bonus,
           netSalary,
           status: PayrollStatus.draft,
-          notes: `Bảng tính lương tháng ${month}/${year}`,
+          notes,
         },
         update: {
           baseSalary,
           hourlyRate,
           totalHours,
+          allowances,
+          deductions,
+          bonus,
           netSalary,
+          notes,
         },
         include: {
           employee: {
@@ -240,12 +259,59 @@ export class PayrollService {
   async recordAttendance(dto: RecordAttendanceDto) {
     const dateObj = new Date(dto.date);
 
+    // Get employee to check assigned schedule
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: dto.employeeId },
+      select: { permissions: true },
+    });
+
+    const perms = (employee?.permissions as Record<string, any>) || {};
+    const schedule = perms.schedule || {};
+    const shiftStart = dto.shiftStart || schedule.shiftStart || '08:30';
+    const shiftEnd = dto.shiftEnd || schedule.shiftEnd || '16:30';
+    const standardHours = Number(schedule.shiftHours || 8);
+
+    let status = dto.status || 'present';
     let hoursWorked = dto.hoursWorked;
-    if (hoursWorked === undefined && dto.checkIn && dto.checkOut) {
-      const inTime = new Date(dto.checkIn).getTime();
-      const outTime = new Date(dto.checkOut).getTime();
-      if (outTime > inTime) {
-        hoursWorked = Number(((outTime - inTime) / (1000 * 60 * 60)).toFixed(2));
+    let note = dto.note || null;
+
+    if (dto.checkIn) {
+      const checkInDate = new Date(dto.checkIn);
+      const [startH, startM] = shiftStart.split(':').map((v) => parseInt(v, 10) || 0);
+      const [endH, endM] = shiftEnd.split(':').map((v) => parseInt(v, 10) || 0);
+
+      const scheduledStartDate = new Date(checkInDate);
+      scheduledStartDate.setHours(startH, startM, 0, 0);
+
+      const scheduledEndDate = new Date(checkInDate);
+      scheduledEndDate.setHours(endH, endM, 0, 0);
+
+      // Check if late (more than 5 mins after scheduled start)
+      if (checkInDate.getTime() > scheduledStartDate.getTime() + 5 * 60 * 1000) {
+        status = 'late';
+        const lateMins = Math.round((checkInDate.getTime() - scheduledStartDate.getTime()) / (60 * 1000));
+        const lateHours = Number((lateMins / 60).toFixed(2));
+
+        if (hoursWorked === undefined || hoursWorked === null) {
+          const remainingMs = Math.max(0, scheduledEndDate.getTime() - checkInDate.getTime());
+          const calculatedHours = Number((remainingMs / (1000 * 60 * 60)).toFixed(2));
+          hoursWorked = Math.min(standardHours, calculatedHours);
+        }
+
+        const reason = dto.lateReason ? ` - Lý do: ${dto.lateReason}` : '';
+        const extraNote = dto.note ? ` | ${dto.note}` : '';
+        note = `[Ca ${shiftStart}-${shiftEnd}] Trễ ${lateMins}p (${lateHours}h)${reason}${extraNote}`.slice(0, 500);
+      } else {
+        if (hoursWorked === undefined || hoursWorked === null) {
+          hoursWorked = standardHours;
+        }
+        if (!note) {
+          note = `[Ca ${shiftStart}-${shiftEnd}] Đúng giờ (${hoursWorked}h)`;
+        }
+      }
+    } else {
+      if (hoursWorked === undefined || hoursWorked === null) {
+        hoursWorked = standardHours;
       }
     }
 
@@ -261,16 +327,16 @@ export class PayrollService {
         date: dateObj,
         checkIn: dto.checkIn ? new Date(dto.checkIn) : null,
         checkOut: dto.checkOut ? new Date(dto.checkOut) : null,
-        hoursWorked: hoursWorked ?? 8,
-        status: dto.status as any,
-        note: dto.note || null,
+        hoursWorked,
+        status: status as any,
+        note,
       },
       update: {
         checkIn: dto.checkIn ? new Date(dto.checkIn) : undefined,
         checkOut: dto.checkOut ? new Date(dto.checkOut) : undefined,
         hoursWorked: hoursWorked !== undefined ? hoursWorked : undefined,
-        status: dto.status as any,
-        note: dto.note !== undefined ? dto.note : undefined,
+        status: status as any,
+        note: note !== undefined ? note : undefined,
       },
     });
   }

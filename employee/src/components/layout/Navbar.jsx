@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
   Building2, 
@@ -6,12 +6,32 @@ import {
   LogOut, 
   DollarSign, 
   Eye,
-  EyeOff
+  EyeOff,
+  Bell
 } from 'lucide-react';
+import { notificationsApi } from '../../api/axiosClient';
+import { EmployeeNotificationsModal } from '../notifications/EmployeeNotificationsModal';
 
 export const Navbar = () => {
   const { user, logout } = useAuth();
   const [showSalary, setShowSalary] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  const fetchUnread = async () => {
+    try {
+      const res = await notificationsApi.getMyNotifications();
+      setUnreadCount(res.unreadCount || 0);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchUnread();
+    const timer = setInterval(fetchUnread, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
@@ -52,6 +72,20 @@ export const Navbar = () => {
 
           {/* Right Actions */}
           <div className="flex items-center space-x-3">
+            {/* Notification Bell */}
+            <button
+              onClick={() => setIsNotifOpen(true)}
+              title="Thông báo & Cảnh báo từ Quản Trị"
+              className="relative p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition"
+            >
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+
             {/* Salary preview toggle */}
             <button
               onClick={() => setShowSalary(!showSalary)}
@@ -86,6 +120,13 @@ export const Navbar = () => {
           </div>
         </div>
       </div>
+
+      {/* Notifications Modal */}
+      <EmployeeNotificationsModal
+        isOpen={isNotifOpen}
+        onClose={() => setIsNotifOpen(false)}
+        onRefreshCount={(c) => setUnreadCount(c)}
+      />
     </header>
   );
 };

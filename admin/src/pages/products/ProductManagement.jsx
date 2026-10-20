@@ -127,12 +127,29 @@ export default function ProductManagement() {
 
   const handleSaveProduct = async (savedData) => {
     try {
+      const payload = {
+        name: savedData.name?.trim(),
+        description: savedData.description?.trim() || null,
+        status: savedData.status || 'active',
+        categoryId: savedData.categoryId,
+        category: { connect: { id: savedData.categoryId } },
+        colors: (savedData.colors || []).map(c => ({
+          ...(c.id && !c.id.startsWith('temp-') ? { id: c.id } : {}),
+          color: (c.colorName || c.color || 'Mặc định').trim(),
+          imageUrls: (c.imageUrls || []).filter(Boolean),
+          variants: (c.variants || []).map(v => ({
+            ...(v.id && !v.id.startsWith('temp-') ? { id: v.id } : {}),
+            size: String(v.size || '').trim() || 'Tiêu chuẩn',
+            price: Number(v.price) || 0,
+            stock: Number(v.stock) || 0,
+          }))
+        }))
+      };
+
       if (productToEdit) {
-        const { colors, categoryName, ...productData } = savedData;
-        await productsApi.updateProduct(productToEdit.id, productData);
+        await productsApi.updateProduct(productToEdit.id, payload);
       } else {
-        const { colors, ...productData } = savedData;
-        await productsApi.createProduct(productData);
+        await productsApi.createProduct(payload);
       }
       setIsModalOpen(false);
       fetchProducts();
@@ -212,13 +229,24 @@ export default function ProductManagement() {
                   <tr key={product.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center">
-                        {product.colors?.[0]?.imageUrls?.[0] ? (
-                          <img src={product.colors[0].imageUrls[0]} alt={product.name} className="w-10 h-10 rounded-lg object-cover border border-slate-200 dark:border-slate-700 mr-3 bg-white" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center mr-3">
-                            <Image className="w-5 h-5 text-slate-400" />
-                          </div>
-                        )}
+                        {(() => {
+                          const imgUrl = product.thumbnail || product.colors?.find(c => c.imageUrls && c.imageUrls.length > 0)?.imageUrls?.[0] || product.colors?.[0]?.imageUrls?.[0];
+                          return imgUrl ? (
+                            <img 
+                              src={imgUrl} 
+                              alt={product.name} 
+                              className="w-10 h-10 rounded-lg object-cover border border-slate-200 dark:border-slate-700 mr-3 bg-white" 
+                              referrerPolicy="no-referrer" 
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                              }}
+                            />
+                          ) : null;
+                        })()}
+                        <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center mr-3 only:flex [&:not(:only-child)]:hidden">
+                          <Image className="w-5 h-5 text-slate-400" />
+                        </div>
                         <div>
                           <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{product.name}</p>
                           <p className="text-xs text-slate-400 font-mono">#{product.id?.substring(0, 8)}</p>

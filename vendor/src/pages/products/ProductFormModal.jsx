@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Loader2, Upload, Image as ImageIcon, X } from 'lucide-react';
 import { Modal, Button, Input, Select, Badge } from '../../components/ui';
 import { productService } from '../../services/productService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 export default function ProductFormModal({ isOpen, onClose, productToEdit, onSave, categories = [] }) {
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadingColorId, setUploadingColorId] = useState(null);
 
   // --- Form State ---
   const [formData, setFormData] = useState({
@@ -26,8 +27,20 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
         categoryId: productToEdit.categoryId || '',
         description: productToEdit.description || '',
         status: productToEdit.status || 'active',
-        // Make sure to map color properly if needed, but since it's from API, it has .color
-        colors: productToEdit.colors ? JSON.parse(JSON.stringify(productToEdit.colors)) : []
+        colors: productToEdit.colors
+          ? productToEdit.colors.map(c => ({
+              id: c.id,
+              color: c.color || '',
+              imageUrls: Array.isArray(c.imageUrls) ? [...c.imageUrls] : [],
+              inputUrl: '',
+              variants: (c.variants || []).map(v => ({
+                id: v.id,
+                size: v.size || '',
+                price: Number(v.price) || 0,
+                stock: Number(v.stock) || 0
+              }))
+            }))
+          : []
       });
     } else {
       setFormData({
@@ -49,7 +62,8 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
     const newColor = {
       id: `temp-color-${Date.now()}`,
       color: '',
-      imageUrls: [''],
+      imageUrls: [],
+      inputUrl: '',
       variants: []
     };
     setFormData(prev => ({ ...prev, colors: [...prev.colors, newColor] }));
@@ -67,6 +81,72 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
     setFormData(prev => ({
       ...prev,
       colors: prev.colors.filter(c => c.id !== colorId)
+    }));
+  };
+
+  const handleFileUpload = async (colorId, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingColorId(colorId);
+      const res = await productService.uploadImage(file);
+      const uploadedUrl = res.url || (res.urls && res.urls[0]);
+      if (uploadedUrl) {
+        setFormData(prev => ({
+          ...prev,
+          colors: prev.colors.map(c => {
+            if (c.id === colorId) {
+              const currentUrls = (c.imageUrls || []).filter(Boolean);
+              return {
+                ...c,
+                imageUrls: [...currentUrls, uploadedUrl]
+              };
+            }
+            return c;
+          })
+        }));
+      }
+    } catch (err) {
+      console.error('Lỗi tải ảnh:', err);
+      alert('Không thể tải ảnh lên: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setUploadingColorId(null);
+      e.target.value = '';
+    }
+  };
+
+  const handleAddUrlImage = (colorId) => {
+    setFormData(prev => ({
+      ...prev,
+      colors: prev.colors.map(c => {
+        if (c.id === colorId) {
+          const trimmed = (c.inputUrl || '').trim();
+          if (!trimmed) return c;
+          const currentUrls = (c.imageUrls || []).filter(Boolean);
+          return {
+            ...c,
+            imageUrls: [...currentUrls, trimmed],
+            inputUrl: ''
+          };
+        }
+        return c;
+      })
+    }));
+  };
+
+  const handleRemoveImage = (colorId, imgIndex) => {
+    setFormData(prev => ({
+      ...prev,
+      colors: prev.colors.map(c => {
+        if (c.id === colorId) {
+          return {
+            ...c,
+            imageUrls: (c.imageUrls || []).filter((_, idx) => idx !== imgIndex)
+          };
+        }
+        return c;
+      })
     }));
   };
 
@@ -113,30 +193,54 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
   };
 
   const handleSubmit = async () => {
-    if (!formData.name || !formData.categoryId) {
-      alert("Please fill required product fields (Name, Category)");
+    if (!formData.name?.trim() || !formData.categoryId) {
+      alert("Vui lòng điền đầy đủ các thông tin bắt buộc (Tên sản phẩm, Danh mục)");
       return;
+    }
+
+    // Kiểm tra tên màu nếu có thêm màu
+    for (let i = 0; i < formData.colors.length; i++) {
+      if (!formData.colors[i].color?.trim()) {
+        alert(`Vui lòng nhập tên cho phân loại màu #${i + 1}`);
+        return;
+      }
     }
     
     try {
       setIsSubmitting(true);
-      // Wait, the API for creating products and variants may be more complex.
-      // Assuming for now the API accepts creating a product first, or creating everything in one payload.
-      // Based on NestJS standard conventions, let's just send the whole data and hope the backend handles it.
-      // Or if not, we can just save basic info for now.
+      const payload = {
+        name: formData.name.trim(),
+        description: formData.description?.trim() || null,
+        status: formData.status || 'active',
+        categoryId: formData.categoryId,
+        category: { connect: { id: formData.categoryId } },
+        colors: formData.colors.map(c => ({
+          ...(c.id && !c.id.startsWith('temp-') ? { id: c.id } : {}),
+          color: c.color.trim(),
+          imageUrls: (c.imageUrls || []).filter(Boolean),
+          variants: (c.variants || []).map(v => ({
+            ...(v.id && !v.id.startsWith('temp-') ? { id: v.id } : {}),
+            size: String(v.size || '').trim() || 'Tiêu chuẩn',
+            price: Number(v.price) || 0,
+            stock: Number(v.stock) || 0,
+          }))
+        }))
+      };
+
       if (productToEdit) {
-        await productService.updateProduct(productToEdit.id, formData);
+        await productService.updateProduct(productToEdit.id, payload);
       } else {
-        await productService.createProduct(formData);
+        await productService.createProduct(payload);
       }
-      onSave(formData);
+      onSave(payload);
     } catch (error) {
       console.error('Error saving product:', error);
-      alert('Không thể lưu sản phẩm. ' + (error.response?.data?.message || ''));
+      alert('Không thể lưu sản phẩm. ' + (error.response?.data?.message || error.message || ''));
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
   return (
     <Modal
@@ -239,19 +343,86 @@ export default function ProductFormModal({ isOpen, onClose, productToEdit, onSav
                   {/* Color Content */}
                   {expandedColorId === color.id && (
                     <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <Input 
-                          label="Color Name" 
-                          placeholder="e.g. Red"
-                          value={color.color}
-                          onChange={e => handleUpdateColor(color.id, 'color', e.target.value)}
-                        />
-                        <Input 
-                          label="Image URL" 
-                          placeholder="https://..."
-                          value={color.imageUrls[0] || ''}
-                          onChange={e => handleUpdateColor(color.id, 'imageUrls', [e.target.value])}
-                        />
+                      <div className="space-y-4 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Input 
+                            label="Color Name *" 
+                            placeholder="e.g. Red, Black, White..."
+                            value={color.color}
+                            onChange={e => handleUpdateColor(color.id, 'color', e.target.value)}
+                          />
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                              Product Images
+                            </label>
+                            <label className={`flex items-center justify-center gap-2 px-3 py-2 border border-dashed border-indigo-400 dark:border-indigo-600 rounded-lg text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer transition-colors ${uploadingColorId === color.id ? 'opacity-50 pointer-events-none' : ''}`}>
+                              {uploadingColorId === color.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                              ) : (
+                                <Upload className="w-4 h-4" />
+                              )}
+                              <span>{uploadingColorId === color.id ? 'Đang tải ảnh...' : 'Thêm ảnh từ máy'}</span>
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                className="hidden" 
+                                onChange={(e) => handleFileUpload(color.id, e)}
+                                disabled={uploadingColorId === color.id}
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Image URL Input Alternative */}
+                        <div className="flex gap-2 items-center">
+                          <div className="flex-1">
+                            <Input 
+                              placeholder="Hoặc dán URL ảnh trực tiếp (https://...)" 
+                              value={color.inputUrl || ''}
+                              onChange={e => handleUpdateColor(color.id, 'inputUrl', e.target.value)}
+                            />
+                          </div>
+                          <Button 
+                            variant="secondary" 
+                            size="sm"
+                            className="h-[38px] text-xs shrink-0"
+                            onClick={() => handleAddUrlImage(color.id)}
+                          >
+                            Thêm URL
+                          </Button>
+                        </div>
+
+                        {/* Image Preview Gallery */}
+                        {color.imageUrls && color.imageUrls.filter(Boolean).length > 0 && (
+                          <div>
+                            <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                              Ảnh đã chọn ({color.imageUrls.filter(Boolean).length}):
+                            </span>
+                            <div className="flex flex-wrap gap-2.5">
+                              {color.imageUrls.filter(Boolean).map((imgUrl, imgIdx) => (
+                                <div key={imgIdx} className="relative group w-16 h-16 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shadow-sm">
+                                  <img 
+                                    src={imgUrl} 
+                                    alt="Color preview" 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.onerror = null;
+                                      e.currentTarget.src = 'https://placehold.co/80x80?text=Error';
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveImage(color.id, imgIdx)}
+                                    className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full shadow transition-opacity opacity-80 group-hover:opacity-100"
+                                    title="Xóa ảnh"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* LEVEL 3: VARIANTS */}

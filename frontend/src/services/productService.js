@@ -11,5 +11,9 @@ export const productService = {
 
   getProductById: async (id) => {
     return await apiClient.get(`/products/${id}`);
-  }
+  },
+
+  getBestSellers: async (params = {}) => {
+    return await apiClient.get('/products/best-sellers', { params });
+  },
 };

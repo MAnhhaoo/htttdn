@@ -15,6 +15,7 @@ import About from '../pages/About/About';
 import Contact from '../pages/Contact/Contact';
 import PaymentDemo from '../pages/Cart/PaymentDemo';
 import Favorites from '../pages/Account/Favorites';
+import VendorShop from '../pages/Shop/VendorShop';
 
 export default function AppRoutes() {
   return (
@@ -28,6 +29,7 @@ export default function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/products" element={<ProductSearch />} />
         <Route path="/products/:id" element={<ProductDetail />} />
+        <Route path="/shop/:id" element={<VendorShop />} />
         <Route path="/cart" element={<Cart />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />

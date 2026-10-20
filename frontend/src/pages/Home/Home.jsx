@@ -1,13 +1,37 @@
+import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Sparkles, ShieldCheck, Truck, HeadphonesIcon, Gift, MoveRight } from 'lucide-react';
-import { useProducts } from '../../hooks/useProducts';
+import { ArrowRight, Sparkles, ShieldCheck, Truck, HeadphonesIcon, Gift, MoveRight, Flame } from 'lucide-react';
+import { useProducts, useBestSellingProducts } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
 import ProductCard from '../../components/product/ProductCard/ProductCard';
 import ProductCardSkeleton from '../../components/product/ProductCard/ProductCardSkeleton';
+import Pagination from '../../components/common/Pagination/Pagination';
 
 export default function Home() {
-  const { products, isLoading: isLoadingProducts } = useProducts({ limit: 4 });
+  const [currentPage, setCurrentPage] = useState(1);
+  const allProductsSectionRef = useRef(null);
+
+  // Top best-selling products from real orders
+  const { products: bestSellingProducts, isLoading: isLoadingBestSelling } = useBestSellingProducts({ limit: 4 });
   const { categories, isLoading: isLoadingCategories } = useCategories();
+
+  // All products with 10 items per page
+  const {
+    products: allProducts,
+    meta: allProductsMeta,
+    isLoading: isLoadingAllProducts,
+    isFetching: isFetchingAllProducts,
+  } = useProducts({
+    page: currentPage,
+    limit: 10,
+  });
+
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+    if (allProductsSectionRef.current) {
+      allProductsSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   // Pick top 4 categories
   const displayCategories = categories?.slice(0, 4) || [];
@@ -126,12 +150,16 @@ export default function Home() {
         )}
       </section>
 
-      {/* ── Featured Products ── */}
+      {/* ── Featured / Best-Selling Products ── */}
       <section className="py-16 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 gap-4">
           <div>
-            <div className="text-[#2A5C4A] text-xs font-bold tracking-widest uppercase mb-2">Được yêu thích</div>
+            <div className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-500 text-xs font-bold tracking-widest uppercase mb-2">
+              <Flame className="w-4 h-4 fill-amber-500 text-amber-500" />
+              Bán chạy nhất
+            </div>
             <h2 className="text-4xl md:text-5xl font-serif text-[#1A3A2C] dark:text-dark-text tracking-tight">Sản phẩm nổi bật</h2>
+            <p className="text-gray-500 text-sm mt-1">Top các sản phẩm được khách hàng yêu thích và đặt mua nhiều nhất</p>
           </div>
           <Link to="/products" className="text-[#2A5C4A] font-semibold hover:text-[#1A3A2C] transition-colors flex items-center gap-2 group whitespace-nowrap">
             Xem tất cả <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -139,10 +167,10 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 lg:gap-8">
-          {isLoadingProducts ? (
+          {isLoadingBestSelling ? (
             [...Array(4)].map((_, i) => <ProductCardSkeleton key={i} />)
-          ) : products.length > 0 ? (
-            products.map((product) => (
+          ) : bestSellingProducts.length > 0 ? (
+            bestSellingProducts.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))
           ) : (
@@ -182,6 +210,47 @@ export default function Home() {
           </div>
           
         </div>
+      </section>
+
+      {/* ── All Products Section with Pagination (10 items per page) ── */}
+      <section ref={allProductsSectionRef} className="py-16 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 border-t border-gray-200/60 dark:border-dark-border/60">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 gap-4">
+          <div>
+            <div className="text-[#2A5C4A] text-xs font-bold tracking-widest uppercase mb-2">Bộ sưu tập</div>
+            <h2 className="text-4xl md:text-5xl font-serif text-[#1A3A2C] dark:text-dark-text tracking-tight">Tất cả sản phẩm</h2>
+            <p className="text-gray-500 text-sm mt-1">
+              Khám phá toàn bộ {allProductsMeta?.totalItems ? `${allProductsMeta.totalItems} ` : ''}sản phẩm chất lượng tại MIVA
+            </p>
+          </div>
+        </div>
+
+        {/* Product Grid - 10 items displayed (2 rows of 5 on desktop) */}
+        <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 lg:gap-6 transition-opacity duration-200 ${isFetchingAllProducts && !isLoadingAllProducts ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
+          {isLoadingAllProducts ? (
+            [...Array(10)].map((_, i) => <ProductCardSkeleton key={i} />)
+          ) : allProducts.length > 0 ? (
+            allProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))
+          ) : (
+            <div className="col-span-full py-20 text-center border-dashed border-2 border-gray-200 rounded-lg">
+              <p className="text-gray-500">Chưa có sản phẩm nào.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Pagination */}
+        {!isLoadingAllProducts && allProductsMeta.totalPages > 1 && (
+          <div className="mt-12 border-t border-gray-200/80 dark:border-dark-border/80 pt-6">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={allProductsMeta.totalPages}
+              totalItems={allProductsMeta.totalItems}
+              itemsPerPage={10}
+              onPageChange={handlePageChange}
+            />
+          </div>
+        )}
       </section>
 
     </div>
