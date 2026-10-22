@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { assertEmailAvailable } from '../../common/utils/account-email/account-email.util';
 
 @Injectable()
 export class UsersService {
@@ -410,14 +411,37 @@ export class UsersService {
   }
 
   async updateUser(id: string, data: any) {
-    const { role: _r, password: _p, id: _i, address: _a, ...updateData } = data;
+    const { role: _r, password: _p, id: _i, address: _a, ...updateData } = data ?? {};
+    if (typeof updateData.dateOfBirth === 'string') {
+      updateData.dateOfBirth = new Date(`${updateData.dateOfBirth}T00:00:00.000Z`);
+    }
+    if (typeof updateData.email === 'string') {
+      updateData.email = updateData.email.trim().toLowerCase();
+    }
+
+    // Chỉ giữ các cột thực sự tồn tại ở từng bảng để tránh lỗi 500 khi body có field lạ
+    const pick = (allowed: string[]) => {
+      const keys = Object.keys(updateData);
+      const invalid = keys.filter((k) => !allowed.includes(k));
+      if (invalid.length > 0) {
+        throw new BadRequestException(`Dữ liệu cập nhật chứa trường không hợp lệ: ${invalid.join(', ')}`);
+      }
+      return Object.fromEntries(
+        Object.entries(updateData).filter(
+          ([key, value]) => allowed.includes(key) && value !== undefined,
+        ),
+      ) as any;
+    };
+    const common = ['fullName', 'email', 'phone', 'avatarUrl', 'status', 'deletedAt'];
 
     // Check client
     const isClient = await this.prisma.client.findUnique({ where: { id } });
     if (isClient) {
+      const clientData = pick([...common, 'dateOfBirth', 'gender']);
+      await assertEmailAvailable(this.prisma, clientData.email, { role: 'client', id });
       const updated = await this.prisma.client.update({
         where: { id },
-        data: updateData,
+        data: clientData,
       });
       const { password: _, ...rest } = updated;
       return rest;
@@ -426,9 +450,11 @@ export class UsersService {
     // Check vendor
     const isVendor = await this.prisma.vendor.findUnique({ where: { id } });
     if (isVendor) {
+      const vendorData = pick([...common, 'storeName', 'taxId']);
+      await assertEmailAvailable(this.prisma, vendorData.email, { role: 'vendor', id });
       const updated = await this.prisma.vendor.update({
         where: { id },
-        data: updateData,
+        data: vendorData,
       });
       const { password: _, ...rest } = updated;
       return rest;
@@ -437,9 +463,11 @@ export class UsersService {
     // Check employee
     const isEmployee = await this.prisma.employee.findUnique({ where: { id } });
     if (isEmployee) {
+      const employeeData = pick([...common, 'dateOfBirth', 'gender']);
+      await assertEmailAvailable(this.prisma, employeeData.email, { role: 'employee', id });
       const updated = await this.prisma.employee.update({
         where: { id },
-        data: updateData,
+        data: employeeData,
       });
       const { password: _, ...rest } = updated;
       return rest;
@@ -448,9 +476,11 @@ export class UsersService {
     // Check admin
     const isAdmin = await this.prisma.admin.findUnique({ where: { id } });
     if (isAdmin) {
+      const adminData = pick([...common, 'department']);
+      await assertEmailAvailable(this.prisma, adminData.email, { role: 'admin', id });
       const updated = await this.prisma.admin.update({
         where: { id },
-        data: updateData,
+        data: adminData,
       });
       const { password: _, ...rest } = updated;
       return rest;

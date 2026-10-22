@@ -32,6 +32,11 @@ export default function OrderManagement() {
     fetchOrders();
   }, []);
 
+  useEffect(() => {
+    window.addEventListener('miva:orders', fetchOrders);
+    return () => window.removeEventListener('miva:orders', fetchOrders);
+  });
+
   const filtered = orders.filter(o => {
     const matchStatus = statusFilter === 'all' || o.status === statusFilter;
     if (!matchStatus) return false;
@@ -59,16 +64,6 @@ export default function OrderManagement() {
   const handleViewClick = (order) => {
     setOrderToView(order);
     setIsDetailModalOpen(true);
-  };
-
-  const handleStatusChange = async (orderId, newStatus) => {
-    try {
-      await orderService.updateOrderStatus(orderId, newStatus);
-      fetchOrders();
-    } catch (error) {
-      console.error('Failed to update status', error);
-      alert('Không thể cập nhật trạng thái đơn hàng. ' + (error.response?.data?.message || ''));
-    }
   };
 
   if (loading) {
@@ -173,8 +168,7 @@ export default function OrderManagement() {
       <OrderDetailModal 
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
-        order={orderToView}
-        onStatusChange={(newStatus) => handleStatusChange(orderToView.id, newStatus)}
+        order={orders.find(order => order.id === orderToView?.id) || orderToView}
         vendorId={user?.id}
       />
     </div>

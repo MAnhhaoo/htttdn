@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -14,6 +15,7 @@ import { Roles } from 'src/common/guards/access-control/roles.decorator';
 import {
   CreateEmployeeDto,
   GetEmployeesPaginationDto,
+  SendEmployeeNotificationDto,
   UpdateEmployeeDto,
 } from './dto/employee.dto';
 import { EmployeesService } from './employees.service';
@@ -39,8 +41,11 @@ export class EmployeesController {
 
   @Post('notifications/send')
   @Roles('admin')
-  sendNotification(@User() user: UserInfo, @Body() body: any) {
-    return this.employeesService.sendNotification(user.userID, body);
+  sendNotification(@User() user: UserInfo, @Body() body: SendEmployeeNotificationDto) {
+    return this.employeesService.sendNotification(user.userID, {
+      ...body,
+      employeeId: body.employeeId ?? undefined,
+    });
   }
 
   @Get('notifications/mine')
@@ -72,7 +77,8 @@ export class EmployeesController {
 
   @Get(':id')
   @Roles('admin', 'employee')
-  getEmployee(@Param('id') id: string) {
+  getEmployee(@Param('id') id: string, @User() user: UserInfo) {
+    this.assertSelfOrAdmin(id, user);
     return this.employeesService.getEmployeeById(id);
   }
 
@@ -115,7 +121,14 @@ export class EmployeesController {
 
   @Get(':id/salary-history')
   @Roles('admin', 'employee')
-  getSalaryHistory(@Param('id') id: string) {
+  getSalaryHistory(@Param('id') id: string, @User() user: UserInfo) {
+    this.assertSelfOrAdmin(id, user);
     return this.employeesService.getSalaryHistory(id);
+  }
+
+  private assertSelfOrAdmin(id: string, user: UserInfo) {
+    if (user.role !== 'admin' && id !== user.userID) {
+      throw new ForbiddenException('Bạn chỉ được xem hồ sơ và lịch sử lương của chính mình');
+    }
   }
 }

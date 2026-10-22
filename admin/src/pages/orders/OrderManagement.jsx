@@ -54,6 +54,11 @@ export default function OrderManagement() {
     fetchOrders();
   }, [fetchOrders]);
 
+  useEffect(() => {
+    window.addEventListener('miva:orders', fetchOrders);
+    return () => window.removeEventListener('miva:orders', fetchOrders);
+  }, [fetchOrders]);
+
   const getStatusBadge = (status) => {
     const styles = {
       completed: 'success',

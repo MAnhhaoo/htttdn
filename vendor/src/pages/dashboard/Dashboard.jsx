@@ -128,6 +128,8 @@ export default function Dashboard() {
     };
 
     fetchDashboardData();
+    window.addEventListener('miva:dashboard', fetchDashboardData);
+    return () => window.removeEventListener('miva:dashboard', fetchDashboardData);
   }, [user?.id, user?.userID]);
 
   if (loading) {

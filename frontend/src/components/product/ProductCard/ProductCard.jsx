@@ -6,6 +6,7 @@ import { useCart } from '../../../hooks/useCart';
 import { useToast } from '../../common/Toast/Toast';
 import { useState, useEffect } from 'react';
 import QuickAddModal from '../QuickAddModal/QuickAddModal';
+import { bestVoucherPrice } from '../../../utils/voucherPrice';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -29,6 +30,7 @@ export default function ProductCard({ product }) {
   const maxPrice = product.maxPrice;
   const totalStock = product.totalStock ?? 0;
   const showPriceRange = maxPrice && price && maxPrice !== price;
+  const voucherPrice = bestVoucherPrice(price, 1, product.voucherOffers, product.id);
 
   // Variant analysis for cart logic
   const allVariants = product.colors?.flatMap(c => c.variants || []) || [];
@@ -177,6 +179,9 @@ export default function ProductCard({ product }) {
                   <p className="font-bold text-sm sm:text-base text-primary leading-tight">
                     {formatPrice(price)}
                   </p>
+                  {voucherPrice && <div className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+                    <strong>{formatPrice(voucherPrice.totalAmount)}</strong> với mã <span className="font-semibold">{voucherPrice.code}</span>
+                  </div>}
                 </div>
               ) : (
                 <p className="text-sm text-light-muted dark:text-dark-muted italic">Liên hệ</p>

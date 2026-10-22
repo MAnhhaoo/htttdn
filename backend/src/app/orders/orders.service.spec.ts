@@ -24,6 +24,7 @@ describe('OrdersService', () => {
       orderCode: 'ORDER-SURVEY',
       clientId,
       status: OrderStatus.pending,
+      vendorOrders: [], shipments: [],
       details: [
         {
           productVariant: {
@@ -38,12 +39,16 @@ describe('OrdersService', () => {
       cart: {
         findUnique: jest.fn().mockResolvedValue({
           id: cartId,
-          items: [{ productVariantId: variantId, quantity: 1 }]})},
+          items: [{ id: 'cart-item', productVariantId: variantId, quantity: 1,
+            productVariant: { productColor: { product: { vendorId } } } }]})},
       order: {
         create: jest.fn().mockResolvedValue(order),
         findUniqueOrThrow: jest.fn().mockResolvedValue(order)},
       productVariant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      orderDetail: { create: jest.fn() },
+      orderDetail: { create: jest.fn(), updateMany: jest.fn() },
+      vendorOrder: { create: jest.fn().mockResolvedValue({ id: 'vendor-order' }) },
+      employee: { findMany: jest.fn().mockResolvedValue([]) },
+      shipment: { create: jest.fn().mockResolvedValue({ id: 'shipment' }) },
       payment: { create: jest.fn() },
       orderStatusHistory: { create: jest.fn() },
       cartItem: { deleteMany: jest.fn() },
@@ -74,7 +79,9 @@ describe('OrdersService', () => {
     const realtime = {
       emitToUser: jest.fn(),
       emitToAdmins: jest.fn(),
-      emitToVendor: jest.fn()};
+      emitToVendor: jest.fn(),
+      emitToEmployees: jest.fn(),
+      emitProductUpdated: jest.fn()};
     const surveys = {
       deliverForOrder: jest.fn().mockResolvedValue([]),
       emitNotifications: jest.fn()};
@@ -112,6 +119,7 @@ describe('OrdersService', () => {
       orderCode: 'ORDER-1',
       clientId,
       status: OrderStatus.pending,
+      vendorOrders: [], shipments: [],
       payment: {
         status: PaymentStatus.pending,
         method: PaymentMethod.cod},
@@ -130,11 +138,14 @@ describe('OrdersService', () => {
       ]};
     const tx = {
       productVariant: { update: jest.fn() },
+      vendorOrder: { updateMany: jest.fn() },
+      shipment: { updateMany: jest.fn() },
       voucherDetail: { update: jest.fn() },
-      voucher: { update: jest.fn() },
+      voucher: { updateMany: jest.fn() },
       payment: { update: jest.fn() },
       order: {
         update: jest.fn(),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUniqueOrThrow: jest.fn().mockResolvedValue({
           ...current,
           status: OrderStatus.cancelled})},
@@ -147,7 +158,9 @@ describe('OrdersService', () => {
     const realtime = {
       emitToUser: jest.fn(),
       emitToAdmins: jest.fn(),
-      emitToVendor: jest.fn()};
+      emitToVendor: jest.fn(),
+      emitToEmployees: jest.fn(),
+      emitProductUpdated: jest.fn()};
     const service = new OrdersService(
       prisma as unknown as PrismaService,
       {} as VouchersService,
@@ -177,8 +190,8 @@ describe('OrdersService', () => {
     expect(tx.voucherDetail.update).toHaveBeenCalledWith({
       where: { id: current.voucherDetails[0].id },
       data: { reversedAt: expect.any(Date) as Date }});
-    expect(tx.voucher.update).toHaveBeenCalledWith({
-      where: { id: voucherId },
+    expect(tx.voucher.updateMany).toHaveBeenCalledWith({
+      where: { id: voucherId, usedQuantity: { gt: 0 } },
       data: { usedQuantity: { decrement: 1 } }});
     expect(tx.payment.update).toHaveBeenCalledWith({
       where: { orderId },

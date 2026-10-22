@@ -16,6 +16,15 @@ export default function NotificationDropdown({ onSelectSurvey }) {
   }, []);
 
   useEffect(() => {
+    const refresh = () => {
+      fetchUnreadCount();
+      if (isOpen) loadNotifications();
+    };
+    window.addEventListener('miva:notification', refresh);
+    return () => window.removeEventListener('miva:notification', refresh);
+  }, [isOpen]);
+
+  useEffect(() => {
     if (isOpen) {
       loadNotifications();
     }

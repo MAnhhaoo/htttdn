@@ -5,6 +5,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -26,6 +27,12 @@ import { VendorsService } from './vendors.service';
 import { UpdateProfileDto, UpdateVendorDto } from './dto/update-vendor.dto';
 
 import { GetVendorsPaginationDto } from './dto/get-vendor.dto';
+
+import {
+  ApproveRegistrationDto,
+  RejectRegistrationDto,
+  RenewSubscriptionDto,
+} from './dto/registration.dto';
 
 import type { Vendor as VendorEntity } from './entities/vendor.entity';
 
@@ -111,7 +118,7 @@ export class VendorsController {
   @Roles('vendor')
   renewSubscription(
     @User() user: VendorInfo,
-    @Body() body: { plan: string },
+    @Body() body: RenewSubscriptionDto,
   ) {
     return this.vendorsService.renewSubscription(user.userID, body?.plan || '1_year');
   }
@@ -131,11 +138,14 @@ export class VendorsController {
   @Patch('admin/registrations/:id/approve')
   @Roles('admin', 'employee')
   approveRegistration(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @User() user: VendorInfo,
-    @Body() body: { plan?: string; commissionRate?: number; note?: string },
+    @Body() body: ApproveRegistrationDto,
   ) {
-    return this.vendorsService.approveRegistration(id, user, body);
+    return this.vendorsService.approveRegistration(id, user, {
+      ...body,
+      note: body?.note ?? undefined,
+    });
   }
 
   /**
@@ -144,9 +154,9 @@ export class VendorsController {
   @Patch('admin/registrations/:id/reject')
   @Roles('admin', 'employee')
   rejectRegistration(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @User() user: VendorInfo,
-    @Body() body: { reason?: string },
+    @Body() body: RejectRegistrationDto,
   ) {
     return this.vendorsService.rejectRegistration(id, user, body?.reason || '');
   }

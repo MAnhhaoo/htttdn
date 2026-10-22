@@ -78,17 +78,13 @@ export default function VoucherManagement() {
   };
 
   const handleSave = async (savedData) => {
-    try {
-      if (voucherToEdit) {
-        await vouchersApi.updateVoucher(voucherToEdit.id, savedData);
-      } else {
-        await vouchersApi.createVoucher(savedData);
-      }
-      setIsModalOpen(false);
-      fetchVouchers();
-    } catch (err) {
-      alert(err.response?.data?.message || 'Lưu voucher thất bại');
+    if (voucherToEdit) {
+      await vouchersApi.updateVoucher(voucherToEdit.id, savedData);
+    } else {
+      await vouchersApi.createVoucher(savedData);
     }
+    setIsModalOpen(false);
+    await fetchVouchers();
   };
 
   return (

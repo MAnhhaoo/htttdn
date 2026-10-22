@@ -6,6 +6,7 @@ import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 import { CustomerReportQueryDto } from './dto/customer-report.dto';
 import { AnalyticsReportQueryDto } from './dto/analytics-report.dto';
+import { UpdateFinanceConfigDto } from './dto/finance-config.dto';
 import { ReportsService } from './reports.service';
 
 @Controller()
@@ -23,10 +24,11 @@ export class ReportsController {
 
   @Post('admin/reports/finance-config')
   @Roles('admin')
-  updateFinanceConfig(
-    @Body() dto: { commissionTaxRate: number; vendorRegistrationFee: number; note?: string },
-  ) {
-    return this.reportsService.saveNewFinanceConfig(dto);
+  updateFinanceConfig(@Body() dto: UpdateFinanceConfigDto) {
+    return this.reportsService.saveNewFinanceConfig({
+      ...dto,
+      note: dto.note ?? undefined,
+    });
   }
 
   @Get('admin/reports/analytics')

@@ -58,7 +58,17 @@ export default function ProductManagement() {
   }, [fetchCategories]);
 
   useEffect(() => {
+    window.addEventListener('miva:categories', fetchCategories);
+    return () => window.removeEventListener('miva:categories', fetchCategories);
+  }, [fetchCategories]);
+
+  useEffect(() => {
     fetchProducts();
+  }, [fetchProducts]);
+
+  useEffect(() => {
+    window.addEventListener('miva:products', fetchProducts);
+    return () => window.removeEventListener('miva:products', fetchProducts);
   }, [fetchProducts]);
 
   useEffect(() => {

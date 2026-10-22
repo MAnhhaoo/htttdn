@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -12,6 +11,12 @@ import { StringUtilService } from '../../common/utils/string-util/string-util.se
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SignInDto, SignUpDto } from './dto/sign.dto';
 import { JWTToken, TokenKeys } from './consts/jwt.const';
+import {
+  ACCOUNT_ROLES,
+  AccountRole,
+  assertEmailAvailable,
+  findAccountsByEmail,
+} from '../../common/utils/account-email/account-email.util';
 
 export type TokenPayload = {
   userID: string;
@@ -81,10 +86,8 @@ export class AuthService {
 
   private async registerClient(signUpDto: SignUpDto) {
     const { email, password, ...otherInformation } = signUpDto;
-    const existingClient = await this.clientsService.getClientByEmail(email);
-    if (existingClient) {
-      throw new BadRequestException('Email đã được sử dụng');
-    }
+    // Email phải chưa thuộc về bất kỳ tài khoản nào (kể cả admin/vendor/nhân viên).
+    await assertEmailAvailable(this.prisma, email);
     const passwordHashed = await this.stringUtilService.hash(password);
     const userCreated = await this.clientsService.createClient({
       ...otherInformation,
@@ -98,13 +101,10 @@ export class AuthService {
 
   private async registerVendor(signUpDto: SignUpDto) {
     const { email, password, address: _addr, businessType: _bt, ...otherInformation } = signUpDto;
-    const existingVendor = await this.vendorsService.getVendorByEmail(email);
-    if (existingVendor) {
-      throw new BadRequestException('Email đã được sử dụng');
-    }
+    await assertEmailAvailable(this.prisma, email);
     const passwordHashed = await this.stringUtilService.hash(password);
     const storeName = (otherInformation as any).storeName || otherInformation.fullName;
-    const plan = (otherInformation as any).subscriptionPlan || '1_year';
+    const plan = (otherInformation as any).subscriptionPlan === '2_years' ? '2_years' : '1_year';
     const fee = plan === '2_years' ? 2000000 : 1200000;
 
     const userCreated = await this.vendorsService.createVendor({
@@ -125,39 +125,31 @@ export class AuthService {
     };
   }
 
-  async signIn(signInDto: SignInDto) {
+  async signIn(signInDto: SignInDto, appRole?: string) {
     const { email, password } = signInDto;
 
-    let user: any = await this.clientsService.getClientByEmail(email);
-    let role: 'admin' | 'client' | 'vendor' | 'employee' = 'client';
+    // Một email có thể (do dữ liệu cũ) tồn tại ở nhiều bảng. Không lấy bản ghi
+    // đầu tiên tìm thấy, mà thử lần lượt các tài khoản đang hoạt động — ưu tiên
+    // vai trò của ứng dụng đang đăng nhập — và chỉ chấp nhận tài khoản khớp mật khẩu.
+    // Nhờ vậy một tài khoản đăng ký trùng email không thể khóa tài khoản thật.
+    const preferred = ACCOUNT_ROLES.includes(appRole as AccountRole)
+      ? (appRole as AccountRole)
+      : undefined;
+    const candidates = (await findAccountsByEmail(this.prisma, email))
+      .filter(({ user }) => user.status === 'active' && !user.deletedAt)
+      .sort((a, b) => Number(b.role === preferred) - Number(a.role === preferred));
 
-    if (!user) {
-      user = await this.vendorsService.getVendorByEmail(email);
-      role = 'vendor';
-    }
-    if (!user) {
-      user = await this.adminsService.getAdminByEmail(email);
-      role = 'admin';
-    }
-    if (!user) {
-      user = await this.prisma.employee.findUnique({
-        where: { email },
-      });
-      if (user) {
-        role = 'employee';
+    let user: any = null;
+    let role: AccountRole = 'client';
+    for (const candidate of candidates) {
+      if (await this.stringUtilService.compare(password, candidate.user.password)) {
+        user = candidate.user;
+        role = candidate.role;
+        break;
       }
     }
 
-    if (!user || user.status !== 'active' || user.deletedAt) {
-      throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
-    }
-
-    const isPasswordMatched = await this.stringUtilService.compare(
-      password,
-      user.password,
-    );
-
-    if (!isPasswordMatched) {
+    if (!user) {
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
 

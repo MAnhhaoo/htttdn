@@ -11,11 +11,12 @@ import EmptyState from '../../components/common/EmptyState/EmptyState';
 import ProductCard from '../../components/product/ProductCard/ProductCard';
 import ProductCardSkeleton from '../../components/product/ProductCard/ProductCardSkeleton';
 import { vendorService } from '../../services/vendorService';
+import { bestVoucherPrice } from '../../utils/voucherPrice';
 
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { product, isLoading, isError } = useProductById(id);
+  const { product, offers, isLoading, isError } = useProductById(id);
   const { addToCart, isAdding } = useCart();
   const { isAuthenticated } = useAuth();
   const toast = useToast();
@@ -155,6 +156,7 @@ export default function ProductDetail() {
   if (isError || !product) return <EmptyState title="Không tìm thấy sản phẩm" description="Sản phẩm này không tồn tại hoặc đã bị xóa." />;
 
   const currentPrice = selectedVariant ? selectedVariant.price : 0;
+  const voucherPrice = bestVoucherPrice(currentPrice, quantity, offers, product.id);
   const isOutOfStock = !selectedVariant || selectedVariant.stock === 0;
 
   return (
@@ -259,6 +261,18 @@ export default function ProductDetail() {
           <div className="text-3xl font-bold text-primary mb-6">
             {formatPrice(currentPrice)}
           </div>
+          {voucherPrice && <section aria-label="Giá sau giảm" className="mb-6 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 p-4 text-emerald-800 dark:text-emerald-300 space-y-1">
+            <p>Giá sau giảm cho {quantity} sản phẩm: <strong>{formatPrice(voucherPrice.totalAmount)}</strong></p>
+            <p className="text-sm">Tiết kiệm {formatPrice(voucherPrice.discountAmount)} khi dùng mã <strong>{voucherPrice.code}</strong>.</p>
+            <p className="text-xs">Chọn mã tại giỏ hàng hoặc thanh toán. Áp dụng khi còn lượt và tài khoản đủ điều kiện.</p>
+            {offers.length > 1 && <details className="pt-2 text-sm"><summary className="cursor-pointer">Xem các mã khác</summary>
+              {offers.map(offer => {
+                const value = bestVoucherPrice(currentPrice, quantity, [offer], product.id);
+                return <p key={offer.id} className="mt-1">{offer.code}: {value ? formatPrice(value.totalAmount) : `đơn từ ${formatPrice(offer.minOrderAmount || 0)}`}</p>;
+              })}
+            </details>}
+          </section>}
+          {!voucherPrice && offers.length > 0 && <p className="mb-6 text-sm text-primary">Có mã giảm giá: {offers.map(offer => `${offer.code}${offer.minOrderAmount ? ` (đơn từ ${formatPrice(offer.minOrderAmount)})` : ''}`).join(', ')}. Chọn mã tại giỏ hàng hoặc thanh toán.</p>}
 
           <div className="prose dark:prose-invert max-w-none text-light-muted dark:text-dark-muted mb-8">
             <p>{product.description}</p>

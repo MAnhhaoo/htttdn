@@ -39,6 +39,11 @@ export default function CategoryManagement() {
   }, [fetchCategories]);
 
   useEffect(() => {
+    window.addEventListener('miva:categories', fetchCategories);
+    return () => window.removeEventListener('miva:categories', fetchCategories);
+  }, [fetchCategories]);
+
+  useEffect(() => {
     setPage(1);
   }, [search]);
 
@@ -115,7 +120,6 @@ export default function CategoryManagement() {
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Name</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Slug</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Description</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Created</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Actions</th>
                 </tr>
@@ -125,7 +129,6 @@ export default function CategoryManagement() {
                   <tr key={cat.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">{cat.name}</td>
                     <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{cat.slug}</td>
-                    <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 max-w-xs truncate">{cat.description || '-'}</td>
                     <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{formatDate(cat.createdAt)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">

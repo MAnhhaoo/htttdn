@@ -256,7 +256,7 @@ export class PayrollService {
     });
   }
 
-  async recordAttendance(dto: RecordAttendanceDto) {
+  async recordAttendance(dto: RecordAttendanceDto & { employeeId: string }) {
     const dateObj = new Date(dto.date);
 
     // Get employee to check assigned schedule
@@ -264,6 +264,9 @@ export class PayrollService {
       where: { id: dto.employeeId },
       select: { permissions: true },
     });
+    if (!employee) {
+      throw new NotFoundException('Nhân viên không tồn tại');
+    }
 
     const perms = (employee?.permissions as Record<string, any>) || {};
     const schedule = perms.schedule || {};

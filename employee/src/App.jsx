@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import RealtimeBridge from './realtime/RealtimeBridge';
 import { ordersApi } from './api/axiosClient';
 
 import { DashboardLayout } from './components/layout/DashboardLayout';
@@ -184,6 +185,11 @@ const AppContent = () => {
     fetchRealOrders();
   }, [fetchRealOrders]);
 
+  useEffect(() => {
+    window.addEventListener('miva:orders', fetchRealOrders);
+    return () => window.removeEventListener('miva:orders', fetchRealOrders);
+  }, [fetchRealOrders]);
+
   // 1. Confirm Order Action (Real DB Patch)
   const handleConfirmOrder = async (orderId, note) => {
     try {
@@ -356,6 +362,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <RealtimeBridge />
         <AppContent />
       </AuthProvider>
     </BrowserRouter>

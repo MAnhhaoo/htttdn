@@ -128,6 +128,23 @@ describe('VouchersService', () => {
     expect(result.totalAmount.toString()).toBe('72');
   });
 
+  it.each(['perUserLimit', 'quantity'] as const)('accounts for planned %s usage across multiple shops before placing an order', async limit => {
+    const variantId = '55555555-5555-4555-8555-555555555555';
+    const selectedVoucher = { ...voucher('77777777-7777-4777-8777-777777777777', 'ONE', VoucherScope.platform, DiscountType.percentage, 10),
+      perUserLimit: limit === 'perUserLimit' ? 1 : 100,
+      quantity: limit === 'quantity' ? 1 : 100 };
+    const db = {
+      productVariant: { findMany: jest.fn().mockResolvedValue([variant(variantId, 100, productId)]) },
+      voucher: { findMany: jest.fn().mockResolvedValue([selectedVoucher]) },
+      voucherDetail: { count: jest.fn().mockResolvedValue(0) },
+    };
+    const service = new VouchersService({} as PrismaService);
+    const planned = new Map<string, number>();
+    const first = await service.calculate(['ONE'], vendorId, [{ productVariantId: variantId, quantity: 1 }], db as never, planned);
+    expect(first.totalAmount.toNumber()).toBe(90);
+    await expect(service.calculate(['ONE'], vendorId, [{ productVariantId: variantId, quantity: 1 }], db as never, planned)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('rejects two vouchers of the same scope', async () => {
     const db = {
       productVariant: {

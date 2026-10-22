@@ -35,14 +35,14 @@ export function toSqlValue(value: unknown): string {
  * Build a batched INSERT statement for a PostgreSQL table.
  * Rows are inserted in chunks to avoid excessively long statements.
  */
-export function buildInsert(
+export function buildInsert<T extends object>(
   table: string,
-  rows: Record<string, unknown>[],
+  rows: readonly T[],
   chunkSize = 500,
 ): string {
   if (rows.length === 0) return '';
 
-  const columns = Object.keys(rows[0]);
+  const columns = Object.keys(rows[0]) as (keyof T & string)[];
   const columnList = columns.map((c) => `"${c}"`).join(', ');
   const chunks: string[] = [];
 

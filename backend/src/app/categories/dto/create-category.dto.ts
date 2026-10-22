@@ -1,18 +1,14 @@
-import { Prisma } from '@prisma/client';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class CreateCategoryDto implements Omit<
-  Prisma.CategoryCreateInput,
-  'slug'
-> {
-  name: string;
+export const CreateCategorySchema = z
+  .object({
+    name: z
+      .string({ error: 'Tên danh mục phải là chuỗi' })
+      .trim()
+      .min(1, 'Tên danh mục là bắt buộc')
+      .max(255, 'Tên danh mục không được vượt quá 255 ký tự'),
+  })
+  .strict();
 
-  createdAt?: string | Date | undefined;
-
-  updatedAt?: string | Date | undefined;
-
-  deletedAt?: string | Date | null | undefined;
-
-  products?: Prisma.ProductCreateNestedManyWithoutCategoryInput | undefined;
-
-  id?: string | undefined;
-}
+export class CreateCategoryDto extends createZodDto(CreateCategorySchema) {}

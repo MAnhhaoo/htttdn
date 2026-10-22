@@ -1,6 +1,8 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
@@ -56,8 +58,17 @@ export class PayrollController {
 
   @Post('attendance')
   @Roles('admin', 'employee')
-  recordAttendance(@Body() dto: RecordAttendanceDto) {
-    return this.payrollService.recordAttendance(dto);
+  recordAttendance(@Body() dto: RecordAttendanceDto, @User() user: UserInfo) {
+    if (user?.role === 'employee') {
+      if (dto.employeeId && dto.employeeId !== user.userID) {
+        throw new ForbiddenException('Nhân viên không được chấm công hộ người khác');
+      }
+      return this.payrollService.recordAttendance({ ...dto, employeeId: user.userID });
+    }
+    if (!dto.employeeId) {
+      throw new BadRequestException('Thiếu employeeId');
+    }
+    return this.payrollService.recordAttendance({ ...dto, employeeId: dto.employeeId });
   }
 
   @Get('attendance')

@@ -12,7 +12,7 @@ import { faker } from '../utils/faker';
 import { buildInsert, sqlSection } from '../utils/sqlBuilder';
 import { CONFIG } from '../config/dataset.config';
 import { createId } from '@paralleldrive/cuid2';
-import type { GeneratedUser } from './users.generator';
+import type { GeneratedClient } from './users.generator';
 import type { GeneratedProduct } from './products.generator';
 import type { GeneratedProductColor } from './productColors.generator';
 import type { GeneratedProductVariant } from './productVariants.generator';
@@ -66,7 +66,7 @@ export interface GeneratedPayment {
 }
 
 export function generateOrders(
-  customers: GeneratedUser[],
+  customers: GeneratedClient[],
   products: GeneratedProduct[],
   colors: GeneratedProductColor[],
   variants: GeneratedProductVariant[],
@@ -77,7 +77,7 @@ export function generateOrders(
   const payments: GeneratedPayment[] = [];
 
   if (variants.length === 0 || customers.length === 0) {
-    return { orders, orderDetails, payments, sql: '' };
+    return { orders, orderDetails, payments, ordersSql: '', getOrderDetailsSql: () => '', paymentsSql: '' };
   }
 
   // Build lookups

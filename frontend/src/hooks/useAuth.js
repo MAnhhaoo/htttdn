@@ -33,14 +33,11 @@ export const useAuth = () => {
 
   const registerMutation = useMutation({
     mutationFn: (data) => authService.register(data),
-    onSuccess: async () => {
-      try {
-        const userData = await authService.getProfile();
-        dispatch(setCredentials(userData));
-        navigate('/');
-      } catch {
-        navigate('/login');
-      }
+    onSuccess: (_, data) => {
+      navigate('/login', {
+        replace: true,
+        state: { registered: true, email: data.email.trim().toLowerCase() },
+      });
     }
   });
 
@@ -51,6 +48,18 @@ export const useAuth = () => {
       queryClient.clear();
       navigate('/login');
     }
+  });
+
+  const refreshProfile = async () => {
+    const userData = await authService.getProfile();
+    dispatch(setCredentials(userData));
+    queryClient.setQueryData(['profile'], userData);
+    return userData;
+  };
+
+  const updateProfileMutation = useMutation({
+    mutationFn: (data) => authService.updateProfile(data),
+    onSuccess: refreshProfile,
   });
 
   return {
@@ -67,5 +76,9 @@ export const useAuth = () => {
 
     logout: logoutMutation.mutate,
     isLoggingOut: logoutMutation.isPending,
+
+    updateProfile: updateProfileMutation.mutateAsync,
+    isUpdatingProfile: updateProfileMutation.isPending,
+    refreshProfile,
   };
 };

@@ -2,10 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { GetNotificationsQueryDto } from './dto/get-notification.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly realtime: RealtimeService) {}
 
   private getTargetWhere(user: UserInfo) {
     if (user.role === 'admin') return { adminId: user.userID };
@@ -77,7 +78,9 @@ export class NotificationsService {
     if (!changed.count) {
       throw new NotFoundException('Thông báo không tồn tại');
     }
-    return this.prisma.notification.findUniqueOrThrow({ where: { id } });
+    const notification = await this.prisma.notification.findUniqueOrThrow({ where: { id } });
+    this.realtime.emitToUser(user.userID, 'notification:updated', { id });
+    return notification;
   }
 
   async markAllRead(user: UserInfo) {
@@ -87,6 +90,7 @@ export class NotificationsService {
       where: { ...targetWhere, isRead: false },
       data: { isRead: true, readAt: now },
     });
+    if (result.count) this.realtime.emitToUser(user.userID, 'notification:updated', { updatedCount: result.count });
     return { updatedCount: result.count, readAt: now };
   }
 }

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
+import RealtimeBridge from './realtime/RealtimeBridge';
 import DashboardLayout from './components/layout/DashboardLayout';
 import Dashboard from './pages/dashboard/Dashboard';
 import ProductManagement from './pages/products/ProductManagement';
@@ -18,6 +19,7 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <RealtimeBridge />
         <BrowserRouter>
           <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />

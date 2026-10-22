@@ -23,9 +23,9 @@ export default function ProductManagement() {
   const [productToEdit, setProductToEdit] = useState(null);
   const [productToView, setProductToView] = useState(null);
 
-  const fetchData = async () => {
+  const fetchData = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [prodRes, catRes] = await Promise.all([
         productService.getVendorProducts({ itemPerPage: 100 }), // temporary high limit
         categoryService.getAll()
@@ -35,13 +35,23 @@ export default function ProductManagement() {
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    window.addEventListener('miva:products', fetchData);
+    const refreshCategories = () => fetchData({ silent: true });
+    window.addEventListener('miva:categories', refreshCategories);
+    return () => {
+      window.removeEventListener('miva:products', fetchData);
+      window.removeEventListener('miva:categories', refreshCategories);
+    };
+  });
 
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());

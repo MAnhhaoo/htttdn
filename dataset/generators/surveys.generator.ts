@@ -266,10 +266,12 @@ export function generateSurveys(
         const earliestAction = survey.startDate
           ? new Date(survey.startDate.getTime() + 86400000)
           : survey.createdAt;
-        const maxAction = survey.endDate || CONFIG.dateRange.end;
+        const maxAction = new Date(
+          Math.min((survey.endDate || CONFIG.dateRange.end).getTime(), CONFIG.dateRange.end.getTime()),
+        );
+        const fromAction = earliestAction > maxAction ? maxAction : earliestAction;
 
-        let actionAt = faker.date.between({ from: earliestAction, to: maxAction });
-        if (actionAt > CONFIG.dateRange.end) actionAt = CONFIG.dateRange.end;
+        const actionAt = faker.date.between({ from: fromAction, to: maxAction });
 
         const responseStatus = faker.helpers.weightedArrayElement([
           { weight: 15, value: 'pending' },

@@ -33,6 +33,11 @@ export const Navbar = () => {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    window.addEventListener('miva:notification', fetchUnread);
+    return () => window.removeEventListener('miva:notification', fetchUnread);
+  });
+
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
   };

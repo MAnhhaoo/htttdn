@@ -66,6 +66,11 @@ export const InternalShippingPage = () => {
     fetchShipments();
   }, [fetchShipments]);
 
+  useEffect(() => {
+    window.addEventListener('miva:shipping', fetchShipments);
+    return () => window.removeEventListener('miva:shipping', fetchShipments);
+  }, [fetchShipments]);
+
   // Handle open update modal
   const handleOpenUpdate = (shipment, suggestedStatus) => {
     setSelectedShipment(shipment);

@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { productService } from '../services/productService';
+import { useMemo } from 'react';
+import { useVoucherOffers } from './useVoucherOffers';
 
 export const useProducts = (params = {}) => {
   const query = useQuery({
@@ -31,8 +33,12 @@ export const useProducts = (params = {}) => {
     keepPreviousData: true,
   });
 
+  const offers = useVoucherOffers((query.data?.list || []).map(product => product.id));
+  const products = useMemo(() => (query.data?.list || []).map(product => ({ ...product,
+    voucherOffers: offers.filter(offer => offer.scope === 'platform' || offer.productIds.includes(product.id)),
+  })), [query.data, offers]);
   return {
-    products: query.data?.list || [],
+    products,
     meta: {
       totalItems: query.data?.totalItems || 0,
       totalPages: query.data?.totalPages || 0,
@@ -50,8 +56,12 @@ export const useBestSellingProducts = (params = {}) => {
     queryFn: () => productService.getBestSellers(params),
   });
 
+  const offers = useVoucherOffers((query.data || []).map(product => product.id));
+  const products = useMemo(() => (query.data || []).map(product => ({ ...product,
+    voucherOffers: offers.filter(offer => offer.scope === 'platform' || offer.productIds.includes(product.id)),
+  })), [query.data, offers]);
   return {
-    products: query.data || [],
+    products,
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,
@@ -66,7 +76,9 @@ export const useProductById = (id) => {
     enabled: !!id,
   });
 
+  const offers = useVoucherOffers(id ? [id] : []);
   return {
+    offers,
     product: query.data || null,
     isLoading: query.isLoading,
     isError: query.isError,

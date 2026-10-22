@@ -23,14 +23,14 @@ export class ShippingController {
 
   @Get('shipments')
   @Roles('admin', 'employee')
-  listShipments(@Query() query: GetShipmentsQueryDto) {
-    return this.shippingService.listShipments(query);
+  listShipments(@Query() query: GetShipmentsQueryDto, @User() user: UserInfo) {
+    return this.shippingService.listShipments(query, user);
   }
 
   @Get('shipments/:id')
   @Roles('admin', 'employee')
-  getShipment(@Param('id', ParseUUIDPipe) id: string) {
-    return this.shippingService.getShipmentById(id);
+  getShipment(@Param('id', ParseUUIDPipe) id: string, @User() user: UserInfo) {
+    return this.shippingService.getShipmentById(id, user);
   }
 
   @Patch('shipments/:id/status')
@@ -44,7 +44,7 @@ export class ShippingController {
   }
 
   @Patch('shipments/:id/assign')
-  @Roles('admin', 'employee')
+  @Roles('admin')
   assignCarrier(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AssignCarrierDto,

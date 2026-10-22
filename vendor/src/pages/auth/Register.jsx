@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Loader2,
-  CheckCircle,
   Building2,
   User,
   FileText,
@@ -25,7 +24,6 @@ export default function VendorRegister() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isSuccess, setIsSuccess] = useState(false);
 
   const [formData, setFormData] = useState({
     // Bước 1: Tài khoản người đại diện
@@ -102,7 +100,10 @@ export default function VendorRegister() {
         businessType: formData.businessType,
       });
 
-      setIsSuccess(true);
+      navigate('/login', {
+        replace: true,
+        state: { registered: true, email: formData.email.trim().toLowerCase() },
+      });
     } catch (err) {
       console.error('Đăng ký thất bại:', err);
       setError(err.response?.data?.message || 'Đăng ký thất bại. Vui lòng kiểm tra lại thông tin.');
@@ -110,63 +111,6 @@ export default function VendorRegister() {
       setIsLoading(false);
     }
   };
-
-  if (isSuccess) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 transition-colors font-sans">
-        <div className="max-w-lg w-full bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 p-8 text-center">
-          <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
-            <CheckCircle className="w-9 h-9" />
-          </div>
-
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">
-            Nộp hồ sơ Đăng ký kinh doanh thành công!
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-            Hồ sơ kinh doanh của bạn đã được tiếp nhận và chuyển đến Ban quản lý sàn để xét duyệt theo quy định.
-          </p>
-
-          <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 text-left text-sm space-y-2 mb-6 border border-slate-200 dark:border-slate-700/60">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500">Gian hàng:</span>
-              <strong className="text-slate-800 dark:text-slate-100 font-semibold">{formData.storeName}</strong>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500">Người đại diện:</span>
-              <span className="text-slate-700 dark:text-slate-200">{formData.fullName}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500">Mã số thuế / GPKD:</span>
-              <span className="font-mono text-indigo-600 dark:text-indigo-400 font-semibold">{formData.taxId}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-500">Gói đăng ký:</span>
-              <span className="text-slate-700 dark:text-slate-200 font-medium">
-                {formData.subscriptionPlan === '2_years' ? 'Gói 2 Năm (2.000.000 ₫)' : 'Gói 1 Năm (1.200.000 ₫)'}
-              </span>
-            </div>
-            <div className="flex justify-between items-center text-xs pt-1 border-t border-slate-200 dark:border-slate-700">
-              <span className="text-slate-500">Trạng thái hồ sơ:</span>
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400">
-                Đang chờ duyệt (Pending Approval)
-              </span>
-            </div>
-          </div>
-
-          <p className="text-xs text-slate-400 mb-6">
-            Trong thời gian chờ duyệt, bạn vẫn có thể đăng nhập để chuẩn bị sản phẩm và thiết lập cấu hình cửa hàng.
-          </p>
-
-          <Button
-            onClick={() => navigate('/dashboard')}
-            className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium shadow-md shadow-indigo-600/20"
-          >
-            Vào Bảng điều khiển gian hàng
-          </Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 transition-colors font-sans py-12">

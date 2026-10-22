@@ -56,3 +56,13 @@ export class GetEmployeesPaginationDto extends createZodDto(
     status: z.enum(['active', 'inactive']).optional(),
   }),
 ) {}
+
+export class SendEmployeeNotificationDto extends createZodDto(
+  z.object({
+    // Bỏ trống hoặc 'all' = gửi cho tất cả nhân viên đang hoạt động
+    employeeId: z.union([z.literal('all'), z.guid()]).optional().nullable(),
+    type: z.enum(['info', 'warning', 'alert', 'urgent']).optional(),
+    title: z.string().trim().min(1, 'Tiêu đề không được để trống').max(255),
+    content: z.string().trim().min(1, 'Nội dung không được để trống').max(2000),
+  }),
+) {}

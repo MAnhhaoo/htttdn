@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
 export default function Login() {
+  const location = useLocation();
   const { login, isLoggingIn, loginError } = useAuth();
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ email: location.state?.email || '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -30,6 +31,11 @@ export default function Login() {
       </div>
 
       <form className="space-y-5" onSubmit={handleSubmit}>
+        {location.state?.registered && (
+          <div role="status" className="bg-emerald-50 text-emerald-700 p-3 rounded-lg text-sm text-center font-medium">
+            Đăng ký thành công. Vui lòng đăng nhập để tiếp tục.
+          </div>
+        )}
         {loginError && (
           <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm text-center font-medium">
             {loginError.response?.data?.message || 'Email hoặc mật khẩu không chính xác'}

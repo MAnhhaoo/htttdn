@@ -16,6 +16,7 @@ import {
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { CreateVoucherDto } from './dto/create-voucher.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 import { PreviewVoucherDto } from './dto/preview-voucher.dto';
 import { UpdateVoucherDto } from './dto/update-voucher.dto';
 
@@ -36,7 +37,29 @@ export type VoucherApplication = {
 
 @Injectable()
 export class VouchersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly realtime?: RealtimeService) {}
+
+  async catalogOffers(productIds: string[]) {
+    const now = new Date();
+    const offers = await this.prisma.voucher.findMany({
+      where: { deletedAt: null, status: 'active', startDate: { lte: now }, endDate: { gte: now },
+        OR: [{ scope: 'platform' }, { details: { some: { productId: { in: productIds }, orderId: null } } }] },
+      select: { id: true, code: true, name: true, scope: true, vendorId: true, discountType: true,
+        discountValue: true, minOrderAmount: true, maxDiscountAmount: true, startDate: true, endDate: true,
+        perUserLimit: true, quantity: true, usedQuantity: true,
+        details: { where: { productId: { in: productIds }, orderId: null }, select: { productId: true } } },
+    });
+    return offers.filter(offer => offer.usedQuantity < offer.quantity).map(({ quantity, usedQuantity, details, ...offer }) => ({
+      ...offer, productIds: details.map(detail => detail.productId),
+    }));
+  }
+
+  private emitUpdated(voucher: { id: string; vendorId: string | null }) {
+    const payload = { voucherId: voucher.id };
+    this.realtime?.emitToCatalog('voucher:updated', payload);
+    this.realtime?.emitToAdmins('voucher:updated', payload);
+    if (voucher.vendorId) this.realtime?.emitToVendor(voucher.vendorId, 'voucher:updated', payload);
+  }
 
   async create(dto: CreateVoucherDto, user: UserInfo) {
     if (user.role !== 'admin' && user.role !== 'vendor') {
@@ -63,7 +86,7 @@ export class VouchersService {
     if (duplicate) throw new ConflictException('Mã voucher đã tồn tại');
 
     const { productIds: _productIds, ...data } = dto;
-    return this.prisma.voucher.create({
+    const created = await this.prisma.voucher.create({
       data: {
         ...data,
         scope,
@@ -73,6 +96,8 @@ export class VouchersService {
               create: productIds.map((productId) => ({ productId }))}
           : undefined},
       include: this.detailsInclude()});
+    this.emitUpdated(created);
+    return created;
   }
 
   getMine(userId: string) {
@@ -165,7 +190,7 @@ export class VouchersService {
     }
 
     const { productIds: _productIds, ...data } = dto;
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       if (productIds) {
         await tx.voucherDetail.deleteMany({
           where: {
@@ -183,6 +208,8 @@ export class VouchersService {
         data,
         include: this.detailsInclude()});
     });
+    this.emitUpdated(updated);
+    return updated;
   }
 
   async setStatus(
@@ -195,7 +222,9 @@ export class VouchersService {
     if (!moderation && (voucher.vendorId !== user.userID && voucher.adminId !== user.userID)) {
       throw new ForbiddenException('Bạn không có quyền cập nhật voucher này');
     }
-    return this.prisma.voucher.update({ where: { id }, data: { status } });
+    const updated = await this.prisma.voucher.update({ where: { id }, data: { status } });
+    this.emitUpdated(updated);
+    return updated;
   }
 
   async remove(id: string, user: UserInfo) {
@@ -203,9 +232,11 @@ export class VouchersService {
     if ((voucher.vendorId !== user.userID && voucher.adminId !== user.userID)) {
       throw new ForbiddenException('Bạn không có quyền xóa voucher này');
     }
-    return this.prisma.voucher.update({
+    const updated = await this.prisma.voucher.update({
       where: { id },
       data: { status: VoucherStatus.inactive, deletedAt: new Date() }});
+    this.emitUpdated(updated);
+    return updated;
   }
 
   preview(dto: PreviewVoucherDto, userId: string) {
@@ -220,6 +251,7 @@ export class VouchersService {
       quantity: number;
     }>,
     db: DatabaseClient,
+    plannedUses = new Map<string, number>(),
   ) {
     const normalizedCodes = [
       ...new Set(codes.map((code) => code.trim().toUpperCase())),
@@ -294,7 +326,7 @@ export class VouchersService {
         voucher.status !== VoucherStatus.active ||
         voucher.startDate > now ||
         voucher.endDate < now ||
-        voucher.usedQuantity >= voucher.quantity
+        voucher.usedQuantity + (plannedUses.get(voucher.id) || 0) >= voucher.quantity
       ) {
         throw new BadRequestException(
           `Voucher ${voucher.code} không còn hiệu lực`,
@@ -306,7 +338,7 @@ export class VouchersService {
           voucherId: voucher.id,
           order: { clientId: userId },
           reversedAt: null}});
-      if (usedByCustomer >= voucher.perUserLimit) {
+      if (usedByCustomer + (plannedUses.get(voucher.id) || 0) >= voucher.perUserLimit) {
         throw new BadRequestException(
           `Bạn đã hết lượt dùng voucher ${voucher.code}`,
         );
@@ -366,8 +398,10 @@ export class VouchersService {
         eligibleAmount: discountBase,
         discountAmount: discount,
         sequence: applications.length + 1,
-        expectedUsedQuantity: voucher.usedQuantity});
+        expectedUsedQuantity: voucher.usedQuantity + (plannedUses.get(voucher.id) || 0)});
     }
+
+    for (const application of applications) plannedUses.set(application.voucherId, (plannedUses.get(application.voucherId) || 0) + 1);
 
     return {
       subtotalAmount: subtotal,

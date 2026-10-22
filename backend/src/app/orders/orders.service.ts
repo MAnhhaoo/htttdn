@@ -20,10 +20,17 @@ import { PrismaService } from 'src/common/prisma/prisma.service';
 import { RealtimeService } from 'src/app/realtime/realtime.service';
 import { SurveysService } from 'src/app/surveys/surveys.service';
 import { VouchersService } from 'src/app/vouchers/vouchers.service';
-import { CheckoutDto } from './dto/checkout.dto';
+import { CheckoutDto, PreviewCheckoutDto } from './dto/checkout.dto';
 import { UpdateOrderStatusDto, UpdateVendorOrderStatusDto } from './dto/update-order-status.dto';
 import { AssignOrderDto } from './dto/assign-order.dto';
 import { GetOrdersPaginationDto } from './dto/get-order.dto';
+import { randomBytes } from 'crypto';
+
+/**
+ * Hậu tố ngẫu nhiên 8 ký tự hex cho mã kiện/vận đơn (VO-/SHIP-yyyymm-XXXXXXXX).
+ * Mã cũ chỉ có 4 chữ số (9000 giá trị/tháng) nên dễ trùng cột UNIQUE.
+ */
+const uniqueCodeSuffix = () => randomBytes(4).toString('hex').toUpperCase();
 
 const orderInclude = {
   client: {
@@ -43,7 +50,7 @@ const orderInclude = {
             include: {
               product: {
                 include: {
-                  vendor: true,
+                  vendor: { select: { id: true, fullName: true, storeName: true, avatarUrl: true } },
                 },
               },
             },
@@ -134,61 +141,73 @@ export class OrdersService {
     private readonly surveysService: SurveysService,
   ) {}
 
+  private async prepareCheckout(tx: Prisma.TransactionClient, clientId: string, dto: PreviewCheckoutDto) {
+    const cart = await tx.cart.findUnique({ where: { clientId }, include: { items: { include: {
+      productVariant: { include: { productColor: { include: { product: true } } } },
+    } } } });
+    if (!cart?.items.length) throw new BadRequestException('Giỏ hàng đang trống');
+    let targetItems = cart.items;
+    if (dto.cartItemIds?.length) {
+      targetItems = cart.items.filter(item => dto.cartItemIds!.includes(item.id));
+      if (new Set(dto.cartItemIds).size !== targetItems.length) throw new BadRequestException('Sản phẩm trong giỏ đã thay đổi, vui lòng chọn lại');
+    } else if (dto.vendorId) {
+      targetItems = cart.items.filter(item => item.productVariant.productColor.product.vendorId === dto.vendorId);
+    }
+    if (!targetItems.length) throw new BadRequestException('Không tìm thấy sản phẩm hợp lệ để đặt hàng');
+    const vendorGroups = new Map<string, typeof targetItems>();
+    for (const item of targetItems) {
+      const vendorId = item.productVariant.productColor.product.vendorId || 'platform';
+      vendorGroups.set(vendorId, [...(vendorGroups.get(vendorId) || []), item]);
+    }
+    if (dto.voucherSelections && dto.voucherCodes?.length) throw new BadRequestException('Vui lòng chọn mã theo từng cửa hàng');
+    const codesByVendor = new Map<string, string[]>();
+    for (const selection of dto.voucherSelections || []) {
+      if (!vendorGroups.has(selection.vendorId) || codesByVendor.has(selection.vendorId)) throw new BadRequestException('Lựa chọn voucher không khớp cửa hàng trong giỏ');
+      codesByVendor.set(selection.vendorId, selection.codes.map(code => code.trim().toUpperCase()));
+    }
+    const requestedCodes = dto.voucherSelections
+      ? [...new Set([...codesByVendor.values()].flat())]
+      : (dto.voucherCodes || []).map(code => code.trim().toUpperCase());
+    if (!dto.voucherSelections && new Set(requestedCodes).size !== requestedCodes.length) throw new BadRequestException('Voucher bị trùng lặp');
+    if (requestedCodes.length) {
+      const vouchers = await tx.voucher.findMany({ where: { code: { in: requestedCodes }, deletedAt: null },
+        select: { code: true, scope: true, vendorId: true } });
+      if (vouchers.length !== requestedCodes.length) throw new BadRequestException('Voucher không tồn tại');
+      for (const [vendorId] of vendorGroups) {
+        const codes = dto.voucherSelections ? codesByVendor.get(vendorId) || [] : vouchers
+          .filter(voucher => voucher.scope === VoucherScope.platform || voucher.vendorId === vendorId).map(voucher => voucher.code);
+        if (codes.some(code => !vouchers.some(voucher => voucher.code === code &&
+          (voucher.scope === VoucherScope.platform || voucher.vendorId === vendorId)))) throw new BadRequestException('Voucher không áp dụng cho cửa hàng được chọn');
+        codesByVendor.set(vendorId, codes);
+      }
+      if (requestedCodes.some(code => ![...codesByVendor.values()].some(codes => codes.includes(code)))) throw new BadRequestException('Voucher không áp dụng cho các sản phẩm đã chọn');
+    }
+    return { targetItems, vendorGroups, codesByVendor };
+  }
+
+  async previewCheckout(clientId: string, dto: PreviewCheckoutDto) {
+    return this.prisma.$transaction(async tx => {
+      const { vendorGroups, codesByVendor } = await this.prepareCheckout(tx, clientId, dto);
+      const plannedUses = new Map<string, number>();
+      const packages: Array<{ vendorId: string; subtotalAmount: Prisma.Decimal; discountAmount: Prisma.Decimal;
+        totalAmount: Prisma.Decimal; applications: unknown[] }> = [];
+      for (const [vendorId, items] of vendorGroups) {
+        const calculated = await this.vouchersService.calculate(codesByVendor.get(vendorId) || [], clientId,
+          items.map(item => ({ productVariantId: item.productVariantId, quantity: item.quantity })), tx, plannedUses);
+        packages.push({ vendorId, subtotalAmount: calculated.subtotalAmount, discountAmount: calculated.discountAmount,
+          totalAmount: calculated.totalAmount, applications: calculated.applications });
+      }
+      return { packages, subtotalAmount: packages.reduce((sum, pack) => sum.plus(pack.subtotalAmount), new Prisma.Decimal(0)),
+        discountAmount: packages.reduce((sum, pack) => sum.plus(pack.discountAmount), new Prisma.Decimal(0)),
+        totalAmount: packages.reduce((sum, pack) => sum.plus(pack.totalAmount), new Prisma.Decimal(0)) };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  }
+
   async checkout(clientId: string, dto: CheckoutDto) {
     const result = await this.prisma
       .$transaction(
         async (tx) => {
-          const cart = await tx.cart.findUnique({
-            where: { clientId },
-            include: {
-              items: {
-                include: {
-                  productVariant: {
-                    include: {
-                      productColor: {
-                        include: {
-                          product: {
-                            include: {
-                              vendor: true,
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          });
-
-          if (!cart?.items.length) {
-            throw new BadRequestException('Giỏ hàng đang trống');
-          }
-
-          // 1. Determine target items to checkout
-          let targetItems = cart.items;
-          if (dto.cartItemIds && dto.cartItemIds.length > 0) {
-            targetItems = targetItems.filter((i) => dto.cartItemIds!.includes(i.id));
-          } else if (dto.vendorId) {
-            targetItems = targetItems.filter(
-              (i) => i.productVariant?.productColor?.product?.vendorId === dto.vendorId,
-            );
-          }
-
-          if (!targetItems.length) {
-            throw new BadRequestException('Không tìm thấy sản phẩm hợp lệ để đặt hàng');
-          }
-
-          // 2. Multi-Vendor Order Splitting: Group items by Vendor
-          // Mỗi đơn hàng chỉ thuộc về 1 vendor duy nhất để vendor tự đóng gói và giao hàng
-          const vendorGroups = new Map<string, typeof targetItems>();
-          for (const item of targetItems) {
-            const vId = item.productVariant?.productColor?.product?.vendorId || 'platform';
-            if (!vendorGroups.has(vId)) {
-              vendorGroups.set(vId, []);
-            }
-            vendorGroups.get(vId)!.push(item);
-          }
+          const { targetItems, vendorGroups, codesByVendor } = await this.prepareCheckout(tx, clientId, dto);
 
           const createdOrders: any[] = [];
           const allSurveyNotifications: any[] = [];
@@ -196,25 +215,8 @@ export class OrdersService {
           const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
 
           for (const [vId, vendorItems] of vendorGroups.entries()) {
-            // Filter applicable vouchers for this vendor (platform scope or vendor scope matching vId)
-            let applicableVoucherCodes: string[] = [];
-            if (dto.voucherCodes && dto.voucherCodes.length > 0) {
-              const matchingVouchers = await tx.voucher.findMany({
-                where: {
-                  code: { in: dto.voucherCodes },
-                  deletedAt: null,
-                  OR: [
-                    { scope: VoucherScope.platform },
-                    ...(vId !== 'platform' ? [{ scope: VoucherScope.vendor, vendorId: vId }] : []),
-                  ],
-                },
-                select: { code: true },
-              });
-              applicableVoucherCodes = matchingVouchers.map((v) => v.code);
-            }
-
             const calculated = await this.vouchersService.calculate(
-              applicableVoucherCodes,
+              codesByVendor.get(vId) || [],
               clientId,
               vendorItems.map((item) => ({
                 productVariantId: item.productVariantId,
@@ -271,7 +273,7 @@ export class OrdersService {
             // Immediately create VendorOrder for this vendor
             let vOrder: any = null;
             if (vId !== 'platform') {
-              const randomCode = Math.floor(1000 + Math.random() * 9000);
+              const randomCode = uniqueCodeSuffix();
               vOrder = await tx.vendorOrder.create({
                 data: {
                   orderId: order.id,
@@ -336,7 +338,7 @@ export class OrdersService {
 
             // Automatic employee assignment & shipment creation for this order
             const autoEmp = await this.findBestAvailableEmployee(tx);
-            const tracking = `SHIP-${yearMonth}-${Math.floor(1000 + Math.random() * 9000)}`;
+            const tracking = `SHIP-${yearMonth}-${uniqueCodeSuffix()}`;
 
             const s = await tx.shipment.create({
               data: {
@@ -404,6 +406,10 @@ export class OrdersService {
           }
 
           // Delete only the checked out cart items
+          if (dto.expectedTotalAmount !== undefined) {
+            const actualTotal = createdOrders.reduce((sum, order) => sum.plus(order.totalAmount), new Prisma.Decimal(0));
+            if (!actualTotal.equals(dto.expectedTotalAmount)) throw new ConflictException('Giá hoặc voucher vừa thay đổi. Vui lòng kiểm tra tổng tiền và xác nhận lại.');
+          }
           const checkedOutItemIds = targetItems.map((i) => i.id);
           await tx.cartItem.deleteMany({
             where: {
@@ -433,6 +439,9 @@ export class OrdersService {
 
     for (const o of result.orders) {
       this.emitOrder(o, 'order:created');
+    }
+    if (dto.voucherCodes?.length || dto.voucherSelections?.some(selection => selection.codes.length)) {
+      this.realtime.emitToCatalog('voucher:updated', {});
     }
     this.surveysService.emitNotifications(result.surveyNotifications);
 
@@ -530,6 +539,7 @@ export class OrdersService {
       receiverPhone: '09******** (Bảo mật sàn)',
       shippingAddress:
         'Kho vận nội bộ MIVA điều phối - Bưu tá tiếp nhận tại kho shop',
+      shipment: this.maskShipmentForVendor(vo.shipment),
     }));
   }
 
@@ -565,6 +575,28 @@ export class OrdersService {
     const currentStatus = vendorOrder.status;
     const newStatus = dto.status;
 
+    // Retried requests must not repeat shipment events or return stock twice.
+    if (currentStatus === newStatus) {
+      const { order: _order, details: _details, shipment: _shipment, ...unchanged } = vendorOrder;
+      return { success: true, message: 'Trạng thái kiện hàng không thay đổi', vendorOrder: unchanged };
+    }
+    if (vendorOrder.order.status === OrderStatus.cancelled || vendorOrder.order.status === OrderStatus.completed) {
+      throw new BadRequestException('Đơn hàng đã kết thúc, không thể cập nhật kiện hàng');
+    }
+    if (newStatus !== VendorOrderStatus.cancelled && vendorOrder.order.status === OrderStatus.pending) {
+      throw new BadRequestException('Chờ Admin hoặc nhân viên MIVA xác nhận đơn hàng trước khi đóng gói');
+    }
+    if (newStatus === VendorOrderStatus.delivered) {
+      throw new BadRequestException('Bưu tá hoặc Admin xác nhận giao thành công qua vận đơn');
+    }
+    if (newStatus === VendorOrderStatus.cancelled) {
+      const order = await this.prisma.order.findUniqueOrThrow({ where: { id: vendorOrder.orderId }, include: orderInclude });
+      if (order.vendorOrders.length !== 1) throw new BadRequestException('Đơn nhiều shop cũ cần Admin xử lý hủy toàn đơn');
+      const cancelled = await this.updateStatus(order.id, { status: OrderStatus.cancelled, note: dto.note }, user);
+      return { success: true, message: 'Đã hủy kiện và đồng bộ đơn, thanh toán, voucher, tồn kho',
+        vendorOrder: cancelled.vendorOrders.find(parcel => parcel.id === vendorOrder.id) };
+    }
+
     const vendorTransitions: Record<VendorOrderStatus, VendorOrderStatus[]> = {
       pending: [VendorOrderStatus.confirmed, VendorOrderStatus.cancelled],
       confirmed: [VendorOrderStatus.processing, VendorOrderStatus.cancelled],
@@ -582,7 +614,11 @@ export class OrdersService {
       cancelled: [],
     };
 
-    if (currentStatus !== newStatus && !vendorTransitions[currentStatus]?.includes(newStatus)) {
+    // Orders confirmed before this fix may still have a pending vendor parcel.
+    const confirmedLegacyParcel = currentStatus === VendorOrderStatus.pending &&
+      newStatus === VendorOrderStatus.processing &&
+      vendorOrder.order.status !== OrderStatus.pending;
+    if (!confirmedLegacyParcel && !vendorTransitions[currentStatus]?.includes(newStatus)) {
       throw new BadRequestException(
         `Không thể chuyển kiện hàng từ trạng thái "${currentStatus}" sang "${newStatus}"`,
       );
@@ -632,45 +668,38 @@ export class OrdersService {
         });
       }
 
-      // 3. Handle Cancelled - return stock to variants
-      if (newStatus === VendorOrderStatus.cancelled) {
-        for (const item of vendorOrder.details) {
-          await tx.productVariant.update({
-            where: { id: item.productVariantId },
-            data: { stock: { increment: item.quantity } },
+      // Cancellation is handled earlier through updateStatus(), which restores
+      // stock, reverses vouchers and marks shipments as returned in one place.
+
+      // Ready for pickup is still processing; shipping starts at handover.
+      let mappedOrderStatus: OrderStatus = vendorOrder.order.status;
+      const otherVendorOrders = (vendorOrder.order.vendorOrders || []).filter(
+        (o) => o.id !== vendorOrder.id,
+      );
+
+      if (newStatus === VendorOrderStatus.shipping) {
+        const allShipping = otherVendorOrders.every(
+          (o) =>
+            o.status === VendorOrderStatus.shipping ||
+            o.status === VendorOrderStatus.delivered ||
+            o.status === VendorOrderStatus.cancelled,
+        );
+        if (allShipping && vendorOrder.order.status !== OrderStatus.shipping) {
+          mappedOrderStatus = OrderStatus.shipping;
+          await tx.order.update({
+            where: { id: vendorOrder.orderId },
+            data: { status: OrderStatus.shipping },
           });
         }
-
-        if (vendorOrder.shipment) {
-          await tx.shipment.update({
-            where: { id: vendorOrder.shipment.id },
-            data: {
-              status: ShipmentStatus.failed,
-              failedReason: dto.note || 'Shop hủy kiện hàng',
-              updatedAt: new Date(),
-            },
-          });
-
-          await tx.shipmentEvent.create({
-            data: {
-              shipmentId: vendorOrder.shipment.id,
-              status: ShipmentStatus.failed,
-              description: `Shop đã hủy kiện hàng: ${dto.note || 'Không có lý do'}`,
-              actorRole: 'vendor',
-              actorId: user.userID,
-            },
-          });
-        }
-      }
-
-      // 4. Create OrderStatusHistory record for audit trail
-      let mappedOrderStatus: OrderStatus = OrderStatus.processing;
-      if (newStatus === VendorOrderStatus.ready_for_pickup || newStatus === VendorOrderStatus.shipping) {
-        mappedOrderStatus = OrderStatus.shipping;
-      } else if (newStatus === VendorOrderStatus.cancelled) {
-        mappedOrderStatus = OrderStatus.cancelled;
-      } else if (newStatus === VendorOrderStatus.confirmed) {
-        mappedOrderStatus = OrderStatus.confirmed;
+      } else if (
+        (newStatus === VendorOrderStatus.processing || newStatus === VendorOrderStatus.ready_for_pickup) &&
+        vendorOrder.order.status === OrderStatus.confirmed
+      ) {
+        mappedOrderStatus = OrderStatus.processing;
+        await tx.order.update({
+          where: { id: vendorOrder.orderId },
+          data: { status: OrderStatus.processing },
+        });
       }
 
       await tx.orderStatusHistory.create({
@@ -683,39 +712,13 @@ export class OrdersService {
         },
       });
 
-      // 5. Check if parent Order should be updated
-      const otherVendorOrders = (vendorOrder.order.vendorOrders || []).filter(
-        (o) => o.id !== vendorOrder.id,
-      );
-
-      if (newStatus === VendorOrderStatus.cancelled) {
-        const allCancelled = otherVendorOrders.every(
-          (o) => o.status === VendorOrderStatus.cancelled,
-        );
-        if (allCancelled) {
-          await tx.order.update({
-            where: { id: vendorOrder.orderId },
-            data: { status: OrderStatus.cancelled, cancelledAt: new Date() },
-          });
-        }
-      } else if (newStatus === VendorOrderStatus.shipping || newStatus === VendorOrderStatus.ready_for_pickup) {
-        const allShipping = otherVendorOrders.every(
-          (o) =>
-            o.status === VendorOrderStatus.shipping ||
-            o.status === VendorOrderStatus.ready_for_pickup ||
-            o.status === VendorOrderStatus.delivered ||
-            o.status === VendorOrderStatus.cancelled,
-        );
-        if (allShipping && vendorOrder.order.status !== OrderStatus.shipping) {
-          await tx.order.update({
-            where: { id: vendorOrder.orderId },
-            data: { status: OrderStatus.shipping },
-          });
-        }
-      }
-
       return vo;
     });
+
+    const parentOrder = await this.prisma.order.findUnique({
+      where: { id: vendorOrder.orderId }, include: orderInclude,
+    });
+    if (parentOrder) this.emitOrder(parentOrder, 'order:updated');
 
     return {
       success: true,
@@ -801,6 +804,19 @@ export class OrdersService {
     return order;
   }
 
+  /** Ẩn thông tin người nhận trong vận đơn khi trả cho vendor (bảo mật sàn MIVA). */
+  private maskShipmentForVendor<T extends Record<string, any> | null | undefined>(
+    shipment: T,
+  ): T {
+    if (!shipment) return shipment;
+    return {
+      ...shipment,
+      receiverName: 'Khách hàng MIVA (Bảo mật)',
+      receiverPhone: '09******** (Bảo mật sàn MIVA)',
+      shippingAddress: 'Địa chỉ người nhận được bảo mật bởi sàn MIVA',
+    };
+  }
+
   private sanitizeOrderForVendor(order: any, vendorId: string) {
     const vendorDetails = (order.details || []).filter(
       (d: any) =>
@@ -813,6 +829,14 @@ export class OrdersService {
     const myVendorOrder = (order.vendorOrders || []).find(
       (vo: any) => vo.vendorId === vendorId,
     );
+    const shipments = Array.isArray(order.shipments)
+      ? order.shipments
+          .filter(
+            (s: any) =>
+              !s.vendorOrderId || !myVendorOrder || s.vendorOrderId === myVendorOrder.id,
+          )
+          .map((s: any) => this.maskShipmentForVendor(s))
+      : order.shipments;
 
     return {
       ...order,
@@ -827,6 +851,10 @@ export class OrdersService {
       details: vendorDetails,
       subtotalAmount: vendorSubtotal,
       totalAmount: vendorSubtotal,
+      ...(order.vendorOrders !== undefined && {
+        vendorOrders: myVendorOrder ? [myVendorOrder] : [],
+      }),
+      ...(shipments !== undefined && { shipments }),
       vendorOrder: myVendorOrder || null,
     };
   }
@@ -846,14 +874,10 @@ export class OrdersService {
     }
 
     if (user.role === 'vendor') {
-      const vendorIds = new Set(
-        current.details.map(
-          (item) => item.productVariant.productColor.product.vendorId,
-        ),
-      );
-      if (vendorIds.size !== 1 || !vendorIds.has(user.userID)) {
+      const parcels = await this.prisma.vendorOrder.findMany({ where: { orderId: id }, select: { vendorId: true } });
+      if (dto.status !== OrderStatus.cancelled || parcels.length !== 1 || parcels[0].vendorId !== user.userID) {
         throw new ForbiddenException(
-          'Vendor không thể cập nhật đơn có sản phẩm từ nhiều cửa hàng',
+          'Vendor xử lý đóng gói và bàn giao qua kiện hàng của shop',
         );
       }
     }
@@ -872,10 +896,20 @@ export class OrdersService {
         `Không thể chuyển từ ${current.status} sang ${dto.status}`,
       );
     }
+    if (dto.status === current.status && (current.status === OrderStatus.cancelled || current.status === OrderStatus.completed)) return current;
+    if (dto.status === OrderStatus.cancelled && current.shipments.some(shipment => shipment.status === ShipmentStatus.delivered)) {
+      throw new BadRequestException('Đơn có kiện đã giao thành công cần xử lý hoàn trả, không thể hủy trực tiếp');
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.order.updateMany({
+        where: { id, status: current.status },
+        data: { status: dto.status, cancelledAt: dto.status === OrderStatus.cancelled ? new Date() : undefined },
+      });
+      if (!claimed.count) throw new ConflictException('Đơn hàng vừa được cập nhật. Vui lòng tải lại và thử lại');
       if (dto.status === OrderStatus.cancelled) {
-        for (const detail of current.details) {
+        const cancelledParcels = new Set(current.vendorOrders.filter(parcel => parcel.status === VendorOrderStatus.cancelled).map(parcel => parcel.id));
+        for (const detail of current.details.filter(detail => !detail.vendorOrderId || !cancelledParcels.has(detail.vendorOrderId))) {
           await tx.productVariant.update({
             where: { id: detail.productVariantId },
             data: { stock: { increment: detail.quantity } }});
@@ -887,8 +921,8 @@ export class OrdersService {
           await tx.voucherDetail.update({
             where: { id: usage.id },
             data: { reversedAt: new Date() }});
-          await tx.voucher.update({
-            where: { id: usage.voucherId },
+          await tx.voucher.updateMany({
+            where: { id: usage.voucherId, usedQuantity: { gt: 0 } },
             data: { usedQuantity: { decrement: 1 } }});
         }
         await tx.payment.update({
@@ -912,6 +946,11 @@ export class OrdersService {
             notes: dto.note ? `Hủy đơn: ${dto.note}` : 'Đơn hàng bị hủy, hoàn hàng về kho',
           },
         });
+        if (current.shipments.length) await tx.shipmentEvent.createMany({ data: current.shipments.filter(shipment =>
+          ![ShipmentStatus.returned, ShipmentStatus.delivered].includes(shipment.status as any)).map(shipment => ({
+          shipmentId: shipment.id, status: ShipmentStatus.returned, actorRole: user.role, actorId: user.userID,
+          description: dto.note || 'Đơn hàng bị hủy, hoàn hàng về kho',
+        })) });
       }
       if (
         dto.status === OrderStatus.completed &&
@@ -922,13 +961,20 @@ export class OrdersService {
           where: { orderId: id },
           data: { status: PaymentStatus.paid, paidAt: new Date() }});
       }
-      await tx.order.update({
-        where: { id },
-        data: {
-          status: dto.status,
-          cancelledAt:
-            dto.status === OrderStatus.cancelled ? new Date() : undefined}});
-      if (dto.status === OrderStatus.confirmed) {
+      if (dto.status === OrderStatus.shipping || dto.status === OrderStatus.completed) {
+        await tx.vendorOrder.updateMany({ where: { orderId: id, status: { not: VendorOrderStatus.cancelled } },
+          data: { status: dto.status === OrderStatus.completed ? VendorOrderStatus.delivered : VendorOrderStatus.shipping } });
+        await tx.shipment.updateMany({ where: { orderId: id, status: { notIn: [ShipmentStatus.returned, ShipmentStatus.delivered] } },
+          data: { status: dto.status === OrderStatus.completed ? ShipmentStatus.delivered : ShipmentStatus.in_transit,
+            deliveredAt: dto.status === OrderStatus.completed ? new Date() : undefined } });
+        const shipmentStatus = dto.status === OrderStatus.completed ? ShipmentStatus.delivered : ShipmentStatus.in_transit;
+        if (current.shipments.length) await tx.shipmentEvent.createMany({ data: current.shipments.filter(shipment =>
+          shipment.status !== ShipmentStatus.returned && shipment.status !== ShipmentStatus.delivered && shipment.status !== shipmentStatus).map(shipment => ({
+          shipmentId: shipment.id, status: shipmentStatus, actorRole: user.role, actorId: user.userID,
+          description: dto.note || 'Cập nhật vận đơn theo trạng thái đơn hàng',
+        })) });
+      }
+      if (dto.status === OrderStatus.confirmed || dto.status === OrderStatus.processing) {
         // Multi-Vendor Order Splitting into VendorOrder
         const vendorGroups = new Map<string, typeof current.details>();
         for (const detail of current.details) {
@@ -955,7 +1001,7 @@ export class OrdersService {
           );
 
           if (!vOrder) {
-            const randomCode = Math.floor(1000 + Math.random() * 9000);
+            const randomCode = uniqueCodeSuffix();
             vOrder = await tx.vendorOrder.create({
               data: {
                 orderId: id,
@@ -967,6 +1013,11 @@ export class OrdersService {
                 status: 'confirmed',
                 notes: 'Kiện hàng tách tự động cho gian hàng đối tác',
               },
+            });
+          } else if (vOrder.status === VendorOrderStatus.pending) {
+            vOrder = await tx.vendorOrder.update({
+              where: { id: vOrder.id },
+              data: { status: VendorOrderStatus.confirmed },
             });
           }
 
@@ -982,7 +1033,7 @@ export class OrdersService {
           });
 
           if (!existingShipment) {
-            const shipTracking = `SHIP-${yearMonth}-${Math.floor(1000 + Math.random() * 9000)}`;
+            const shipTracking = `SHIP-${yearMonth}-${uniqueCodeSuffix()}`;
             const autoEmp = await this.findBestAvailableEmployee(tx);
 
             const shipment = await tx.shipment.create({
@@ -1237,7 +1288,7 @@ export class OrdersService {
         // If order does not have shipments yet, generate shipment(s)
         const now = new Date();
         const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const tracking = `SHIP-${yearMonth}-${Math.floor(1000 + Math.random() * 9000)}`;
+        const tracking = `SHIP-${yearMonth}-${uniqueCodeSuffix()}`;
 
         const s = await tx.shipment.create({
           data: {
@@ -1381,6 +1432,10 @@ export class OrdersService {
           },
         });
       });
+      const payload = { shipmentId: shipment.id, orderId: shipment.orderId, status: ShipmentStatus.assigned };
+      this.realtime.emitToAdmins('shipment:updated', payload);
+      this.realtime.emitToEmployees('shipment:updated', payload);
+      this.realtime.emitToUser(bestEmp.id, 'shipment:updated', payload);
       count++;
     }
 
@@ -1425,7 +1480,7 @@ export class OrdersService {
       status: OrderStatus;
       details: Array<{
         productVariant: {
-          productColor: { product: { vendorId: string | null } };
+          productColor: { product: { id: string; vendorId: string | null } };
         };
       }>;
     },
@@ -1437,12 +1492,21 @@ export class OrdersService {
       status: order.status};
     this.realtime.emitToUser(order.clientId, event, payload);
     this.realtime.emitToAdmins(event, payload);
+    this.realtime.emitToEmployees(event, payload);
     for (const vendorId of new Set(
       order.details.map(
         (item) => item.productVariant.productColor.product.vendorId,
       ),
     )) {
       if (vendorId) this.realtime.emitToVendor(vendorId, event, payload);
+    }
+    for (const product of new Map(
+      order.details.map((item) => {
+        const product = item.productVariant.productColor.product;
+        return [product.id, product] as const;
+      }),
+    ).values()) {
+      if (product.id) this.realtime.emitProductUpdated(product.id, product.vendorId);
     }
   }
 }

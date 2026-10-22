@@ -38,7 +38,7 @@ export function generateVoucherDetails(
   }
 
   for (const voucher of vendorVouchers) {
-    const vendorProducts = productsByVendor.get(voucher.userId) ?? [];
+    const vendorProducts = voucher.vendorId ? productsByVendor.get(voucher.vendorId) ?? [] : [];
     if (vendorProducts.length === 0) continue;
 
     // Link 2–4 products to this vendor voucher

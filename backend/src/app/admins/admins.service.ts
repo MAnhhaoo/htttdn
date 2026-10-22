@@ -10,6 +10,8 @@ import { PaginationUtilService } from '../../common/utils/paginaton-util/paginti
 
 import { QueryUtilService } from '../../common/utils/query-util/query-util.service';
 
+import { assertEmailAvailable } from '../../common/utils/account-email/account-email.util';
+
 import {
   GetOptionsParams,
   Options} from '../../common/query/options.interface';
@@ -135,8 +137,13 @@ export class AdminsService
   }
 
   async createAdmin(createAdminDto: CreateAdminDto) {
+    const adminData = { ...createAdminDto } as any;
+    if (typeof adminData.email === 'string') {
+      adminData.email = adminData.email.trim().toLowerCase();
+      await assertEmailAvailable(this.prismaService, adminData.email);
+    }
     return this.extended.create({
-      data: createAdminDto});
+      data: adminData});
   }
 
   async getAdminByEmail(email: string) {
@@ -161,7 +168,20 @@ export class AdminsService
     where: Prisma.AdminWhereUniqueInput;
     data: UpdateAdminDto;
   }) {
-    const { where, data: dataUpdate } = params;
+    const { where } = params;
+    const dataUpdate = { ...params.data } as any;
+
+    if (typeof dataUpdate.email === 'string') {
+      dataUpdate.email = dataUpdate.email.trim().toLowerCase();
+      const current = where.id
+        ? { id: where.id }
+        : await this.prismaService.admin.findUnique({ where, select: { id: true } });
+      await assertEmailAvailable(
+        this.prismaService,
+        dataUpdate.email,
+        current ? { role: 'admin', id: current.id } : undefined,
+      );
+    }
 
     const data = await this.extended.update({
       data: dataUpdate,
