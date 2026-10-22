@@ -221,46 +221,100 @@ export const OrderDetailModal = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
               <div className="flex items-center space-x-2 text-xs font-bold text-slate-800">
                 <UserCheck className="w-4 h-4 text-blue-600" />
-                <span>Nhân viên phụ trách xử lý đơn</span>
+                <span>Nhân sự phụ trách đơn hàng theo 3 ban nghiệp vụ MIVA</span>
               </div>
-              {order.assignedCarrier ? (
-                <span className="text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                  Đã phân công
-                </span>
-              ) : (
-                <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                  Chờ phân công
-                </span>
-              )}
             </div>
 
-            {order.assignedCarrier ? (
-              <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
-                <div className="flex items-center space-x-3">
-                  <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm">
-                    {order.assignedCarrier.fullName?.slice(0, 1) || 'E'}
-                  </div>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-bold text-slate-800">{order.assignedCarrier.fullName}</span>
-                      <span className="text-[10px] font-mono font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100">
-                        {order.assignedCarrier.employeeCode}
-                      </span>
+            <div className={`grid grid-cols-1 ${order.exceptionEmployee || order.exception ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-3 mt-3`}>
+              {/* 1. Handling Employee (Ban Điều phối & Liên kết Vendor) */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  1. Ban Điều phối &amp; Vendor
+                </span>
+                {order.handlingEmployee ? (
+                  <div className="flex items-center space-x-3 mt-2">
+                    <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">
+                      {order.handlingEmployee.fullName?.slice(0, 1) || 'H'}
                     </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5 flex flex-wrap gap-x-3">
-                      <span>Phòng ban: <strong className="text-slate-700">{order.assignedCarrier.department || 'Vận hành'}</strong></span>
-                      {order.assignedCarrier.phoneNumber && (
-                        <span>SĐT: <strong className="text-slate-700">{order.assignedCarrier.phoneNumber}</strong></span>
-                      )}
+                    <div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-xs font-bold text-slate-800">{order.handlingEmployee.fullName}</span>
+                        <span className="text-[10px] font-mono font-semibold text-indigo-700 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-100">
+                          {order.handlingEmployee.employeeCode}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-0.5">
+                        <strong className="text-slate-800 font-semibold">{order.handlingEmployee.department}</strong>
+                      </p>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic mt-2">
+                    Chờ chuyên viên điều phối tiếp nhận
+                  </p>
+                )}
               </div>
-            ) : (
-              <p className="mt-2 text-xs text-slate-400 italic">
-                Đơn hàng này chưa có nhân viên phụ trách cụ thể. Hệ thống sẽ tự động phân công khi xác nhận hoặc Admin có thể can thiệp phân công.
-              </p>
-            )}
+
+              {/* 2. Delivery Carrier (Phòng Vận chuyển & Giao nhận) */}
+              <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  2. Bưu tá Giao hàng (Shipper)
+                </span>
+                {order.assignedCarrier ? (
+                  <div className="flex items-center space-x-3 mt-2">
+                    <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0">
+                      {order.assignedCarrier.fullName?.slice(0, 1) || 'S'}
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-xs font-bold text-slate-800">{order.assignedCarrier.fullName}</span>
+                        <span className="text-[10px] font-mono font-semibold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-100">
+                          {order.assignedCarrier.employeeCode}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-0.5">
+                        <strong className="text-slate-800 font-semibold">{order.assignedCarrier.department || 'Phòng Vận chuyển & Giao nhận'}</strong>
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic mt-2">
+                    Chờ hệ thống phân công bưu tá
+                  </p>
+                )}
+              </div>
+
+              {/* 3. Exception Employee (Bộ phận Xử lý Sự cố & Ngoại lệ Đơn) */}
+              {(order.exceptionEmployee || order.exception) && (
+                <div className="bg-rose-50/60 p-3 rounded-xl border border-rose-200">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-100/70 px-2 py-0.5 rounded border border-rose-200">
+                    3. Ban Xử lý Sự cố &amp; Ngoại lệ
+                  </span>
+                  {order.exceptionEmployee ? (
+                    <div className="flex items-center space-x-3 mt-2">
+                      <div className="w-9 h-9 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-sm shrink-0">
+                        {order.exceptionEmployee.fullName?.slice(0, 1) || 'E'}
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-xs font-bold text-slate-800">{order.exceptionEmployee.fullName}</span>
+                          <span className="text-[10px] font-mono font-semibold text-rose-700 bg-rose-50 px-1 py-0.2 rounded border border-rose-200">
+                            {order.exceptionEmployee.employeeCode}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-0.5">
+                          <strong className="text-slate-800 font-semibold">{order.exceptionEmployee.department}</strong>
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-rose-600 font-medium mt-2">
+                      Đơn có phát sinh sự cố • Đang chuyển giao Ban Xử lý Sự cố
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Product Items Table */}

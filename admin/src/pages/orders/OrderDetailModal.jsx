@@ -16,6 +16,7 @@ import {
   FileText,
   UserCheck,
   Sparkles,
+  Shuffle,
   Loader2,
   X
 } from 'lucide-react';
@@ -94,14 +95,72 @@ export default function OrderDetailModal({ isOpen, onClose, order, onStatusChang
   const hasFailedShipment = (order.shipments || []).some(s => s.status === 'failed' || s.status === 'returned');
   const showEscalationAlert = (order.status === 'shipping' || order.status === 'pending') && (escalationLog || hasFailedShipment);
 
-  // Find assigned employee if any
-  const assignedCarrier = order.shipments?.find(s => s.carrier)?.carrier;
+  // Lấy danh sách phân công theo 3 phòng ban từ statusHistory & shipments
+  const historyList = order.statusHistory || [];
+  const reversedHistory = [...historyList].reverse();
+
+  // 1. Chuyên viên Điều phối & Liên kết Vendor
+  const handlingHistory = reversedHistory.find(h => 
+    h.employee && (
+      h.employee.department?.toLowerCase().includes('điều phối') ||
+      h.employee.department?.toLowerCase().includes('vendor') ||
+      h.note?.toLowerCase().includes('điều phối')
+    )
+  );
+  const assignedHandling = handlingHistory?.employee;
+
+  // 2. Bưu tá Phòng Vận chuyển & Giao nhận
+  const directCarrier = order.shipments?.find(s => s.carrier)?.carrier;
+  const shippingHistory = reversedHistory.find(h => 
+    h.employee && (
+      h.employee.department?.toLowerCase().includes('vận chuyển') ||
+      h.employee.department?.toLowerCase().includes('giao nhận') ||
+      h.note?.toLowerCase().includes('bưu tá') ||
+      h.note?.toLowerCase().includes('giao nhận')
+    )
+  );
+  const assignedShipper = directCarrier || shippingHistory?.employee;
+
+  // 3. Chuyên viên Bộ phận Xử lý Sự cố & Ngoại lệ Đơn
+  const exceptionHistory = reversedHistory.find(h => 
+    h.employee && (
+      h.employee.department?.toLowerCase().includes('sự cố') ||
+      h.employee.department?.toLowerCase().includes('ngoại lệ') ||
+      h.note?.toLowerCase().includes('sự cố') ||
+      h.note?.toLowerCase().includes('khiếu nại') ||
+      h.note?.toLowerCase().includes('tranh chấp')
+    )
+  );
+  const assignedException = exceptionHistory?.employee;
+
+  // Phân loại danh sách nhân viên thực tế từ DB theo phòng ban
+  const handlingEmployees = employees.filter(e => {
+    const dept = (e.department || '').toLowerCase();
+    return dept.includes('điều phối') || dept.includes('vendor');
+  });
+
+  const shippingEmployees = employees.filter(e => {
+    const dept = (e.department || '').toLowerCase();
+    return dept.includes('vận chuyển') || dept.includes('giao nhận');
+  });
+
+  const exceptionEmployees = employees.filter(e => {
+    const dept = (e.department || '').toLowerCase();
+    return dept.includes('sự cố') || dept.includes('ngoại lệ');
+  });
+
+  const otherEmployees = employees.filter(e => {
+    const dept = (e.department || '').toLowerCase();
+    return !dept.includes('điều phối') && !dept.includes('vendor') &&
+           !dept.includes('vận chuyển') && !dept.includes('giao nhận') &&
+           !dept.includes('sự cố') && !dept.includes('ngoại lệ');
+  });
 
   // Open Assign Modal and fetch real employees
-  const handleOpenAssignModal = async () => {
+  const handleOpenAssignModal = async (defaultEmpId) => {
     setIsAssignModalOpen(true);
     setAssignNote('');
-    setSelectedEmpId(assignedCarrier?.id || '');
+    setSelectedEmpId(defaultEmpId || assignedShipper?.id || assignedHandling?.id || assignedException?.id || '');
     if (employees.length === 0) {
       try {
         setLoadingEmployees(true);
@@ -139,13 +198,22 @@ export default function OrderDetailModal({ isOpen, onClose, order, onStatusChang
     }
   };
 
-  // Trigger auto-assignment by system
-  const handleAutoAssign = async () => {
-    if (!confirm('Hệ thống sẽ tự động phân tích và chọn nhân viên có tải công việc thấp nhất để phân công. Bạn có muốn tiếp tục?')) return;
+  // Trigger auto-assignment by system (random but according to department)
+  const handleAutoAssign = async (departmentType) => {
+    const deptLabels = {
+      handling: 'Bộ phận Điều phối & Liên kết Vendor',
+      shipping: 'Phòng Vận chuyển & Giao nhận',
+      exception: 'Bộ phận Xử lý Sự cố & Ngoại lệ Đơn',
+    };
+    const confirmMsg = departmentType
+      ? `Hệ thống sẽ chọn ngẫu nhiên một nhân viên thuộc [${deptLabels[departmentType]}] để phân công. Bạn có muốn tiếp tục?`
+      : 'Hệ thống sẽ tự động phân tích trạng thái đơn và chọn ngẫu nhiên nhân sự đúng phòng ban tương ứng. Bạn có muốn tiếp tục?';
+    if (!confirm(confirmMsg)) return;
+
     try {
       setAssigning(true);
-      const res = await ordersApi.autoAssignOrder(order.id);
-      alert('Hệ thống đã tự động phân công nhân viên thành công!');
+      const res = await ordersApi.autoAssignOrder(order.id, departmentType ? { department: departmentType } : {});
+      alert('Hệ thống đã tự động phân công ngẫu nhiên nhân viên thành công!');
       setIsAssignModalOpen(false);
       if (onOrderUpdated) onOrderUpdated(res.data || res);
     } catch (err) {
@@ -282,55 +350,154 @@ export default function OrderDetailModal({ isOpen, onClose, order, onStatusChang
             </div>
           </div>
 
-          {/* Assigned Employee (Phân công nhân sự phụ trách) */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                  Nhân viên phụ trách đơn hàng
-                </h4>
-                {assignedCarrier ? (
-                  <div className="flex items-center gap-3 pt-1">
-                    <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-sm">
-                      {assignedCarrier.fullName?.charAt(0) || 'E'}
+          {/* Phân công nhân sự theo 3 phòng ban nghiệp vụ */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 p-5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <UserCheck className="w-4 h-4 text-blue-600" />
+                Nhân sự phân công phụ trách đơn hàng (3 Ban nghiệp vụ)
+              </h4>
+              {order.status !== 'completed' && order.status !== 'cancelled' && (
+                <button
+                  type="button"
+                  onClick={handleOpenAssignModal}
+                  disabled={assigning}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  Chỉnh lại nhân viên phụ trách
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+              {/* Ban 1: Điều phối & Liên kết Vendor */}
+              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 shadow-xs">
+                <div className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-400 uppercase flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Package className="w-3.5 h-3.5 text-indigo-500" />
+                    1. Điều phối & Vendor
+                  </span>
+                  {assignedHandling && <Badge variant="success" size="sm">Đã phân công</Badge>}
+                </div>
+                {assignedHandling ? (
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs shrink-0">
+                      {assignedHandling.fullName?.charAt(0) || 'Đ'}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm text-slate-800 dark:text-slate-100">
-                          {assignedCarrier.fullName}
-                        </span>
-                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                          {assignedCarrier.employeeCode}
-                        </span>
-                        <Badge variant="success">Đã phân công</Badge>
-                      </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {assignedCarrier.department || 'Bộ phận Vận hành'} {assignedCarrier.phone ? `• SĐT: ${assignedCarrier.phone}` : ''}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
+                        {assignedHandling.fullName}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        {assignedHandling.employeeCode} {assignedHandling.phone ? `• ${assignedHandling.phone}` : ''}
                       </p>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 pt-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
-                    <Clock className="w-4 h-4 shrink-0" />
-                    <span>Đơn hàng chưa có nhân viên phụ trách xử lý. Hệ thống có thể tự động phân công hoặc Admin chủ động chỉ định.</span>
-                  </div>
+                  <p className="mt-2.5 text-xs text-slate-400 italic">Chưa chỉ định điều phối</p>
                 )}
               </div>
 
-              {order.status !== 'completed' && order.status !== 'cancelled' && (
-                <div className="flex items-center gap-2 shrink-0">
+              {/* Ban 2: Vận chuyển & Giao nhận */}
+              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 uppercase flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <Truck className="w-3.5 h-3.5 text-blue-500" />
+                      2. Bưu tá Giao nhận
+                    </span>
+                    {assignedShipper && <Badge variant="success" size="sm">Đã phân công</Badge>}
+                  </div>
+                  {assignedShipper ? (
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs shrink-0">
+                        {assignedShipper.fullName?.charAt(0) || 'S'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
+                          {assignedShipper.fullName}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-mono">
+                          {assignedShipper.employeeCode} {assignedShipper.phone ? `• ${assignedShipper.phone}` : ''}
+                        </p>
+                        <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
+                          {assignedShipper.department || 'Phòng Vận chuyển & Giao nhận'}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2.5">
+                      <p className="text-xs text-amber-600 dark:text-amber-400 italic">
+                        Chưa phân công bưu tá
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleOpenAssignModal}
+                    onClick={() => handleOpenAssignModal(assignedShipper?.id)}
                     disabled={assigning}
-                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition"
+                    className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                    title="Admin chỉnh lại bưu tá giao nhận phụ trách đơn này"
                   >
-                    <UserCheck className="w-3.5 h-3.5" />
-                    {assignedCarrier ? 'Thay đổi phân công' : 'Chỉ định nhân viên'}
+                    <UserCheck className="w-3 h-3" />
+                    Chỉnh lại bưu tá
+                  </button>
+                  <span className="text-slate-300 dark:text-slate-700">•</span>
+                  <button
+                    type="button"
+                    onClick={() => handleAutoAssign('shipping')}
+                    disabled={assigning}
+                    className="text-[11px] font-medium text-slate-500 hover:text-blue-600 dark:text-slate-400 inline-flex items-center gap-1"
+                    title="Hệ thống tự động phân công bưu tá từ Phòng Vận chuyển & Giao nhận"
+                  >
+                    <Sparkles className="w-3 h-3 text-blue-500" />
+                    Tự động phân công
                   </button>
                 </div>
-              )}
+              </div>
+
+              {/* Ban 3: Xử lý Sự cố & Ngoại lệ */}
+              <div className={`p-3 rounded-xl border shadow-xs ${
+                assignedException 
+                  ? 'border-amber-300 dark:border-amber-800/60 bg-amber-50/40 dark:bg-amber-950/20' 
+                  : (showEscalationAlert || order.status === 'cancelled')
+                    ? 'border-red-300 dark:border-red-800/60 bg-red-50/40 dark:bg-red-950/20'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80'
+              }`}>
+                <div className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 uppercase flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+                    3. Xử lý Sự cố & Ngoại lệ
+                  </span>
+                  {assignedException && <Badge variant="warning" size="sm">Đang giải quyết</Badge>}
+                </div>
+                {assignedException ? (
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs shrink-0">
+                      {assignedException.fullName?.charAt(0) || 'E'}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
+                        {assignedException.fullName}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        {assignedException.employeeCode} {assignedException.phone ? `• ${assignedException.phone}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ) : (showEscalationAlert || order.status === 'cancelled') ? (
+                  <p className="mt-2.5 text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Có sự cố (chờ chỉ định)
+                  </p>
+                ) : (
+                  <p className="mt-2.5 text-xs text-slate-400 italic">Không có sự cố</p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -488,14 +655,14 @@ export default function OrderDetailModal({ isOpen, onClose, order, onStatusChang
         </div>
       </Modal>
 
-      {/* Modal: Phân công nhân viên xử lý */}
+      {/* Modal: Phân công / Chỉnh lại nhân viên xử lý */}
       {isAssignModalOpen && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-blue-600" />
-                Phân công Nhân viên Phụ trách Đơn hàng
+                Phân công / Chỉnh lại Nhân viên Phụ trách
               </h3>
               <button 
                 onClick={() => setIsAssignModalOpen(false)} 
@@ -505,60 +672,139 @@ export default function OrderDetailModal({ isOpen, onClose, order, onStatusChang
               </button>
             </div>
 
-            <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl p-3 text-xs text-blue-800 dark:text-blue-300 flex items-center justify-between">
-              <div>
-                <p className="font-semibold">Mã đơn: #{order.orderCode || order.id.slice(0, 8)}</p>
-                <p className="text-[11px] text-blue-600 dark:text-blue-400">
-                  Người nhận: {order.receiverName || order.client?.fullName} • {order.receiverPhone || ''}
-                </p>
+            <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-xl p-3 text-xs text-blue-800 dark:text-blue-300">
+              <p className="font-semibold">Mã đơn: #{order.orderCode || order.id.slice(0, 8)}</p>
+              <p className="text-[11px] text-blue-600 dark:text-blue-400">
+                Người nhận: {order.receiverName || order.client?.fullName} • {order.receiverPhone || ''}
+              </p>
+            </div>
+
+            {/* Quick Random Assign according to Department */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Phân công ngẫu nhiên theo đúng phòng ban:
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleAutoAssign('handling')}
+                  disabled={assigning}
+                  className="px-2.5 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-indigo-200 dark:border-indigo-800 transition"
+                  title="Chọn ngẫu nhiên 1 nhân viên thuộc Ban Điều phối & Vendor"
+                >
+                  <Shuffle className="w-3.5 h-3.5 shrink-0" />
+                  Random Ban Điều phối
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAutoAssign('shipping')}
+                  disabled={assigning}
+                  className="px-2.5 py-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-blue-200 dark:border-blue-800 transition"
+                  title="Chọn ngẫu nhiên 1 bưu tá thuộc Ban Vận chuyển & Giao nhận"
+                >
+                  <Shuffle className="w-3.5 h-3.5 shrink-0" />
+                  Random Ban Vận chuyển
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAutoAssign('exception')}
+                  disabled={assigning}
+                  className="px-2.5 py-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-amber-200 dark:border-amber-800 transition"
+                  title="Chọn ngẫu nhiên 1 chuyên viên thuộc Ban Xử lý Sự cố"
+                >
+                  <Shuffle className="w-3.5 h-3.5 shrink-0" />
+                  Random Ban Sự cố
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAutoAssign()}
+                  disabled={assigning}
+                  className="px-2.5 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-emerald-200 dark:border-emerald-800 transition"
+                  title="Hệ thống tự động chọn ngẫu nhiên đúng phòng ban theo trạng thái đơn"
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                  Tự động theo trạng thái
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleAutoAssign}
-                disabled={assigning}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold flex items-center gap-1 shrink-0 transition"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Tự động chọn NV tối ưu
-              </button>
+            </div>
+
+            <div className="relative flex py-1 items-center">
+              <div className="grow border-t border-slate-200 dark:border-slate-800"></div>
+              <span className="shrink mx-2 text-[11px] text-slate-400 font-medium">hoặc Admin tự chọn nhân viên</span>
+              <div className="grow border-t border-slate-200 dark:border-slate-800"></div>
             </div>
 
             <form onSubmit={handleManualAssign} className="space-y-4 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Chọn nhân viên cụ thể ({employees.length} nhân viên hoạt động):
+                  Chọn nhân viên theo đúng phòng ban:
                 </label>
                 {loadingEmployees ? (
                   <div className="py-4 text-center text-slate-400 flex items-center justify-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                    Đang tải danh sách nhân viên...
+                    Đang tải danh sách nhân viên thực tế...
                   </div>
                 ) : (
                   <select
                     value={selectedEmpId}
                     onChange={(e) => setSelectedEmpId(e.target.value)}
                     required
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-medium focus:ring-2 focus:ring-blue-500 text-xs"
                   >
                     <option value="">-- Chọn nhân viên phụ trách --</option>
-                    {employees.map((emp) => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.fullName} ({emp.employeeCode}) - {emp.department} {emp.phone ? `[${emp.phone}]` : ''}
-                      </option>
-                    ))}
+                    
+                    {handlingEmployees.length > 0 && (
+                      <optgroup label={`📋 BỘ PHẬN ĐIỀU PHỐI & LIÊN KẾT VENDOR (${handlingEmployees.length})`}>
+                        {handlingEmployees.map((emp) => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.fullName} ({emp.employeeCode}) {emp.phone ? `• [${emp.phone}]` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+
+                    {shippingEmployees.length > 0 && (
+                      <optgroup label={`🚚 PHÒNG VẬN CHUYỂN & GIAO NHẬN (${shippingEmployees.length})`}>
+                        {shippingEmployees.map((emp) => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.fullName} ({emp.employeeCode}) {emp.phone ? `• [${emp.phone}]` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+
+                    {exceptionEmployees.length > 0 && (
+                      <optgroup label={`🛡️ BỘ PHẬN XỬ LÝ SỰ CỐ & NGOẠI LỆ ĐƠN (${exceptionEmployees.length})`}>
+                        {exceptionEmployees.map((emp) => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.fullName} ({emp.employeeCode}) {emp.phone ? `• [${emp.phone}]` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+
+                    {otherEmployees.length > 0 && (
+                      <optgroup label={`🏢 CÁC NHÂN VIÊN KHÁC (${otherEmployees.length})`}>
+                        {otherEmployees.map((emp) => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.fullName} ({emp.employeeCode}) - {emp.department}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 )}
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Ghi chú điều phối (Lưu vào lịch sử đơn hàng):
+                  Ghi chú điều phối của Admin (Lưu vào lịch sử đơn):
                 </label>
                 <textarea
                   rows={2}
                   value={assignNote}
                   onChange={(e) => setAssignNote(e.target.value)}
-                  placeholder="VD: Phân công nhân viên bưu tá phụ trách giao tuyến Tân Bình..."
+                  placeholder="VD: Admin chỉ định nhân viên xử lý tiếp nhận / đổi bưu tá theo khu vực..."
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
                 />
               </div>

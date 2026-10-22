@@ -1,0 +1,527 @@
+erDiagram
+    %% ==========================================
+    %% USERS & AUTHENTICATION
+    %% ==========================================
+    Admin {
+        uuid id PK
+        string fullName
+        string email UK
+        string password
+        string phone
+        string avatarUrl
+        string department
+        UserStatus status
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    Employee {
+        uuid id PK
+        string employeeCode UK
+        string fullName
+        string email UK
+        string password
+        string phone
+        string avatarUrl
+        date dateOfBirth
+        Gender gender
+        string citizenId
+        string address
+        string department
+        string position
+        EmploymentType employmentType
+        decimal salary
+        decimal hourlyRate
+        date hireDate
+        UserStatus status
+        string assignedOrderScope
+        json permissions
+        uuid adminId FK
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    Client {
+        uuid id PK
+        string fullName
+        string email UK
+        string password
+        string phone
+        string avatarUrl
+        date dateOfBirth
+        Gender gender
+        int loyaltyPoints
+        UserStatus status
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    ClientAddress {
+        uuid id PK
+        uuid clientId FK
+        string receiverName
+        string phone
+        string addressLine
+        string ward
+        string district
+        string province
+        string label
+        boolean isDefault
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    Vendor {
+        uuid id PK
+        string fullName
+        string email UK
+        string password
+        string phone
+        string avatarUrl
+        string storeName
+        string taxId
+        UserStatus status
+        string subscriptionPlan
+        decimal subscriptionFee
+        datetime subscriptionExpiresAt
+        decimal commissionRate
+        string approvalStatus
+        datetime approvedAt
+        string approvedBy
+        string rejectedReason
+        boolean renewalRequested
+        string renewalPlan
+        datetime renewalRequestedAt
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    %% ==========================================
+    %% HR & EMPLOYEE MANAGEMENT
+    %% ==========================================
+    EmployeeSalaryHistory {
+        uuid id PK
+        uuid employeeId FK
+        decimal oldSalary
+        decimal newSalary
+        decimal oldHourlyRate
+        decimal newHourlyRate
+        EmploymentType employmentType
+        date effectiveDate
+        string reason
+        uuid adminId FK
+        datetime createdAt
+    }
+
+    EmployeeAttendance {
+        uuid id PK
+        uuid employeeId FK
+        date date
+        datetime checkIn
+        datetime checkOut
+        decimal hoursWorked
+        AttendanceStatus status
+        string note
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    EmployeePayroll {
+        uuid id PK
+        uuid employeeId FK
+        int month
+        int year
+        EmploymentType employmentType
+        decimal baseSalary
+        decimal hourlyRate
+        decimal totalHours
+        decimal allowances
+        decimal deductions
+        decimal bonus
+        decimal netSalary
+        PayrollStatus status
+        datetime paidAt
+        string notes
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    %% ==========================================
+    %% PRODUCT CATALOG
+    %% ==========================================
+    Category {
+        uuid id PK
+        string name
+        string slug UK
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    Product {
+        uuid id PK
+        uuid categoryId FK
+        uuid vendorId FK
+        string name
+        string slug UK
+        string description
+        ProductStatus status
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    ProductColor {
+        uuid id PK
+        uuid productId FK
+        string color
+        string imageUrls
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    ProductVariant {
+        uuid id PK
+        uuid productColorId FK
+        string size
+        int stock
+        decimal price
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    ProductFavorite {
+        uuid id PK
+        uuid clientId FK
+        uuid productId FK
+        datetime createdAt
+    }
+
+    Review {
+        uuid id PK
+        uuid clientId FK
+        uuid productId FK
+        uuid orderDetailId FK
+        string content
+        int rating
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    %% ==========================================
+    %% CART & VOUCHER
+    %% ==========================================
+    Cart {
+        uuid id PK
+        uuid clientId FK
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    CartItem {
+        uuid id PK
+        uuid cartId FK
+        uuid productVariantId FK
+        int quantity
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    Voucher {
+        uuid id PK
+        uuid adminId FK
+        uuid vendorId FK
+        string code UK
+        string name
+        VoucherScope scope
+        DiscountType discountType
+        decimal discountValue
+        decimal minOrderAmount
+        decimal maxDiscountAmount
+        int quantity
+        int usedQuantity
+        int perUserLimit
+        datetime startDate
+        datetime endDate
+        VoucherStatus status
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    VoucherDetail {
+        uuid id PK
+        uuid voucherId FK
+        uuid productId FK
+        uuid orderId FK
+        decimal eligibleAmount
+        decimal discountAmount
+        int sequence
+        datetime createdAt
+        datetime reversedAt
+    }
+
+    %% ==========================================
+    %% ORDER, PAYMENT & LOGISTICS
+    %% ==========================================
+    Order {
+        uuid id PK
+        string orderCode UK
+        uuid clientId FK
+        decimal subtotalAmount
+        decimal discountAmount
+        decimal shippingFee
+        decimal totalAmount
+        OrderStatus status
+        string notes
+        string receiverName
+        string receiverPhone
+        string shippingAddress
+        datetime createdAt
+        datetime updatedAt
+        datetime cancelledAt
+    }
+
+    OrderDetail {
+        uuid id PK
+        uuid orderId FK
+        uuid productVariantId FK
+        uuid vendorOrderId FK
+        int quantity
+        decimal price
+        string productName
+        string colorName
+        string sizeName
+        string imageUrl
+    }
+
+    VendorOrder {
+        uuid id PK
+        string vendorOrderCode UK
+        uuid orderId FK
+        uuid vendorId FK
+        decimal subtotalAmount
+        decimal shippingFee
+        decimal totalAmount
+        VendorOrderStatus status
+        string notes
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    Payment {
+        uuid id PK
+        uuid orderId FK
+        PaymentMethod method
+        decimal amount
+        PaymentStatus status
+        string transactionCode UK
+        string gateway
+        json gatewayResponse
+        datetime paidAt
+        datetime failedAt
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    OrderStatusHistory {
+        uuid id PK
+        uuid orderId FK
+        uuid adminId FK
+        uuid clientId FK
+        uuid vendorId FK
+        uuid employeeId FK
+        OrderStatus fromStatus
+        OrderStatus toStatus
+        string note
+        datetime createdAt
+    }
+
+    Shipment {
+        uuid id PK
+        string trackingNumber UK
+        uuid orderId FK
+        uuid vendorOrderId FK
+        uuid carrierId FK
+        string carrierType
+        ShipmentStatus status
+        string pickupAddress
+        string shippingAddress
+        string receiverName
+        string receiverPhone
+        datetime estimatedDelivery
+        datetime deliveredAt
+        string failedReason
+        string notes
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    ShipmentEvent {
+        uuid id PK
+        uuid shipmentId FK
+        ShipmentStatus status
+        string location
+        string description
+        string actorRole
+        uuid actorId
+        datetime createdAt
+    }
+
+    %% ==========================================
+    %% SURVEY & NOTIFICATION
+    %% ==========================================
+    Survey {
+        uuid id PK
+        uuid adminId FK
+        uuid vendorId FK
+        string title
+        string description
+        string imageUrl
+        SurveyScope scope
+        SurveyAudienceType audienceType
+        SurveyTriggerType triggerType
+        SurveyStatus status
+        datetime startDate
+        datetime endDate
+        datetime createdAt
+        datetime updatedAt
+        datetime deletedAt
+    }
+
+    SurveyQuestion {
+        uuid id PK
+        uuid surveyId FK
+        string question
+        SurveyQuestionType type
+        boolean required
+        int position
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    SurveyOption {
+        uuid id PK
+        uuid questionId FK
+        string content
+        int position
+        datetime createdAt
+    }
+
+    SurveyResponse {
+        uuid id PK
+        uuid surveyId FK
+        uuid clientId FK
+        uuid orderId FK
+        string deliveryKey UK
+        SurveyResponseStatus status
+        datetime notifiedAt
+        datetime openedAt
+        datetime submittedAt
+        datetime skippedAt
+        datetime expiresAt
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    SurveyAnswer {
+        uuid id PK
+        uuid responseId FK
+        uuid questionId FK
+        uuid optionId FK
+        string textAnswer
+        int ratingValue
+        datetime createdAt
+    }
+
+    Notification {
+        uuid id PK
+        uuid adminId FK
+        uuid clientId FK
+        uuid vendorId FK
+        uuid surveyId FK
+        uuid surveyResponseId FK
+        NotificationType type
+        string title
+        string content
+        json data
+        boolean isRead
+        datetime readAt
+        datetime expiresAt
+        datetime createdAt
+    }
+
+    %% ==========================================
+    %% RELATIONSHIPS
+    %% ==========================================
+    Admin ||--o{ Employee : "creates"
+    Admin ||--o{ EmployeeSalaryHistory : "modifies"
+    Employee ||--o{ EmployeeSalaryHistory : "has"
+    Employee ||--o{ EmployeeAttendance : "has"
+    Employee ||--o{ EmployeePayroll : "receives"
+
+    Client ||--o| Cart : "owns"
+    Cart ||--|{ CartItem : "contains"
+    Client ||--o{ ClientAddress : "has"
+    Client ||--o{ ProductFavorite : "favorites"
+    Client ||--o{ Review : "writes"
+
+    Category ||--o{ Product : "classifies"
+    Vendor ||--o{ Product : "sells"
+    Product ||--|{ ProductColor : "has"
+    ProductColor ||--|{ ProductVariant : "has"
+    ProductVariant ||--o{ CartItem : "in"
+    Product ||--o{ ProductFavorite : "favorited in"
+    Product ||--o{ Review : "reviewed in"
+
+    Client ||--o{ Order : "places"
+    Order ||--|{ OrderDetail : "contains"
+    ProductVariant ||--o{ OrderDetail : "purchased in"
+    OrderDetail ||--o| Review : "yields"
+
+    Order ||--o{ VendorOrder : "splits into"
+    Vendor ||--o{ VendorOrder : "fulfills"
+    VendorOrder ||--o{ OrderDetail : "includes"
+    Order ||--o{ Shipment : "ships via"
+    VendorOrder ||--o| Shipment : "dispatched via"
+    Employee ||--o{ Shipment : "delivers as carrier"
+    Shipment ||--|{ ShipmentEvent : "tracks"
+
+    Order ||--|| Payment : "paid via"
+    Order ||--|{ OrderStatusHistory : "tracked in"
+    Admin ||--o{ OrderStatusHistory : "updated by"
+    Employee ||--o{ OrderStatusHistory : "updated by"
+    Client ||--o{ OrderStatusHistory : "updated by"
+    Vendor ||--o{ OrderStatusHistory : "updated by"
+
+    Admin ||--o{ Voucher : "creates"
+    Vendor ||--o{ Voucher : "creates"
+    Voucher ||--o{ VoucherDetail : "applied in"
+    Product ||--o{ VoucherDetail : "targets"
+    Order ||--o{ VoucherDetail : "uses"
+
+    Admin ||--o{ Survey : "creates"
+    Vendor ||--o{ Survey : "creates"
+    Survey ||--|{ SurveyQuestion : "has"
+    SurveyQuestion ||--o{ SurveyOption : "options"
+    Survey ||--o{ SurveyResponse : "collects"
+    Client ||--o{ SurveyResponse : "answers"
+    Order ||--o{ SurveyResponse : "triggered by"
+    SurveyResponse ||--|{ SurveyAnswer : "includes"
+    SurveyQuestion ||--o{ SurveyAnswer : "referenced by"
+    SurveyOption ||--o{ SurveyAnswer : "selected in"
+
+    Admin ||--o{ Notification : "receives"
+    Client ||--o{ Notification : "receives"
+    Vendor ||--o{ Notification : "receives"
+    Survey ||--o{ Notification : "relates to"
+    SurveyResponse ||--o| Notification : "triggers"

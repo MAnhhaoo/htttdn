@@ -21,6 +21,7 @@ const STATUS_CONFIG = {
 export const InternalShippingPage = () => {
   const { user } = useAuth();
   const [shipments, setShipments] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
@@ -55,6 +56,9 @@ export const InternalShippingPage = () => {
       const res = await shippingApi.getShipments(params);
       const list = res.list || res.data?.list || (Array.isArray(res) ? res : []);
       setShipments(list);
+      if (res?.summary) {
+        setSummary(res.summary);
+      }
     } catch (err) {
       console.error('Error fetching internal shipments:', err);
     } finally {
@@ -74,9 +78,31 @@ export const InternalShippingPage = () => {
   // Handle open update modal
   const handleOpenUpdate = (shipment, suggestedStatus) => {
     setSelectedShipment(shipment);
-    setNextStatus(suggestedStatus || 'in_transit');
-    setLocationText('Hub Logistics Nội bộ MIVA');
-    setDescriptionText('');
+    const targetStatus = suggestedStatus || 'in_transit';
+    setNextStatus(targetStatus);
+
+    let defaultLoc = 'Hub Logistics Nội bộ MIVA';
+    let defaultDesc = '';
+
+    if (targetStatus === 'picking_up') {
+      defaultLoc = shipment.vendorOrder?.vendor?.storeName || 'Kho Vendor';
+      defaultDesc = 'Bưu tá đã tiếp nhận đơn và đang tới lấy hàng tại kho Vendor';
+    } else if (targetStatus === 'in_transit') {
+      defaultLoc = 'Hub Logistics Phân loại MIVA';
+      defaultDesc = 'Đã lấy hàng thành công từ Vendor, đang luân chuyển qua Hub phân loại';
+    } else if (targetStatus === 'out_for_delivery') {
+      defaultLoc = shipment.shippingAddress ? `Tuyến: ${shipment.shippingAddress.split(',').slice(-2).join(',').trim()}` : 'Tuyến giao hàng';
+      defaultDesc = 'Đã xuất kho Hub, bưu tá đang trên đường đi giao đến người nhận';
+    } else if (targetStatus === 'delivered') {
+      defaultLoc = shipment.shippingAddress || 'Địa chỉ khách hàng';
+      defaultDesc = 'Đã giao kiện hàng thành công cho người nhận';
+    } else if (targetStatus === 'failed') {
+      defaultLoc = shipment.shippingAddress || 'Địa chỉ khách hàng';
+      defaultDesc = 'Giao hàng không thành công';
+    }
+
+    setLocationText(defaultLoc);
+    setDescriptionText(defaultDesc);
     setFailedReason('');
     setIsUpdateOpen(true);
   };
@@ -144,12 +170,20 @@ export const InternalShippingPage = () => {
     }
   };
 
-  // Quick Stats
-  const pendingCount = shipments.filter((s) => s.status === 'pending').length;
-  const inTransitCount = shipments.filter(
-    (s) => s.status === 'picking_up' || s.status === 'in_transit' || s.status === 'out_for_delivery'
-  ).length;
-  const deliveredCount = shipments.filter((s) => s.status === 'delivered').length;
+  // Quick Stats from server summary or loaded array
+  const pendingCount =
+    summary?.pending ?? shipments.filter((s) => s.status === 'pending').length;
+  const inTransitCount =
+    summary?.inTransit ??
+    shipments.filter(
+      (s) =>
+        s.status === 'assigned' ||
+        s.status === 'picking_up' ||
+        s.status === 'in_transit' ||
+        s.status === 'out_for_delivery',
+    ).length;
+  const deliveredCount =
+    summary?.delivered ?? shipments.filter((s) => s.status === 'delivered').length;
 
   return (
     <div className="space-y-6">
@@ -341,12 +375,12 @@ export const InternalShippingPage = () => {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {s.status === 'assigned' && (
+                    {(s.status === 'pending' || s.status === 'assigned') && (
                       <button
                         onClick={() => handleOpenUpdate(s, 'picking_up')}
                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition"
                       >
-                        Bắt đầu lấy hàng Vendor
+                        Tiếp nhận &amp; Bắt đầu lấy hàng (Vendor)
                       </button>
                     )}
 

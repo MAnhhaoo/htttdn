@@ -24,6 +24,7 @@ export default function EmployeeManagement() {
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [departments, setDepartments] = useState([]);
 
   // Modals
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -63,6 +64,20 @@ export default function EmployeeManagement() {
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
+
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const res = await employeesApi.getDepartments();
+        if (res.data) {
+          setDepartments(res.data);
+        }
+      } catch (err) {
+        console.error('Error fetching departments:', err);
+      }
+    };
+    fetchDepartments();
+  }, []);
 
   // Handle Save (Create or Update)
   const handleSaveEmployee = async (formData) => {
@@ -224,10 +239,11 @@ export default function EmployeeManagement() {
             className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           >
             <option value="">Tất cả phòng ban</option>
-            <option value="Vận hành">Vận hành</option>
-            <option value="CSKH">CSKH</option>
-            <option value="Kho vận">Kho vận</option>
-            <option value="Kiểm duyệt">Kiểm duyệt</option>
+            {departments.map((dept) => (
+              <option key={dept} value={dept}>
+                {dept}
+              </option>
+            ))}
           </select>
 
           {/* Type Filter */}
@@ -490,6 +506,7 @@ export default function EmployeeManagement() {
           onClose={() => setIsFormOpen(false)}
           onSave={handleSaveEmployee}
           employeeToEdit={employeeToEdit}
+          departments={departments}
         />
       )}
 

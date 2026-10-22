@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, 
   Star, 
@@ -10,11 +12,13 @@ import {
   Send, 
   RotateCw, 
   Check, 
-  Sparkles 
+  Sparkles,
+  Maximize2
 } from 'lucide-react';
 import { surveyService } from '../../services/surveyService';
 
 export default function SurveyModal({ isOpen, onClose, surveyResponseId, onSubmitted }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [detail, setDetail] = useState(null);
@@ -213,7 +217,7 @@ export default function SurveyModal({ isOpen, onClose, surveyResponseId, onSubmi
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
   const isSubmittedAlready = detail?.status === 'submitted' && !justSubmitted;
   const isSkipped = detail?.status === 'skipped';
@@ -232,9 +236,9 @@ export default function SurveyModal({ isOpen, onClose, surveyResponseId, onSubmi
     5: { label: 'Rất hài lòng', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800' },
   };
 
-  return (
+  return createPortal(
     <div 
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm p-3 sm:p-4 md:p-6 flex items-center justify-center transition-all animate-fade-in"
+      className="fixed inset-0 z-[99999] overflow-y-auto bg-black/60 backdrop-blur-sm p-3 sm:p-4 md:p-6 flex items-center justify-center transition-all animate-fade-in"
       onClick={handleModalClose}
     >
       <div 
@@ -273,12 +277,25 @@ export default function SurveyModal({ isOpen, onClose, surveyResponseId, onSubmi
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             {canEdit && questions.length > 0 && (
-              <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg">
+              <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg mr-1">
                 Đã trả lời <span className="font-bold text-emerald-600 dark:text-emerald-400">{answeredCount}</span>/{questions.length}
               </div>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                handleModalClose();
+                if (surveyResponseId) {
+                  navigate(`/surveys/${surveyResponseId}`);
+                }
+              }}
+              className="p-2 rounded-xl text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title="Mở toàn màn hình / trang riêng"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
             <button
               type="button"
               onClick={handleModalClose}
@@ -612,6 +629,7 @@ export default function SurveyModal({ isOpen, onClose, surveyResponseId, onSubmi
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

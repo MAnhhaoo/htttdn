@@ -75,6 +75,12 @@ export class EmployeesController {
     return this.employeesService.getEmployees(query);
   }
 
+  @Get('departments')
+  @Roles('admin', 'employee')
+  getDepartments() {
+    return this.employeesService.getDepartments();
+  }
+
   @Get(':id')
   @Roles('admin', 'employee')
   getEmployee(@Param('id') id: string, @User() user: UserInfo) {

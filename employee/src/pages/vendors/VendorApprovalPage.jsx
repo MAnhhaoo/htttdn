@@ -348,44 +348,48 @@ export const VendorApprovalPage = () => {
       {/* Approve Modal */}
       {approveModalOpen && selectedVendor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
-            <h3 className="font-bold text-sm text-slate-800">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl space-y-4">
+            <h3 className="font-bold text-sm text-slate-800 dark:text-white">
               Phê duyệt đối tác: {selectedVendor.storeName || selectedVendor.fullName}
             </h3>
 
-            <div className="p-3 bg-slate-50 rounded-xl text-xs space-y-1 text-slate-600">
-              <div><strong>Đại diện:</strong> {selectedVendor.fullName} ({selectedVendor.email})</div>
-              <div><strong>MST:</strong> {selectedVendor.taxId || 'Chưa cung cấp'}</div>
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/60 dark:border-slate-700/60 rounded-xl text-xs space-y-1 text-slate-600 dark:text-slate-300">
+              <div><strong className="text-slate-700 dark:text-slate-200">Đại diện:</strong> {selectedVendor.fullName} ({selectedVendor.email})</div>
+              <div><strong className="text-slate-700 dark:text-slate-200">MST:</strong> {selectedVendor.taxId || 'Chưa cung cấp'}</div>
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Gói thời hạn</label>
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">Gói thời hạn</label>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <button
                   type="button"
                   onClick={() => setApprovePlan('1_year')}
-                  className={`p-2.5 rounded-xl border text-left ${
-                    approvePlan === '1_year' ? 'border-indigo-600 bg-indigo-50 font-bold' : 'border-slate-200'
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    approvePlan === '1_year'
+                      ? 'border-indigo-600 bg-indigo-50/70 dark:border-indigo-500 dark:bg-indigo-950/50 font-bold'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
-                  <div>Gói 1 Năm</div>
-                  <div className="text-indigo-600 font-bold">1.200.000 ₫</div>
+                  <div className="text-slate-900 dark:text-white">Gói 1 Năm</div>
+                  <div className="text-indigo-600 dark:text-indigo-400 font-bold">1.200.000 ₫</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setApprovePlan('2_years')}
-                  className={`p-2.5 rounded-xl border text-left ${
-                    approvePlan === '2_years' ? 'border-indigo-600 bg-indigo-50 font-bold' : 'border-slate-200'
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    approvePlan === '2_years'
+                      ? 'border-indigo-600 bg-indigo-50/70 dark:border-indigo-500 dark:bg-indigo-950/50 font-bold'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
-                  <div>Gói 2 Năm</div>
-                  <div className="text-indigo-600 font-bold">2.000.000 ₫</div>
+                  <div className="text-slate-900 dark:text-white">Gói 2 Năm</div>
+                  <div className="text-indigo-600 dark:text-indigo-400 font-bold">2.000.000 ₫</div>
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">Chiết khấu sàn (%)</label>
+              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 uppercase mb-1">Chiết khấu sàn (%)</label>
               <input
                 type="number"
                 step="0.1"
@@ -393,15 +397,15 @@ export const VendorApprovalPage = () => {
                 max="50"
                 value={approveCommission}
                 onChange={(e) => setApproveCommission(e.target.value)}
-                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500"
+                className="w-full px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 text-xs">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
               <button
                 type="button"
                 onClick={() => setApproveModalOpen(false)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
                 Hủy
               </button>
@@ -409,7 +413,7 @@ export const VendorApprovalPage = () => {
                 type="button"
                 onClick={handleApprove}
                 disabled={submitting}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow-xs"
               >
                 {submitting ? 'Đang xử lý...' : 'Xác nhận duyệt'}
               </button>

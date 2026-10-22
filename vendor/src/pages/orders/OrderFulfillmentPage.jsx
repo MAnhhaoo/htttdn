@@ -55,8 +55,10 @@ export default function OrderFulfillmentPage() {
   // Update Status Action
   const handleUpdateStatus = async (item, newStatus, customNote = '') => {
     let confirmMsg = '';
-    if (newStatus === 'processing') {
-      confirmMsg = `Xác nhận tiếp nhận và bắt đầu đóng gói kiện hàng ${item.vendorOrderCode}?`;
+    if (newStatus === 'confirmed') {
+      confirmMsg = `Xác nhận nhận đơn hàng ${item.vendorOrderCode} từ hệ thống MIVA?`;
+    } else if (newStatus === 'processing') {
+      confirmMsg = `Bắt đầu đóng gói kiện hàng ${item.vendorOrderCode}?`;
     } else if (newStatus === 'ready_for_pickup') {
       confirmMsg = `Xác nhận đã đóng gói xong kiện hàng ${item.vendorOrderCode} và sẵn sàng bàn giao cho bưu tá MIVA?`;
     } else if (newStatus === 'shipping') {
@@ -97,12 +99,13 @@ export default function OrderFulfillmentPage() {
 
   // Metrics
   const stats = useMemo(() => {
-    const pending = vendorOrders.filter(vo => vo.status === 'pending' || vo.status === 'confirmed').length;
+    const pending = vendorOrders.filter(vo => vo.status === 'pending').length;
+    const confirmed = vendorOrders.filter(vo => vo.status === 'confirmed').length;
     const processing = vendorOrders.filter(vo => vo.status === 'processing').length;
     const ready = vendorOrders.filter(vo => vo.status === 'ready_for_pickup').length;
     const shipping = vendorOrders.filter(vo => vo.status === 'shipping' || vo.status === 'delivered').length;
     const cancelled = vendorOrders.filter(vo => vo.status === 'cancelled').length;
-    return { pending, processing, ready, shipping, cancelled, total: vendorOrders.length };
+    return { pending, confirmed, processing, ready, shipping, cancelled, total: vendorOrders.length };
   }, [vendorOrders]);
 
   // Filtered List
@@ -111,9 +114,11 @@ export default function OrderFulfillmentPage() {
       // Tab filter
       let matchTab = true;
       if (activeTab === 'urgent') {
-        matchTab = vo.status === 'confirmed' || vo.status === 'processing';
+        matchTab = vo.status === 'pending' || vo.status === 'confirmed' || vo.status === 'processing';
       } else if (activeTab === 'pending') {
-        matchTab = vo.status === 'pending' || vo.status === 'confirmed';
+        matchTab = vo.status === 'pending';
+      } else if (activeTab === 'confirmed') {
+        matchTab = vo.status === 'confirmed';
       } else if (activeTab === 'processing') {
         matchTab = vo.status === 'processing';
       } else if (activeTab === 'ready_for_pickup') {
@@ -143,8 +148,9 @@ export default function OrderFulfillmentPage() {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'pending':
+        return <Badge variant="warning">Chờ Shop xác nhận</Badge>;
       case 'confirmed':
-        return <Badge variant="warning">Chờ tiếp nhận</Badge>;
+        return <Badge className="bg-sky-500/10 text-sky-600 border-sky-500/20">Đã xác nhận</Badge>;
       case 'processing':
         return <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">Đang đóng gói</Badge>;
       case 'ready_for_pickup':
@@ -189,17 +195,29 @@ export default function OrderFulfillmentPage() {
       </div>
 
       {/* KPI Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         <div 
           onClick={() => setActiveTab('pending')}
           className={`p-4 rounded-xl border transition cursor-pointer ${activeTab === 'pending' ? 'bg-amber-500/10 border-amber-500/40 ring-2 ring-amber-500/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-400/50'}`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Chờ tiếp nhận</span>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Chờ xác nhận</span>
             <Clock className="w-4 h-4 text-amber-500" />
           </div>
           <p className="text-2xl font-bold text-amber-600 mt-2">{stats.pending}</p>
           <p className="text-[11px] text-slate-400 mt-0.5">Admin/NV vừa chuyển qua</p>
+        </div>
+
+        <div 
+          onClick={() => setActiveTab('confirmed')}
+          className={`p-4 rounded-xl border transition cursor-pointer ${activeTab === 'confirmed' ? 'bg-sky-500/10 border-sky-500/40 ring-2 ring-sky-500/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-sky-400/50'}`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Đã xác nhận</span>
+            <CheckCircle2 className="w-4 h-4 text-sky-500" />
+          </div>
+          <p className="text-2xl font-bold text-sky-600 mt-2">{stats.confirmed}</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Chờ bắt đầu đóng gói</p>
         </div>
 
         <div 
@@ -257,8 +275,9 @@ export default function OrderFulfillmentPage() {
         <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-3">
           {[
             { id: 'all', label: 'Tất cả kiện hàng', count: stats.total },
-            { id: 'urgent', label: '⚡ Cần xử lý gấp', count: stats.pending + stats.processing, highlight: true },
-            { id: 'pending', label: 'Chờ tiếp nhận', count: stats.pending },
+            { id: 'urgent', label: '⚡ Cần xử lý gấp', count: stats.pending + stats.confirmed + stats.processing, highlight: true },
+            { id: 'pending', label: 'Chờ xác nhận', count: stats.pending },
+            { id: 'confirmed', label: 'Đã xác nhận', count: stats.confirmed },
             { id: 'processing', label: 'Đang đóng gói', count: stats.processing },
             { id: 'ready_for_pickup', label: 'Sẵn sàng gửi ship', count: stats.ready },
             { id: 'shipping', label: 'Đang giao', count: stats.shipping },
@@ -319,7 +338,8 @@ export default function OrderFulfillmentPage() {
       ) : (
         <div className="space-y-4">
           {filteredOrders.map(vo => {
-            const isPendingOrConfirmed = vo.status === 'pending' || vo.status === 'confirmed';
+            const isPending = vo.status === 'pending';
+            const isConfirmed = vo.status === 'confirmed';
             const isProcessing = vo.status === 'processing';
             const isReadyForPickup = vo.status === 'ready_for_pickup';
             const isCancelled = vo.status === 'cancelled';
@@ -464,12 +484,36 @@ export default function OrderFulfillmentPage() {
                       {parentClosed && !isCancelled && !isCompleted && (
                         <p className="text-xs text-slate-500">Đơn hàng đã kết thúc, không thể cập nhật kiện hàng.</p>
                       )}
-                      {isPendingOrConfirmed && (
+                      {isPending && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            onClick={() => handleUpdateStatus(vo, 'confirmed')}
+                            disabled={actionLoading || waitingForConfirmation || parentClosed}
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-2.5 flex items-center justify-center gap-2 shadow-xs"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            Xác nhận đơn hàng
+                          </Button>
+
+                          <Button
+                            variant="danger"
+                            onClick={() => setCancelModalItem(vo)}
+                            disabled={actionLoading || parentClosed}
+                            className="text-xs py-2.5 px-3 flex items-center justify-center gap-1.5"
+                            title="Từ chối / Hủy kiện nếu hết hàng"
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                            Hủy
+                          </Button>
+                        </div>
+                      )}
+
+                      {isConfirmed && (
                         <div className="flex items-center gap-2">
                           <Button
                             onClick={() => handleUpdateStatus(vo, 'processing')}
                             disabled={actionLoading || waitingForConfirmation || parentClosed}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 flex items-center justify-center gap-2"
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 flex items-center justify-center gap-2 shadow-xs"
                           >
                             <Boxes className="w-4 h-4" />
                             Tiếp nhận &amp; Bắt đầu đóng gói

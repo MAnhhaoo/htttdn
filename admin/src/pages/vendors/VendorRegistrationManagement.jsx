@@ -374,25 +374,25 @@ export default function VendorRegistrationManagement() {
 
                       <td className="py-3.5 px-4">
                         {vendor.approvalStatus === 'pending_approval' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50">
                             <Clock className="w-3 h-3" /> Chờ duyệt mới
                           </span>
                         ) : vendor.renewalRequested ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50">
                             <RefreshCw className="w-3 h-3" /> Chờ duyệt gia hạn
                           </span>
                         ) : vendor.approvalStatus === 'approved' ? (
                           isExp ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/50">
                               <AlertTriangle className="w-3 h-3" /> Tạm khóa (Hết hạn)
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50">
                               <CheckCircle className="w-3 h-3" /> Đang hoạt động
                             </span>
                           )
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                             <XCircle className="w-3 h-3" /> Bị từ chối
                           </span>
                         )}
@@ -402,7 +402,7 @@ export default function VendorRegistrationManagement() {
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => openDetailModal(vendor)}
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg transition-colors"
                             title="Xem chi tiết"
                           >
                             <Eye className="w-4 h-4" />
@@ -420,7 +420,7 @@ export default function VendorRegistrationManagement() {
 
                               <button
                                 onClick={() => openRejectModal(vendor)}
-                                className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs font-medium flex items-center gap-1 border border-rose-200 transition-colors"
+                                className="px-2.5 py-1.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 rounded-lg text-xs font-medium flex items-center gap-1 border border-rose-200 dark:border-rose-800/60 transition-colors"
                                 title="Từ chối"
                               >
                                 <X className="w-3.5 h-3.5" /> Từ chối
@@ -471,41 +471,45 @@ export default function VendorRegistrationManagement() {
           title={`Phê duyệt đối tác: ${selectedVendor.storeName || selectedVendor.fullName}`}
         >
           <div className="space-y-4">
-            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl text-xs text-slate-600 dark:text-slate-300 space-y-1">
-              <div><strong>Gian hàng:</strong> {selectedVendor.storeName || selectedVendor.fullName}</div>
-              <div><strong>Người đại diện:</strong> {selectedVendor.fullName} ({selectedVendor.email})</div>
-              <div><strong>Mã số thuế:</strong> {selectedVendor.taxId || 'Chưa cung cấp'}</div>
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/60 dark:border-slate-700/60 rounded-xl text-xs text-slate-600 dark:text-slate-300 space-y-1">
+              <div><strong className="text-slate-700 dark:text-slate-200">Gian hàng:</strong> {selectedVendor.storeName || selectedVendor.fullName}</div>
+              <div><strong className="text-slate-700 dark:text-slate-200">Người đại diện:</strong> {selectedVendor.fullName} ({selectedVendor.email})</div>
+              <div><strong className="text-slate-700 dark:text-slate-200">Mã số thuế:</strong> {selectedVendor.taxId || 'Chưa cung cấp'}</div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5 uppercase">
                 Gói đăng ký thời hạn
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <div
                   onClick={() => setApprovePlan('1_year')}
                   className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                    approvePlan === '1_year' ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-200'
+                    approvePlan === '1_year'
+                      ? 'border-indigo-600 bg-indigo-50/70 dark:border-indigo-500 dark:bg-indigo-950/50 shadow-xs'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
-                  <div className="font-bold text-sm text-slate-800">Gói 1 Năm</div>
-                  <div className="text-xs text-indigo-600 font-semibold mt-1">1.200.000 ₫</div>
+                  <div className="font-bold text-sm text-slate-900 dark:text-white">Gói 1 Năm</div>
+                  <div className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold mt-1">1.200.000 ₫</div>
                 </div>
 
                 <div
                   onClick={() => setApprovePlan('2_years')}
                   className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                    approvePlan === '2_years' ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-200'
+                    approvePlan === '2_years'
+                      ? 'border-indigo-600 bg-indigo-50/70 dark:border-indigo-500 dark:bg-indigo-950/50 shadow-xs'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
                 >
-                  <div className="font-bold text-sm text-slate-800">Gói 2 Năm</div>
-                  <div className="text-xs text-indigo-600 font-semibold mt-1">2.000.000 ₫</div>
+                  <div className="font-bold text-sm text-slate-900 dark:text-white">Gói 2 Năm</div>
+                  <div className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold mt-1">2.000.000 ₫</div>
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5 uppercase">
                 Tỷ lệ chiết khấu hoa hồng sàn (%) trên đơn hàng hoàn tất
               </label>
               <input
@@ -515,15 +519,15 @@ export default function VendorRegistrationManagement() {
                 max="50"
                 value={approveCommission}
                 onChange={(e) => setApproveCommission(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
               />
-              <span className="text-[11px] text-slate-400 mt-1 block">
+              <span className="text-[11px] text-slate-400 dark:text-slate-400 mt-1 block">
                 Mặc định: 5.00%. Áp dụng tự động khi đơn hàng giao thành công.
               </span>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5 uppercase">
                 Ghi chú phê duyệt (tùy chọn)
               </label>
               <textarea
@@ -531,11 +535,11 @@ export default function VendorRegistrationManagement() {
                 placeholder="Ví dụ: Đã đối soát thanh toán phí qua ngân hàng, hồ sơ hợp lệ..."
                 value={approveNote}
                 onChange={(e) => setApproveNote(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
               <Button variant="secondary" onClick={() => setApproveModalOpen(false)}>
                 Hủy bỏ
               </Button>
@@ -564,10 +568,10 @@ export default function VendorRegistrationManagement() {
               placeholder="Ví dụ: Chưa hoàn tất thanh toán phí thường niên, thông tin người đại diện chưa khớp với giấy tờ..."
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:border-rose-500"
+              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-colors"
             />
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
               <Button variant="secondary" onClick={() => setRejectModalOpen(false)}>
                 Hủy bỏ
               </Button>
@@ -591,18 +595,18 @@ export default function VendorRegistrationManagement() {
           title="Hồ sơ chi tiết Đối tác kinh doanh"
         >
           <div className="space-y-4 text-sm">
-            <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-lg">
+            <div className="flex items-center gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-lg">
                 <Store className="w-7 h-7" />
               </div>
               <div>
-                <h3 className="font-bold text-base text-slate-800">{selectedVendor.storeName || selectedVendor.fullName}</h3>
+                <h3 className="font-bold text-base text-slate-800 dark:text-white">{selectedVendor.storeName || selectedVendor.fullName}</h3>
                 <p className="text-xs text-slate-400">ID: {selectedVendor.id}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-medium">
+                  <span className="text-xs px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-medium">
                     {selectedVendor.subscriptionPlan === '2_years' ? 'Gói 2 Năm' : 'Gói 1 Năm'}
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium">
+                  <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-medium">
                     Hoa hồng sàn: {selectedVendor.commissionRate || 8}%
                   </span>
                 </div>
@@ -610,58 +614,58 @@ export default function VendorRegistrationManagement() {
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3 bg-slate-50 rounded-xl">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/60">
                 <div className="text-slate-400 mb-0.5">Người đại diện</div>
-                <div className="font-semibold text-slate-700">{selectedVendor.fullName}</div>
+                <div className="font-semibold text-slate-700 dark:text-slate-200">{selectedVendor.fullName}</div>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/60">
                 <div className="text-slate-400 mb-0.5">Email liên hệ</div>
-                <div className="font-semibold text-slate-700">{selectedVendor.email}</div>
+                <div className="font-semibold text-slate-700 dark:text-slate-200">{selectedVendor.email}</div>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/60">
                 <div className="text-slate-400 mb-0.5">Số điện thoại</div>
-                <div className="font-semibold text-slate-700">{selectedVendor.phone || 'Chưa cung cấp'}</div>
+                <div className="font-semibold text-slate-700 dark:text-slate-200">{selectedVendor.phone || 'Chưa cung cấp'}</div>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/60">
                 <div className="text-slate-400 mb-0.5">Mã số thuế</div>
-                <div className="font-semibold text-slate-700">{selectedVendor.taxId || 'Chưa cung cấp'}</div>
+                <div className="font-semibold text-slate-700 dark:text-slate-200">{selectedVendor.taxId || 'Chưa cung cấp'}</div>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/60">
                 <div className="text-slate-400 mb-0.5">Ngày đăng ký</div>
-                <div className="font-semibold text-slate-700">{formatDate(selectedVendor.createdAt)}</div>
+                <div className="font-semibold text-slate-700 dark:text-slate-200">{formatDate(selectedVendor.createdAt)}</div>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/60">
                 <div className="text-slate-400 mb-0.5">Ngày hết hạn</div>
-                <div className="font-semibold text-slate-700">{formatDate(selectedVendor.subscriptionExpiresAt)}</div>
+                <div className="font-semibold text-slate-700 dark:text-slate-200">{formatDate(selectedVendor.subscriptionExpiresAt)}</div>
               </div>
             </div>
 
-            <div className="p-3 bg-slate-50 rounded-xl text-xs">
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-100 dark:border-slate-700/60 text-xs">
               <div className="text-slate-400 mb-0.5">Địa chỉ kho hàng / kinh doanh</div>
-              <div className="font-medium text-slate-700">{selectedVendor.address || 'Chưa cập nhật địa chỉ'}</div>
+              <div className="font-medium text-slate-700 dark:text-slate-200">{selectedVendor.address || 'Chưa cập nhật địa chỉ'}</div>
             </div>
 
             {selectedVendor.approvedBy && (
-              <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl text-xs space-y-1">
-                <div className="text-indigo-900 font-semibold">Lịch sử phê duyệt gần nhất:</div>
-                <div className="text-slate-600">Người duyệt: <strong>{selectedVendor.approvedBy}</strong></div>
-                <div className="text-slate-600">Thời gian: {formatDate(selectedVendor.approvedAt)}</div>
+              <div className="p-3 bg-indigo-50/50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 rounded-xl text-xs space-y-1">
+                <div className="text-indigo-900 dark:text-indigo-200 font-semibold">Lịch sử phê duyệt gần nhất:</div>
+                <div className="text-slate-600 dark:text-slate-300">Người duyệt: <strong>{selectedVendor.approvedBy}</strong></div>
+                <div className="text-slate-600 dark:text-slate-300">Thời gian: {formatDate(selectedVendor.approvedAt)}</div>
               </div>
             )}
 
             {selectedVendor.rejectedReason && (
-              <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl text-xs space-y-1">
-                <div className="text-rose-900 font-semibold">Lý do từ chối:</div>
-                <div className="text-rose-700">{selectedVendor.rejectedReason}</div>
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/60 rounded-xl text-xs space-y-1">
+                <div className="text-rose-900 dark:text-rose-200 font-semibold">Lý do từ chối:</div>
+                <div className="text-rose-700 dark:text-rose-300">{selectedVendor.rejectedReason}</div>
               </div>
             )}
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
               <Button variant="secondary" onClick={() => setDetailModalOpen(false)}>
                 Đóng
               </Button>
