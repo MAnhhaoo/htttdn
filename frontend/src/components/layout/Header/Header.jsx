@@ -153,16 +153,8 @@ export default function Header() {
               Sản phẩm mới
             </Link>
             <div className="w-1 h-1 rounded-full bg-light-border dark:bg-dark-border"></div>
-            <Link to="/products?sale=true" className="hover:text-primary transition-colors whitespace-nowrap uppercase text-red-500">
-              Khuyến mãi
-            </Link>
-            <div className="w-1 h-1 rounded-full bg-light-border dark:bg-dark-border"></div>
             <Link to="/about" className="hover:text-primary transition-colors whitespace-nowrap uppercase">
               Về MIVA
-            </Link>
-            <div className="w-1 h-1 rounded-full bg-light-border dark:bg-dark-border"></div>
-            <Link to="/contact" className="hover:text-primary transition-colors whitespace-nowrap uppercase">
-              Liên hệ
             </Link>
           </div>
         </div>
@@ -252,9 +244,6 @@ export default function Header() {
                 <div className="space-y-1">
                   <Link to="/about" className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-muted dark:text-dark-muted hover:text-primary transition-colors">
                     Về MIVA
-                  </Link>
-                  <Link to="/contact" className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-muted dark:text-dark-muted hover:text-primary transition-colors">
-                    Liên hệ
                   </Link>
                 </div>
               </div>

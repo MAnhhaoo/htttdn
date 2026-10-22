@@ -186,7 +186,7 @@ export default function VendorShop() {
             <div className="hidden lg:block w-[1px] h-20 bg-light-border dark:bg-dark-border" />
 
             {/* Right: Real Shop Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 gap-y-4 gap-x-6 sm:gap-x-10 text-xs bg-light-surface/60 dark:bg-dark-surface/60 p-5 rounded-xl border border-light-border/70 dark:border-dark-border/70">
+            <div className="grid grid-cols-3 gap-y-4 gap-x-4 sm:gap-x-8 text-xs bg-light-surface/60 dark:bg-dark-surface/60 p-5 rounded-xl border border-light-border/70 dark:border-dark-border/70">
               <div>
                 <span className="text-light-muted dark:text-dark-muted block mb-1">Đánh giá:</span>
                 <span className="text-base font-bold text-amber-500 flex items-center gap-1">
@@ -200,13 +200,6 @@ export default function VendorShop() {
                 <span className="text-light-muted dark:text-dark-muted block mb-1">Sản phẩm:</span>
                 <span className="text-base font-bold text-primary">
                   {stats.totalProducts || 0}
-                </span>
-              </div>
-
-              <div>
-                <span className="text-light-muted dark:text-dark-muted block mb-1">Tỉ lệ phản hồi:</span>
-                <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">
-                  {stats.responseRate || '100%'}
                 </span>
               </div>
 
