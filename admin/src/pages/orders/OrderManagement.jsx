@@ -7,7 +7,10 @@ import {
   ChevronRight,
   UserCheck,
   Sparkles,
-  Clock
+  Clock,
+  Truck,
+  Package,
+  AlertTriangle
 } from 'lucide-react';
 import { ordersApi } from '../../api';
 import { formatCurrency, formatDate } from '../../utils/formatHelpers';
@@ -72,6 +75,16 @@ export default function OrderManagement() {
   const handleViewClick = (order, userName) => {
     setOrderToView({ ...order, userName });
     setIsDetailModalOpen(true);
+  };
+
+  const handleAutoAssignSingle = async (e, orderId) => {
+    e.stopPropagation();
+    try {
+      await ordersApi.autoAssignOrder(orderId);
+      await fetchOrders();
+    } catch (err) {
+      alert(`Lỗi tự động phân công: ${err.response?.data?.message || err.message}`);
+    }
   };
 
   const handleStatusChange = async (orderId, newStatus, note) => {
@@ -177,7 +190,64 @@ export default function OrderManagement() {
                   const userEmail = order.client?.email || '';
                   const itemsCount = order.details ? order.details.length : 0;
                   const displayOrderCode = order.orderCode ? `#${order.orderCode}` : `#${order.id.substring(0, 8)}...`;
-                  const carrier = order.shipments?.find(s => s.carrier)?.carrier;
+                  const historyList = order.statusHistory || [];
+                  const reversedHistory = [...historyList].reverse();
+                  
+                  const shippingEmp = order.shipments?.find(s => s.carrier)?.carrier || reversedHistory.find(h => 
+                    h.employee && (
+                      h.employee.department?.toLowerCase().includes('vận chuyển') ||
+                      h.employee.department?.toLowerCase().includes('giao nhận') ||
+                      h.note?.toLowerCase().includes('bưu tá')
+                    )
+                  )?.employee;
+                  
+                  const exceptionEmp = reversedHistory.find(h => 
+                    h.employee && (
+                      h.employee.department?.toLowerCase().includes('sự cố') ||
+                      h.employee.department?.toLowerCase().includes('ngoại lệ') ||
+                      h.note?.toLowerCase().includes('sự cố')
+                    )
+                  )?.employee;
+                  
+                  const handlingEmp = reversedHistory.find(h => 
+                    h.employee && (
+                      h.employee.department?.toLowerCase().includes('điều phối') ||
+                      h.employee.department?.toLowerCase().includes('vendor') ||
+                      h.note?.toLowerCase().includes('điều phối')
+                    )
+                  )?.employee;
+
+                  const anyHistoryEmp = reversedHistory.find(h => h.employee)?.employee;
+
+                  let displayEmp = null;
+                  let deptMeta = null;
+
+                  if (order.status === 'cancelled') {
+                    displayEmp = exceptionEmp || handlingEmp || shippingEmp || anyHistoryEmp;
+                    deptMeta = {
+                      icon: AlertTriangle,
+                      deptName: 'Sự cố & Ngoại lệ',
+                      textColor: 'text-amber-700 dark:text-amber-400',
+                      iconColor: 'text-amber-600',
+                    };
+                  } else if (order.status === 'shipping' || order.status === 'completed') {
+                    displayEmp = shippingEmp || handlingEmp || anyHistoryEmp;
+                    deptMeta = {
+                      icon: Truck,
+                      deptName: 'Vận chuyển & Giao nhận',
+                      textColor: 'text-blue-700 dark:text-blue-400',
+                      iconColor: 'text-blue-600',
+                    };
+                  } else {
+                    // pending, confirmed, processing
+                    displayEmp = handlingEmp || shippingEmp || anyHistoryEmp;
+                    deptMeta = {
+                      icon: Package,
+                      deptName: 'Điều phối & Vendor',
+                      textColor: 'text-indigo-700 dark:text-indigo-400',
+                      iconColor: 'text-indigo-600',
+                    };
+                  }
 
                   return (
                     <tr key={order.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
@@ -198,25 +268,41 @@ export default function OrderManagement() {
 
                       {/* Assigned Employee Column */}
                       <td className="px-4 py-3 text-xs">
-                        {carrier ? (
-                          <div>
-                            <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                              <UserCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                              <span>{carrier.fullName}</span>
+                        <div className="space-y-1">
+                          {displayEmp && (
+                            <div>
+                              <div className={`font-semibold ${deptMeta.textColor} flex items-center gap-1.5`}>
+                                <deptMeta.icon className={`w-3.5 h-3.5 ${deptMeta.iconColor} shrink-0`} />
+                                <span className="truncate max-w-[130px]">{displayEmp.fullName}</span>
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                                {displayEmp.employeeCode} • {deptMeta.deptName}
+                              </div>
                             </div>
-                            <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                              {carrier.employeeCode} {carrier.phone ? `• ${carrier.phone}` : ''}
+                          )}
+
+                          {shippingEmp && displayEmp?.id !== shippingEmp.id && (
+                            <div className="pt-0.5 border-t border-slate-100 dark:border-slate-800">
+                              <div className="font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1.5 text-[11px]">
+                                <Truck className="w-3 h-3 text-blue-500 shrink-0" />
+                                <span className="truncate max-w-[130px]">Bưu tá: {shippingEmp.fullName}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                {shippingEmp.employeeCode} • Vận chuyển & Giao nhận
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleViewClick(order, userName)}
-                            className="text-[11px] text-amber-700 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 px-2.5 py-1 rounded-full font-medium inline-flex items-center gap-1 border border-amber-200 dark:border-amber-900 transition"
-                            title="Bấm để phân công nhân viên xử lý"
-                          >
-                            <Clock className="w-3 h-3 text-amber-600" /> Chưa phân công
-                          </button>
-                        )}
+                          )}
+
+                          {!displayEmp && !shippingEmp && (
+                            <button
+                              onClick={(e) => handleAutoAssignSingle(e, order.id)}
+                              className="text-[11px] text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 px-2.5 py-1 rounded-full font-medium inline-flex items-center gap-1.5 border border-blue-200 dark:border-blue-800 transition shadow-xs"
+                              title="Hệ thống tự động phân công nhân sự ngay"
+                            >
+                              <Sparkles className="w-3 h-3 text-blue-600 animate-spin" /> Tự động phân công
+                            </button>
+                          )}
+                        </div>
                       </td>
 
                       <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{formatDate(order.createdAt)}</td>

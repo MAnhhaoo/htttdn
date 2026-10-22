@@ -83,9 +83,10 @@ export class OrdersController {
   @Roles('admin')
   autoAssignOrder(
     @Param('id', ParseUUIDPipe) id: string,
+    @Query('department') department: 'handling' | 'shipping' | 'exception' | undefined,
     @User() user: UserInfo,
   ) {
-    return this.ordersService.autoAssignOrder(id, user);
+    return this.ordersService.autoAssignOrder(id, user, department);
   }
 
   @Patch(':id/assign')

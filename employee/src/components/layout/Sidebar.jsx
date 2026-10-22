@@ -13,14 +13,23 @@ import {
   User,
   Store
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const Sidebar = ({ pendingCount = 2, confirmedCount = 1, exceptionCount = 1 }) => {
-  const navItems = [
+  const { user } = useAuth();
+  const department = user?.department || '';
+
+  const isVendorLink = department.includes('Điều phối');
+  const isShipping = department.includes('Vận chuyển');
+  const isExceptions = department.includes('Sự cố');
+
+  let navItems = [
     {
       to: '/orders',
       icon: Package,
       label: 'Đơn hàng được quản lý',
       end: true,
+      roles: ['vendor_link', 'exceptions', 'all'],
     },
     {
       to: '/orders?status=pending',
@@ -28,6 +37,7 @@ export const Sidebar = ({ pendingCount = 2, confirmedCount = 1, exceptionCount =
       label: 'Chờ xác nhận',
       badge: pendingCount,
       badgeColor: 'bg-amber-100 text-amber-800',
+      roles: ['vendor_link', 'all'],
     },
     {
       to: '/orders?status=confirmed',
@@ -35,21 +45,19 @@ export const Sidebar = ({ pendingCount = 2, confirmedCount = 1, exceptionCount =
       label: 'Chuyển đơn cho Vendor',
       badge: confirmedCount,
       badgeColor: 'bg-blue-100 text-blue-800',
+      roles: ['vendor_link', 'all'],
     },
     {
       to: '/vendor-tracking',
       icon: Store,
       label: 'Theo dõi VendorOrder',
-    },
-    {
-      to: '/vendor-approvals',
-      icon: ShieldAlert,
-      label: 'Kiểm duyệt Vendor',
+      roles: ['vendor_link', 'exceptions', 'all'],
     },
     {
       to: '/shipping',
       icon: Truck,
-      label: 'Điều phối & Vận chuyển',
+      label: 'Tiếp nhận & Giao hàng (Bưu tá)',
+      roles: ['shipping', 'all'],
     },
     {
       to: '/orders?exception=true',
@@ -57,23 +65,36 @@ export const Sidebar = ({ pendingCount = 2, confirmedCount = 1, exceptionCount =
       label: 'Xử lý sự cố & Ngoại lệ',
       badge: exceptionCount,
       badgeColor: 'bg-rose-100 text-rose-800',
+      roles: ['exceptions', 'all'],
     },
     {
       to: '/audit-history',
       icon: History,
       label: 'Xem lịch sử trạng thái',
+      roles: ['vendor_link', 'shipping', 'exceptions', 'all'],
     },
     {
       to: '/permissions-faq',
       icon: ShieldAlert,
       label: 'Quy tắc & Phạm vi quyền hạn',
+      roles: ['vendor_link', 'shipping', 'exceptions', 'all'],
     },
     {
       to: '/profile',
       icon: User,
       label: 'Hồ sơ & Hợp đồng lương',
+      roles: ['vendor_link', 'shipping', 'exceptions', 'all'],
     },
   ];
+
+  // Lọc theo đúng ban nghiệp vụ
+  if (isVendorLink) {
+    navItems = navItems.filter((item) => item.roles.includes('vendor_link'));
+  } else if (isShipping) {
+    navItems = navItems.filter((item) => item.roles.includes('shipping'));
+  } else if (isExceptions) {
+    navItems = navItems.filter((item) => item.roles.includes('exceptions'));
+  }
 
   return (
     <aside className="w-64 bg-white border-r border-slate-200 min-h-[calc(100vh-4rem)] flex flex-col justify-between p-4 shrink-0">

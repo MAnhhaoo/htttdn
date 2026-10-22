@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
 } from '@nestjs/common';
 import { User } from 'src/common/decorators/user.decorator';
@@ -52,4 +53,20 @@ export class ShippingController {
   ) {
     return this.shippingService.assignCarrier(id, dto, user);
   }
+
+  @Post('shipments/:id/random-assign')
+  @Roles('admin')
+  randomAssignCarrier(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: UserInfo,
+  ) {
+    return this.shippingService.randomAssignCarrier(id, user);
+  }
+
+  @Post('shipments/random-assign-all')
+  @Roles('admin')
+  randomAssignAll(@User() user: UserInfo) {
+    return this.shippingService.randomAssignAll(user);
+  }
 }
+

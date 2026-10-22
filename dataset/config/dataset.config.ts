@@ -12,7 +12,7 @@ export const CONFIG = {
   /** Record counts */
   counts: {
     adminUsers: 5,
-    employeeUsers: 15,
+    employeeUsers: 20,
     vendorUsers: 25,
     customerUsers: 120,
     categories: 15,

@@ -16,6 +16,7 @@ import Contact from '../pages/Contact/Contact';
 import PaymentDemo from '../pages/Cart/PaymentDemo';
 import Favorites from '../pages/Account/Favorites';
 import VendorShop from '../pages/Shop/VendorShop';
+import SurveyPage from '../pages/Survey/SurveyPage';
 
 export default function AppRoutes() {
   return (
@@ -41,6 +42,8 @@ export default function AppRoutes() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/favorites" element={<Favorites />} />
+          <Route path="/surveys" element={<SurveyPage />} />
+          <Route path="/surveys/:responseId" element={<SurveyPage />} />
         </Route>
       </Route>
     </Routes>

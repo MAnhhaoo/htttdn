@@ -75,7 +75,7 @@ export const ordersApi = {
   getOrders: (params = {}) => axiosClient.get('/orders/admin/all', { params }),
   updateOrderStatus: (id, status, note) => axiosClient.patch(`/orders/${id}/status`, { status, note }),
   assignOrder: (id, data) => axiosClient.patch(`/orders/${id}/assign`, data),
-  autoAssignOrder: (id) => axiosClient.post(`/orders/${id}/auto-assign`),
+  autoAssignOrder: (id, params = {}) => axiosClient.post(`/orders/${id}/auto-assign`, null, { params }),
   autoAssignAll: () => axiosClient.post('/orders/admin/auto-assign-all'),
 };
 
@@ -109,6 +109,7 @@ export const reportsApi = {
 
 export const employeesApi = {
   getEmployees: (params = {}) => axiosClient.get('/employees', { params }),
+  getDepartments: () => axiosClient.get('/employees/departments'),
   getEmployee: (id) => axiosClient.get(`/employees/${id}`),
   createEmployee: (data) => axiosClient.post('/employees', data),
   updateEmployee: (id, data) => axiosClient.patch(`/employees/${id}`, data),
@@ -126,6 +127,8 @@ export const shippingApi = {
   getShipment: (id) => axiosClient.get(`/shipping/shipments/${id}`),
   updateStatus: (id, data) => axiosClient.patch(`/shipping/shipments/${id}/status`, data),
   assignCarrier: (id, data) => axiosClient.patch(`/shipping/shipments/${id}/assign`, data),
+  randomAssignCarrier: (id) => axiosClient.post(`/shipping/shipments/${id}/random-assign`),
+  randomAssignAll: () => axiosClient.post('/shipping/shipments/random-assign-all'),
 };
 
 // ==================== PAYROLL ====================

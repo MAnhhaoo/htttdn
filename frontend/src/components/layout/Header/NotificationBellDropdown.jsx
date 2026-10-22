@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, Clock, Store, ShieldCheck, ClipboardList, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, Check, Clock, Store, ShieldCheck, ClipboardList, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
 import { notificationService } from '../../../services/notificationService';
 import SurveyModal from '../../survey/SurveyModal';
 
 export default function NotificationBellDropdown() {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -305,6 +307,25 @@ export default function NotificationBellDropdown() {
                           </p>
                         )}
 
+                        {/* Survey Action Buttons */}
+                        {isSurvey && (notif.surveyResponseId || notif.data?.responseId) && (
+                          <div className="flex items-center gap-2 mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const rId = notif.surveyResponseId || notif.data?.responseId;
+                                setIsOpen(false);
+                                navigate(`/surveys/${rId}`);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer shadow-xs"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              {isSubmitted ? 'Xem lại trên trang riêng' : 'Làm khảo sát (trang riêng)'}
+                            </button>
+                          </div>
+                        )}
+
                         {/* Metadata Footer: Sent Time & Deadline */}
                         <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-400 dark:text-slate-500">
                           <span>
@@ -327,6 +348,21 @@ export default function NotificationBellDropdown() {
                   );
                 })
               )}
+            </div>
+
+            {/* Dropdown Footer */}
+            <div className="p-2.5 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  navigate('/surveys');
+                }}
+                className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                Xem tất cả khảo sát & đóng góp ý kiến
+              </button>
             </div>
           </div>
         )}

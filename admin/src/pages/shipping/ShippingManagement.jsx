@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { 
   Truck, Search, Filter, RefreshCw, UserCheck, CheckCircle2, 
   Clock, AlertTriangle, ChevronLeft, ChevronRight, MapPin, 
-  Calendar, FileText, ArrowRight, User, Phone, Package, Send
+  Calendar, FileText, ArrowRight, User, Phone, Package, Send, Shuffle
 } from 'lucide-react';
 import { shippingApi, employeesApi } from '../../api';
 import { Button, Input, Modal, Badge } from '../../components/ui';
@@ -41,6 +41,7 @@ export default function ShippingManagement() {
   const [carrierType, setCarrierType] = useState('employee');
   const [assignNotes, setAssignNotes] = useState('');
   const [assigning, setAssigning] = useState(false);
+  const [randomAssigning, setRandomAssigning] = useState(false);
 
   // Status update form
   const [updateStatusVal, setUpdateStatusVal] = useState('in_transit');
@@ -120,6 +121,38 @@ export default function ShippingManagement() {
     }
   };
 
+  // Random Assign Single
+  const handleRandomAssignSingle = async (shipmentId) => {
+    try {
+      setRandomAssigning(true);
+      const res = await shippingApi.randomAssignCarrier(shipmentId);
+      alert(res.data?.message || 'Đã phân công ngẫu nhiên nhân viên vận chuyển thành công!');
+      if (isAssignOpen) setIsAssignOpen(false);
+      fetchShipments();
+    } catch (err) {
+      alert(`Lỗi phân công ngẫu nhiên: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setRandomAssigning(false);
+    }
+  };
+
+  // Random Assign All
+  const handleRandomAssignAll = async () => {
+    if (!window.confirm('Hệ thống sẽ chọn ngẫu nhiên các nhân sự thuộc Phòng Vận chuyển & Giao nhận để phân công cho tất cả vận đơn chưa có người phụ trách. Bạn có chắc chắn muốn thực hiện?')) {
+      return;
+    }
+    try {
+      setRandomAssigning(true);
+      const res = await shippingApi.randomAssignAll();
+      alert(res.data?.message || 'Đã phân công ngẫu nhiên thành công cho tất cả vận đơn!');
+      fetchShipments();
+    } catch (err) {
+      alert(`Lỗi phân công ngẫu nhiên: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setRandomAssigning(false);
+    }
+  };
+
   // Open Update Status Modal
   const handleOpenUpdate = (shipment) => {
     setSelectedShipment(shipment);
@@ -178,14 +211,25 @@ export default function ShippingManagement() {
             Quản lý vận đơn, điều phối nhân sự giao hàng và theo dõi hành trình kiện hàng thời gian thực.
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={fetchShipments} 
-          className="flex items-center gap-2 self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Làm mới
-        </Button>
+        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <Button 
+            variant="outline" 
+            onClick={fetchShipments} 
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Làm mới
+          </Button>
+          <Button 
+            onClick={handleRandomAssignAll} 
+            disabled={randomAssigning || loading}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs"
+            title="Tự động phân công ngẫu nhiên nhân viên vận chuyển cho tất cả đơn chờ"
+          >
+            <Shuffle className={`w-4 h-4 ${randomAssigning ? 'animate-spin' : ''}`} />
+            🎲 Phân công ngẫu nhiên tất cả
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -370,9 +414,17 @@ export default function ShippingManagement() {
                       <td className="px-5 py-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            onClick={() => handleRandomAssignSingle(s.id)}
+                            disabled={randomAssigning}
+                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition"
+                            title="Phân công ngẫu nhiên nhân viên vận chuyển"
+                          >
+                            <Shuffle className="w-4 h-4" />
+                          </button>
+                          <button
                             onClick={() => handleOpenAssign(s)}
                             className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition"
-                            title="Phân công nhân sự vận chuyển"
+                            title="Phân công nhân sự vận chuyển thủ công"
                           >
                             <UserCheck className="w-4 h-4" />
                           </button>
@@ -446,11 +498,14 @@ export default function ShippingManagement() {
               required
             >
               <option value="">-- Chọn nhân sự vận chuyển --</option>
-              {employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.fullName} ({emp.employeeCode}) - {emp.department || 'Vận chuyển'} - {emp.phone || 'SĐT N/A'}
-                </option>
-              ))}
+              {employees.map((emp) => {
+                const isShipping = emp.department?.includes('Vận chuyển') || emp.department?.includes('Giao nhận');
+                return (
+                  <option key={emp.id} value={emp.id}>
+                    {isShipping ? '🚚 ' : ''}{emp.fullName} ({emp.employeeCode}) - {emp.department || 'N/A'} - {emp.position || ''}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -482,13 +537,26 @@ export default function ShippingManagement() {
             />
           </div>
 
-          <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <Button variant="outline" type="button" onClick={() => setIsAssignOpen(false)}>
-              Hủy
+          <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleRandomAssignSingle(selectedShipment.id)}
+              disabled={randomAssigning}
+              className="text-indigo-600 hover:text-indigo-700 flex items-center gap-1.5 text-xs"
+              title="Chọn ngẫu nhiên một nhân viên thuộc Phòng Vận chuyển & Giao nhận"
+            >
+              <Shuffle className="w-3.5 h-3.5" />
+              🎲 Phân công ngẫu nhiên ngay
             </Button>
-            <Button type="submit" disabled={assigning} className="bg-blue-600 hover:bg-blue-700 text-white">
-              {assigning ? 'Đang phân công...' : 'Xác nhận Điều phối'}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" type="button" onClick={() => setIsAssignOpen(false)}>
+                Hủy
+              </Button>
+              <Button type="submit" disabled={assigning} className="bg-blue-600 hover:bg-blue-700 text-white">
+                {assigning ? 'Đang phân công...' : 'Xác nhận Điều phối'}
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>

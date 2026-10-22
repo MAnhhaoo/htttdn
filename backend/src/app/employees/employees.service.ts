@@ -113,6 +113,16 @@ export class EmployeesService {
     };
   }
 
+  async getDepartments(): Promise<string[]> {
+    const emps = await this.prisma.employee.findMany({
+      where: { deletedAt: null },
+      select: { department: true },
+      distinct: ['department'],
+      orderBy: { department: 'asc' },
+    });
+    return emps.map((e) => e.department).filter(Boolean);
+  }
+
   async getEmployeeById(id: string) {
     const employee = await this.prisma.employee.findUnique({
       where: { id },

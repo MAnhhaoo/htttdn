@@ -513,8 +513,67 @@ export default function Checkout() {
             </div>
 
             <VoucherPricing items={checkoutItems} pricing={pricing} />
+            {/* Multi-vendor Split Invoices */}
+            {vendorPackages.length > 1 && (
+              <div className="space-y-3 pt-4 border-t border-light-border dark:border-dark-border">
+                <div className="flex items-center justify-between text-xs font-bold text-light-muted dark:text-dark-muted uppercase tracking-wider">
+                  <span>Hóa đơn theo từng kiện ({vendorPackages.length} kiện)</span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {vendorPackages.map((pkg, idx) => {
+                    const pack = pricing.data?.packages?.find((p) => p.vendorId === pkg.vendorId);
+                    const packDiscount = pack ? Number(pack.discountAmount) : 0;
+                    const packTotal = pack ? Number(pack.totalAmount) : pkg.subtotal - packDiscount;
+
+                    return (
+                      <div 
+                        key={pkg.vendorId}
+                        className="p-3.5 rounded-xl border border-light-border dark:border-dark-border bg-gray-50/70 dark:bg-dark-bg/60 space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between font-bold text-light-text dark:text-dark-text pb-1.5 border-b border-light-border dark:border-dark-border">
+                          <span className="flex items-center gap-1.5 text-primary">
+                            <Store className="w-3.5 h-3.5" />
+                            Kiện {idx + 1}: {pkg.storeName}
+                          </span>
+                          <span className="text-light-muted dark:text-dark-muted font-normal">
+                            {pkg.items.length} SP
+                          </span>
+                        </div>
+
+                        <div className="space-y-1 text-light-muted dark:text-dark-muted">
+                          <div className="flex justify-between">
+                            <span>Tạm tính tiền hàng:</span>
+                            <span className="font-medium text-light-text dark:text-dark-text">{formatPrice(pkg.subtotal)}</span>
+                          </div>
+                          {packDiscount > 0 ? (
+                            <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                              <span>Giảm voucher shop:</span>
+                              <span className="font-semibold">-{formatPrice(packDiscount)}</span>
+                            </div>
+                          ) : null}
+                          <div className="flex justify-between">
+                            <span>Phí giao hàng:</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Miễn phí</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-1.5 border-t border-dashed border-light-border dark:border-dark-border flex justify-between items-center font-bold">
+                          <span className="text-light-text dark:text-dark-text">Thành tiền kiện {idx + 1}:</span>
+                          <span className="text-primary text-sm font-extrabold">{formatPrice(packTotal)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Total Cost Breakdown */}
             <div className="border-t border-light-border dark:border-dark-border pt-4 space-y-3">
+              <div className="flex items-center justify-between text-xs font-bold text-light-muted dark:text-dark-muted uppercase tracking-wider">
+                <span>{vendorPackages.length > 1 ? 'Tổng thanh toán tất cả các kiện' : 'Chi tiết thanh toán'}</span>
+              </div>
               <div className="flex justify-between text-sm">
                 <span className="text-light-muted dark:text-dark-muted">Tạm tính ({checkoutItems.length} sản phẩm)</span>
                 <span className="font-medium text-light-text dark:text-dark-text">{formatPrice(checkoutSubtotal)}</span>
@@ -523,11 +582,18 @@ export default function Checkout() {
                 <span className="text-light-muted dark:text-dark-muted">Phí giao hàng</span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Miễn phí</span>
               </div>
-              {pricing.data && <div className="flex justify-between text-sm text-emerald-700 dark:text-emerald-400"><span>Giảm giá voucher</span><strong>-{formatPrice(pricing.data.discountAmount)}</strong></div>}
+              {pricing.data && (
+                <div className="flex justify-between text-sm text-emerald-700 dark:text-emerald-400">
+                  <span>Tổng giảm giá voucher</span>
+                  <strong className="font-bold">-{formatPrice(pricing.data.discountAmount)}</strong>
+                </div>
+              )}
               <div className="border-t border-light-border dark:border-dark-border pt-3 flex justify-between items-center">
                 <div>
                   <span className="font-bold text-light-text dark:text-dark-text block">Tổng cộng tất cả</span>
-                  <span className="text-[11px] text-light-muted dark:text-dark-muted">Cho {vendorPackages.length} đơn hàng</span>
+                  <span className="text-[11px] text-light-muted dark:text-dark-muted">
+                    {vendorPackages.length > 1 ? `Cho ${vendorPackages.length} đơn hàng độc lập` : 'Đã bao gồm thuế và phí'}
+                  </span>
                 </div>
                 <span data-testid="checkout-total" className="font-black text-2xl text-primary">{formatPrice(pricing.data?.totalAmount ?? checkoutSubtotal)}</span>
               </div>

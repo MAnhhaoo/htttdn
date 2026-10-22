@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Modal, Button, Input, Select } from '../../components/ui';
+import { employeesApi } from '../../api';
 import { 
   User, Mail, Phone, Lock, DollarSign, Clock, ShieldCheck, 
   Building2, Briefcase, Calendar, MapPin, CreditCard, AlertCircle
@@ -14,8 +15,21 @@ const PERMISSION_OPTIONS = [
   { key: 'shipping_manage', label: 'Điều phối & Xử lý vận chuyển nội bộ', desc: 'Tiếp nhận đơn điều phối vận chuyển, chuyển trạng thái giao hàng' },
 ];
 
-export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToEdit }) {
+export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToEdit, departments = [] }) {
   const isEditing = Boolean(employeeToEdit);
+  const [deptList, setDeptList] = useState(departments);
+
+  useEffect(() => {
+    if (departments && departments.length > 0) {
+      setDeptList(departments);
+    } else {
+      employeesApi.getDepartments()
+        .then((res) => {
+          if (res.data) setDeptList(res.data);
+        })
+        .catch(console.error);
+    }
+  }, [departments]);
 
   const [formData, setFormData] = useState(() => {
     if (employeeToEdit) {
@@ -26,7 +40,7 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
         phone: employeeToEdit.phone || '',
         citizenId: employeeToEdit.citizenId || '',
         address: employeeToEdit.address || '',
-        department: employeeToEdit.department || 'Vận hành',
+        department: employeeToEdit.department || (departments[0] || 'Phòng Quản lý & Vận hành Đơn hàng'),
         position: employeeToEdit.position || 'Nhân viên',
         employmentType: employeeToEdit.employmentType || 'full_time',
         salary: employeeToEdit.salary ? Number(employeeToEdit.salary) : 0,
@@ -56,7 +70,7 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
       phone: '',
       citizenId: '',
       address: '',
-      department: 'Vận hành',
+      department: departments[0] || 'Phòng Quản lý & Vận hành Đơn hàng',
       position: 'Nhân viên xử lý đơn',
       employmentType: 'full_time',
       salary: 10000000,
@@ -276,10 +290,11 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
                 onChange={(e) => handleTextChange('department', e.target.value)}
                 className="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
-                <option value="Vận hành">Phòng Vận Hành (Operations)</option>
-                <option value="CSKH">Chăm Sóc Khách Hàng (Customer Care)</option>
-                <option value="Kho vận">Kho Vận &amp; Giao Nhận (Logistics)</option>
-                <option value="Kiểm duyệt">Kiểm Duyệt Sản Phẩm (Quality Control)</option>
+                {deptList.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
               </select>
             </div>
 

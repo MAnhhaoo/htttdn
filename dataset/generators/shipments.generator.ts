@@ -53,8 +53,11 @@ export function generateShipments(
   const vendorById = new Map(vendors.map((v) => [v.id, v]));
   const orderById = new Map(orders.map((o) => [o.id, o]));
 
-  // Carriers: active employees in shipping/operations
-  const carrierPool = employees.filter((e) => e.status === 'active');
+  // Carriers (bưu tá): BẮT BUỘC là nhân viên thuộc Phòng Vận chuyển & Giao nhận (5 nhân sự thật EMP016 - EMP020)
+  const shippingEmployees = employees.filter(
+    (e) => e.status === 'active' && e.department === 'Phòng Vận chuyển & Giao nhận',
+  );
+  const carrierPool = shippingEmployees.length > 0 ? shippingEmployees : employees.filter((e) => e.status === 'active');
 
   const mapStatusToShipmentStatus = (orderStatus: string): string => {
     switch (orderStatus) {
@@ -99,18 +102,20 @@ export function generateShipments(
       estimatedDelivery: estDate,
       deliveredAt: deliveredDate,
       failedReason: shipmentStatus === 'failed' ? 'Khách hàng hẹn lại ngày giao' : null,
-      notes: null,
+      notes: carrier
+        ? `Bưu tá phụ trách: ${carrier.fullName} (${carrier.employeeCode}) - ${carrier.department}`
+        : 'Kiện hàng đã được điều phối và tạo vận đơn nội bộ',
       createdAt: order.createdAt,
       updatedAt: deliveredDate || order.updatedAt,
     });
 
     // Tracking events
     const eventTimes = [
-      { status: 'assigned', desc: 'Đã phân công nhân viên điều phối và lấy hàng', delayHrs: 1 },
-      { status: 'picking_up', desc: 'Nhân viên đang đến lấy hàng tại kho Vendor', delayHrs: 4 },
+      { status: 'assigned', desc: `Đã phân công bưu tá ${carrier?.fullName || ''} (Phòng Vận chuyển & Giao nhận) phụ trách lấy hàng`, delayHrs: 1 },
+      { status: 'picking_up', desc: `Bưu tá ${carrier?.fullName || ''} đang đến lấy hàng tại kho Vendor`, delayHrs: 4 },
       { status: 'in_transit', desc: 'Đang trung chuyển qua bưu cục MIVA Express', delayHrs: 14 },
-      { status: 'out_for_delivery', desc: 'Shipper đang trên đường giao hàng đến địa chỉ người nhận', delayHrs: 28 },
-      { status: 'delivered', desc: 'Đã giao hàng thành công và người nhận ký xác nhận', delayHrs: 32 },
+      { status: 'out_for_delivery', desc: `Bưu tá ${carrier?.fullName || ''} đang trên đường giao hàng đến địa chỉ người nhận`, delayHrs: 28 },
+      { status: 'delivered', desc: `Bưu tá ${carrier?.fullName || ''} đã giao hàng thành công và người nhận ký xác nhận`, delayHrs: 32 },
     ];
 
     const currentIdx = ['pending', 'assigned', 'picking_up', 'in_transit', 'out_for_delivery', 'delivered'].indexOf(shipmentStatus);

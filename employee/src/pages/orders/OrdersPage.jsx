@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
@@ -10,13 +10,18 @@ import {
   Send, 
   AlertTriangle, 
   Clock, 
+  ChevronLeft,
   ChevronRight, 
   Store,
   Eye,
   ShieldCheck,
   Check,
-  UserCheck
+  UserCheck,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
+import { ordersApi } from '../../api/axiosClient';
+import { formatOrder } from '../../utils/orderFormat';
 
 const STATUS_TABS = [
   { key: 'all', label: 'Tất cả đơn' },
@@ -38,7 +43,11 @@ const STATUS_BADGE = {
 };
 
 export const OrdersPage = ({
-  orders,
+  orders: propOrders = [],
+  countsByStatus: propCountsByStatus,
+  totalItems: propTotalItems = 0,
+  loading: parentLoading = false,
+  onRefresh,
   onOpenDetail,
   onOpenConfirm,
   onOpenReject,
@@ -49,22 +58,83 @@ export const OrdersPage = ({
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStatus = searchParams.get('status') || 'all';
   const initialException = searchParams.get('exception') === 'true';
+  const initialPage = parseInt(searchParams.get('page') || '1', 10);
 
   const [currentTab, setCurrentTab] = useState(initialStatus);
+  const [page, setPage] = useState(initialPage);
+  const [pageSize, setPageSize] = useState(20);
   const [onlyExceptions, setOnlyExceptions] = useState(initialException);
   const [onlyMyScope, setOnlyMyScope] = useState(true);
   const [onlyMyAssigned, setOnlyMyAssigned] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Server-side orders & counts state
+  const [orders, setOrders] = useState(propOrders);
+  const [countsByStatus, setCountsByStatus] = useState(propCountsByStatus || null);
+  const [totalItems, setTotalItems] = useState(propTotalItems);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+
+  // Sync propCountsByStatus if available
+  useEffect(() => {
+    if (propCountsByStatus) {
+      setCountsByStatus(propCountsByStatus);
+    }
+  }, [propCountsByStatus]);
+
+  // Fetch orders with server-side filters & pagination
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = {
+        page,
+        itemPerPage: pageSize,
+        ...(currentTab !== 'all' ? { status: currentTab } : {}),
+        ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
+      };
+
+      const res = await ordersApi.listAll(params);
+      const rawList = res?.list || res?.data?.list || (Array.isArray(res) ? res : []);
+      if (Array.isArray(rawList)) {
+        setOrders(rawList.map(formatOrder));
+      }
+      if (res?.countsByStatus) {
+        setCountsByStatus(res.countsByStatus);
+      }
+      if (res?.totalItems !== undefined) {
+        setTotalItems(res.totalItems);
+      }
+      if (res?.totalPages !== undefined) {
+        setTotalPages(res.totalPages);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải đơn hàng:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, currentTab, searchQuery]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
   // Handle URL changes
-  React.useEffect(() => {
+  useEffect(() => {
     const s = searchParams.get('status') || 'all';
     const exc = searchParams.get('exception') === 'true';
+    const p = parseInt(searchParams.get('page') || '1', 10);
     setCurrentTab(s);
     setOnlyExceptions(exc);
+    setPage(p);
   }, [searchParams]);
 
-  // Filter orders according to user permissions & filters
+  // Listen to realtime order changes
+  useEffect(() => {
+    window.addEventListener('miva:orders', fetchOrders);
+    return () => window.removeEventListener('miva:orders', fetchOrders);
+  }, [fetchOrders]);
+
+  // Filter orders on client-side for additional employee scopes (e.g. onlyMyAssigned, onlyExceptions)
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       // 1. Scope filter based on employee role
@@ -95,39 +165,18 @@ export const OrdersPage = ({
         }
       }
 
-      // 2. Tab status filter
-      if (currentTab !== 'all' && order.status !== currentTab) {
-        return false;
-      }
-
-      // 3. Exception filter
+      // 2. Exception filter
       if (onlyExceptions && !order.exception) {
         return false;
       }
 
-      // 4. Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().replace(/^#/, '').trim();
-        const matchesCode = order.orderCode?.toLowerCase().includes(q);
-        const matchesName = order.receiverName?.toLowerCase().includes(q);
-        const matchesPhone = order.receiverPhone?.includes(q);
-        const matchesVendor = 
-          (order.orderVendors || []).some((v) => v.name?.toLowerCase().includes(q) || v.code?.toLowerCase().includes(q)) ||
-          order.assignedVendor?.name?.toLowerCase().includes(q) ||
-          order.assignedVendor?.code?.toLowerCase().includes(q);
-        const matchesProduct = (order.details || []).some((d) => d.productName?.toLowerCase().includes(q) || d.vendorName?.toLowerCase().includes(q));
-        if (!matchesCode && !matchesName && !matchesPhone && !matchesVendor && !matchesProduct) {
-          return false;
-        }
-      }
-
       return true;
     });
-  }, [orders, currentTab, onlyExceptions, onlyMyScope, onlyMyAssigned, searchQuery, user]);
+  }, [orders, onlyExceptions, onlyMyScope, onlyMyAssigned, user]);
 
-  // Statistics
-  const pendingCount = orders.filter((o) => o.status === 'pending').length;
-  const confirmedCount = orders.filter((o) => o.status === 'confirmed').length;
+  // Statistics from server counts or fallback
+  const pendingCount = countsByStatus?.pending ?? orders.filter((o) => o.status === 'pending').length;
+  const confirmedCount = countsByStatus?.confirmed ?? orders.filter((o) => o.status === 'confirmed').length;
   const exceptionCount = orders.filter((o) => o.exception !== null).length;
   const totalValue = filteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
@@ -170,7 +219,7 @@ export const OrdersPage = ({
           <p className="text-2xl font-extrabold text-emerald-700 mt-1">
             {totalValue.toLocaleString()} đ
           </p>
-          <p className="text-[11px] text-slate-500 mt-0.5">{filteredOrders.length} đơn hàng lọc được</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">{filteredOrders.length} đơn hàng trong trang</p>
         </div>
       </div>
 
@@ -183,8 +232,11 @@ export const OrdersPage = ({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm theo mã đơn (#...), tên khách, SĐT, sản phẩm, hoặc Vendor..."
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Tìm theo mã đơn (#...), tên khách, SĐT, hoặc sản phẩm..."
               className="w-full text-xs pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
@@ -199,7 +251,7 @@ export const OrdersPage = ({
                 className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
               />
               <span className="font-semibold text-slate-700">
-                Phạm vi được giao ({user?.scopeName || user?.assignedOrderScope})
+                Phạm vi ({user?.scopeName || user?.assignedOrderScope})
               </span>
             </label>
 
@@ -227,20 +279,30 @@ export const OrdersPage = ({
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>Chỉ xem có sự cố</span>
             </button>
+
+            <button
+              onClick={fetchOrders}
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-xl font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition"
+              title="Làm mới danh sách"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span>Làm mới</span>
+            </button>
           </div>
         </div>
 
         {/* Status Tabs */}
         <div className="flex items-center space-x-1 overflow-x-auto pt-2 border-t border-slate-100">
           {STATUS_TABS.map((tab) => {
-            const count = tab.key === 'all' ? orders.length : orders.filter((o) => o.status === tab.key).length;
+            const count = countsByStatus?.[tab.key] ?? (tab.key === 'all' ? totalItems : 0);
             const isActive = currentTab === tab.key;
             return (
               <button
                 key={tab.key}
                 onClick={() => {
                   setCurrentTab(tab.key);
-                  setSearchParams(tab.key === 'all' ? {} : { status: tab.key });
+                  setPage(1);
+                  setSearchParams(tab.key === 'all' ? { page: '1' } : { status: tab.key, page: '1' });
                 }}
                 className={`px-3 py-2 text-xs font-bold rounded-xl whitespace-nowrap transition flex items-center space-x-2 ${
                   isActive
@@ -277,7 +339,14 @@ export const OrdersPage = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredOrders.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-500 mb-2" />
+                    <p className="font-medium text-slate-600">Đang tải danh sách đơn hàng...</p>
+                  </td>
+                </tr>
+              ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
                     <Package className="w-10 h-10 mx-auto text-slate-300 mb-2" />
@@ -419,26 +488,30 @@ export const OrdersPage = ({
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {order.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => onOpenConfirm(order)}
-                                title="Xác nhận đơn"
-                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                              >
-                                <CheckCircle2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => onOpenReject(order)}
-                                title="Từ chối theo quy tắc"
-                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                              >
-                                <AlertOctagon className="w-4 h-4" />
-                              </button>
-                            </>
+                          {/* Chỉ ban Điều phối & Liên kết Vendor được xác nhận & chuyển đơn */}
+                          {order.status === 'pending' && (user?.department?.includes('Điều phối') || user?.role === 'admin') && (
+                            <button
+                              onClick={() => onOpenConfirm(order)}
+                              title="Xác nhận đơn & Chuẩn bị chuyển Vendor"
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
                           )}
 
-                          {order.status === 'confirmed' && (
+                          {/* Chỉ ban Quản lý Sự cố & Ngoại lệ Đơn được từ chối đơn pending */}
+                          {order.status === 'pending' && (user?.department?.includes('Sự cố') || user?.role === 'admin') && (
+                            <button
+                              onClick={() => onOpenReject(order)}
+                              title="Từ chối theo quy tắc ngoại lệ"
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            >
+                              <AlertOctagon className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Chỉ ban Điều phối & Liên kết Vendor được chuyển đơn cho Vendor */}
+                          {order.status === 'confirmed' && (user?.department?.includes('Điều phối') || user?.role === 'admin') && (
                             <button
                               onClick={() => onOpenTransfer(order)}
                               title="Chuyển đơn cho Vendor"
@@ -449,13 +522,16 @@ export const OrdersPage = ({
                             </button>
                           )}
 
-                          <button
-                            onClick={() => onOpenException(order)}
-                            title="Xử lý / Báo sự cố"
-                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition"
-                          >
-                            <AlertTriangle className="w-4 h-4" />
-                          </button>
+                          {/* Ban Quản lý sự cố hoặc Admin xử lý sự cố */}
+                          {(user?.department?.includes('Sự cố') || user?.role === 'admin') && (
+                            <button
+                              onClick={() => onOpenException(order)}
+                              title="Xử lý / Báo sự cố ngoại lệ"
+                              className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                            >
+                              <AlertTriangle className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -464,6 +540,72 @@ export const OrdersPage = ({
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Pagination Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xs">
+        <div className="text-xs text-slate-500 font-medium">
+          Hiển thị trang <span className="font-bold text-slate-800">{page}</span> / <span className="font-bold text-slate-800">{totalPages}</span> (Tổng cộng <span className="font-bold text-blue-600">{totalItems}</span> đơn hàng)
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => {
+              if (page > 1) {
+                const nextP = page - 1;
+                setPage(nextP);
+                setSearchParams(currentTab === 'all' ? { page: String(nextP) } : { status: currentTab, page: String(nextP) });
+              }
+            }}
+            disabled={page <= 1 || loading}
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Trang trước</span>
+          </button>
+
+          {/* Quick Page Numbers */}
+          <div className="flex items-center space-x-1">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum = i + 1;
+              if (totalPages > 5 && page > 3) {
+                pageNum = page - 2 + i;
+                if (pageNum > totalPages) pageNum = totalPages - 4 + i;
+              }
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => {
+                    setPage(pageNum);
+                    setSearchParams(currentTab === 'all' ? { page: String(pageNum) } : { status: currentTab, page: String(pageNum) });
+                  }}
+                  className={`w-8 h-8 rounded-xl text-xs font-bold transition ${
+                    page === pageNum
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => {
+              if (page < totalPages) {
+                const nextP = page + 1;
+                setPage(nextP);
+                setSearchParams(currentTab === 'all' ? { page: String(nextP) } : { status: currentTab, page: String(nextP) });
+              }
+            }}
+            disabled={page >= totalPages || loading}
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            <span>Trang sau</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>

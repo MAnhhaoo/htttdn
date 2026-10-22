@@ -1,13 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { 
-  Trash2, 
-  Plus, 
-  Minus, 
-  ArrowRight, 
-  ShoppingBag, 
-  Store, 
-  Package 
+import {
+  Trash2,
+  Plus,
+  Minus,
+  ArrowRight,
+  ShoppingBag,
+  Store
 } from 'lucide-react';
 import { useCart } from '../../hooks/useCart';
 import { formatPrice } from '../../utils/formatPrice';
@@ -18,11 +17,11 @@ import VoucherPricing from '../../components/cart/VoucherPricing';
 
 export default function Cart() {
   const navigate = useNavigate();
-  const { 
-    items, 
-    isLoadingCart, 
-    updateQuantity, 
-    removeItem 
+  const {
+    items,
+    isLoadingCart,
+    updateQuantity,
+    removeItem
   } = useCart();
 
   // Selection state: set of selected CartItem IDs
@@ -88,6 +87,27 @@ export default function Cart() {
     return vIds.size;
   }, [selectedItems]);
 
+  const selectedVendorGroups = useMemo(() => {
+    const groups = {};
+    selectedItems.forEach((item) => {
+      const vendor = item.productVariant?.productColor?.product?.vendor;
+      const vId = vendor?.id || 'platform';
+      const storeName = vendor?.storeName || 'Cửa hàng MIVA';
+      if (!groups[vId]) {
+        groups[vId] = {
+          vendorId: vId,
+          storeName,
+          vendor,
+          items: [],
+          subtotal: 0,
+        };
+      }
+      groups[vId].items.push(item);
+      groups[vId].subtotal += Number(item.productVariant?.price || 0) * item.quantity;
+    });
+    return Object.values(groups);
+  }, [selectedItems]);
+
   const isAllSelected = items.length > 0 && selectedItemIds.size === items.length;
 
   const toggleSelectAll = () => {
@@ -142,9 +162,9 @@ export default function Cart() {
 
   if (items.length === 0) {
     return (
-      <EmptyState 
+      <EmptyState
         icon={ShoppingBag}
-        title="Giỏ hàng trống" 
+        title="Giỏ hàng trống"
         description="Bạn chưa thêm sản phẩm nào vào giỏ hàng."
         actionText="Tiếp tục mua sắm"
         onAction={() => navigate('/products')}
@@ -165,7 +185,7 @@ export default function Cart() {
         {/* Global Select All Checkbox */}
         <div className="flex items-center gap-3 bg-white dark:bg-dark-card border border-light-border dark:border-dark-border px-4 py-2.5 rounded-xl shadow-xs">
           <label className="flex items-center gap-2.5 cursor-pointer text-sm font-medium text-light-text dark:text-dark-text select-none">
-            <input 
+            <input
               type="checkbox"
               checked={isAllSelected}
               onChange={toggleSelectAll}
@@ -189,14 +209,14 @@ export default function Cart() {
             );
 
             return (
-              <div 
-                key={group.vendorId} 
+              <div
+                key={group.vendorId}
                 className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl overflow-hidden shadow-xs"
               >
                 {/* Shop / Vendor Header */}
                 <div className="p-4 sm:px-6 border-b border-light-border dark:border-dark-border bg-gray-50/70 dark:bg-dark-bg/60 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <input 
+                    <input
                       type="checkbox"
                       checked={isGroupSelected}
                       ref={(el) => {
@@ -222,7 +242,7 @@ export default function Cart() {
                   </div>
 
                   {/* Action to order only from this shop */}
-                  <button 
+                  <button
                     type="button"
                     onClick={() => handleCheckoutShopOnly(group.items)}
                     className="text-xs font-semibold text-primary hover:text-primary-dark hover:underline flex items-center gap-1 cursor-pointer"
@@ -238,15 +258,14 @@ export default function Cart() {
                     const isSelected = selectedItemIds.has(item.id);
 
                     return (
-                      <li 
-                        key={item.id} 
-                        className={`p-4 sm:p-6 flex flex-col sm:flex-row gap-4 sm:gap-6 transition-colors ${
-                          isSelected ? 'bg-transparent' : 'opacity-70 bg-gray-50/30 dark:bg-dark-bg/20'
-                        }`}
+                      <li
+                        key={item.id}
+                        className={`p-4 sm:p-6 flex flex-col sm:flex-row gap-4 sm:gap-6 transition-colors ${isSelected ? 'bg-transparent' : 'opacity-70 bg-gray-50/30 dark:bg-dark-bg/20'
+                          }`}
                       >
                         {/* Item Checkbox */}
                         <div className="flex items-center self-start sm:self-center">
-                          <input 
+                          <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => toggleItem(item.id)}
@@ -256,13 +275,13 @@ export default function Cart() {
 
                         {/* Product Image */}
                         <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-xl bg-light-surface dark:bg-dark-surface overflow-hidden shrink-0 border border-light-border dark:border-dark-border">
-                          <img 
+                          <img
                             src={item.productVariant?.productColor?.imageUrls?.[0] || 'https://placehold.co/400x400?text=No+Image'}
-                            alt={item.productVariant?.productColor?.product?.name} 
+                            alt={item.productVariant?.productColor?.product?.name}
                             className="w-full h-full object-cover"
                           />
                         </div>
-                        
+
                         {/* Details */}
                         <div className="flex-1 flex flex-col">
                           <div className="flex justify-between items-start gap-4">
@@ -273,7 +292,7 @@ export default function Cart() {
                                 </Link>
                               </h3>
                               <p className="text-xs sm:text-sm text-light-muted dark:text-dark-muted mt-1">
-                                Màu: <span className="font-medium text-light-text dark:text-dark-text">{item.productVariant?.productColor?.color}</span> | 
+                                Màu: <span className="font-medium text-light-text dark:text-dark-text">{item.productVariant?.productColor?.color}</span> |
                                 Phân loại: <span className="font-medium text-light-text dark:text-dark-text">{item.productVariant?.size}</span>
                               </p>
                             </div>
@@ -286,7 +305,7 @@ export default function Cart() {
                           <div className="mt-auto pt-4 flex items-center justify-between">
                             {/* Quantity Controls */}
                             <div className="flex items-center border border-light-border dark:border-dark-border rounded-lg bg-gray-50 dark:bg-dark-bg h-9">
-                              <button 
+                              <button
                                 onClick={() => updateQuantity({ id: item.id, quantity: item.quantity - 1 })}
                                 aria-label={`Giảm số lượng ${item.productVariant?.productColor?.product?.name}`}
                                 disabled={item.quantity <= 1}
@@ -295,7 +314,7 @@ export default function Cart() {
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
                               <span className="w-9 text-center font-semibold text-xs sm:text-sm">{item.quantity}</span>
-                              <button 
+                              <button
                                 onClick={() => updateQuantity({ id: item.id, quantity: item.quantity + 1 })}
                                 aria-label={`Tăng số lượng ${item.productVariant?.productColor?.product?.name}`}
                                 disabled={item.quantity >= item.productVariant?.stock}
@@ -305,7 +324,7 @@ export default function Cart() {
                               </button>
                             </div>
 
-                            <button 
+                            <button
                               onClick={() => removeItem(item.id)}
                               className="text-xs sm:text-sm font-medium text-rose-500 hover:text-rose-600 flex items-center gap-1 p-2 cursor-pointer"
                             >
@@ -336,34 +355,71 @@ export default function Cart() {
         {/* Order Summary Sidebar */}
         <div className="w-full lg:w-80 xl:w-96 shrink-0">
           <div className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl p-6 sticky top-24 shadow-sm space-y-6">
-            <h2 className="text-lg font-bold text-light-text dark:text-dark-text border-b border-light-border dark:border-dark-border pb-3">
-              Tóm tắt đơn hàng
-            </h2>
 
-            {/* Multi-Vendor Splitting Notice */}
-            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/80 text-amber-900 dark:text-amber-200 text-xs space-y-1.5 leading-relaxed">
-              <div className="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
-                <Package className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Quy định đóng gói đơn hàng</span>
-              </div>
-              <p>
-                {selectedVendorsCount > 1 ? (
-                  <>
-                    Bạn đang chọn sản phẩm từ <strong className="text-amber-700 dark:text-amber-300">{selectedVendorsCount} nhà bán hàng</strong> khác nhau. Khi đặt, hệ thống sẽ <strong>tách thành {selectedVendorsCount} đơn hàng riêng biệt</strong> để từng người bán tự đóng gói và giao hàng độc lập.
-                  </>
-                ) : selectedVendorsCount === 1 ? (
-                  <>
-                    Sản phẩm đang chọn thuộc về <strong>1 nhà bán hàng duy nhất</strong>. Đơn hàng sẽ được đóng gói chung bởi cửa hàng này.
-                  </>
-                ) : (
-                  <>Chưa có sản phẩm nào được chọn để thanh toán.</>
-                )}
-              </p>
-            </div>
-            
+
             <VoucherPricing items={selectedItems} pricing={pricing} />
-            <div className="space-y-3.5 text-sm">
-              {pricing.data && <div className="flex justify-between text-emerald-700 dark:text-emerald-400"><span>Giảm giá voucher:</span><strong>-{formatPrice(pricing.data.discountAmount)}</strong></div>}
+            {/* Multi-vendor Split Invoices */}
+            {selectedVendorGroups.length > 1 && (
+              <div className="space-y-3 pt-3 border-t border-light-border dark:border-dark-border">
+                <div className="flex items-center justify-between text-xs font-bold text-light-muted dark:text-dark-muted uppercase tracking-wider">
+                  <span>Hóa đơn từng kiện ({selectedVendorGroups.length} kiện)</span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {selectedVendorGroups.map((group, idx) => {
+                    const pack = pricing.data?.packages?.find((p) => p.vendorId === group.vendorId);
+                    const packDiscount = pack ? Number(pack.discountAmount) : 0;
+                    const packTotal = pack ? Number(pack.totalAmount) : group.subtotal - packDiscount;
+
+                    return (
+                      <div
+                        key={group.vendorId}
+                        className="p-3.5 rounded-xl border border-light-border dark:border-dark-border bg-gray-50/70 dark:bg-dark-bg/60 space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between font-bold text-light-text dark:text-dark-text pb-1.5 border-b border-light-border dark:border-dark-border">
+                          <span className="flex items-center gap-1.5 text-primary">
+                            <Store className="w-3.5 h-3.5" />
+                            Kiện {idx + 1}: {group.storeName}
+                          </span>
+                          <span className="text-light-muted dark:text-dark-muted font-normal">
+                            {group.items.length} SP
+                          </span>
+                        </div>
+
+                        <div className="space-y-1 text-light-muted dark:text-dark-muted">
+                          <div className="flex justify-between">
+                            <span>Tạm tính tiền hàng:</span>
+                            <span className="font-medium text-light-text dark:text-dark-text">{formatPrice(group.subtotal)}</span>
+                          </div>
+                          {packDiscount > 0 ? (
+                            <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                              <span>Giảm voucher shop:</span>
+                              <span className="font-semibold">-{formatPrice(packDiscount)}</span>
+                            </div>
+                          ) : null}
+                          <div className="flex justify-between">
+                            <span>Phí vận chuyển:</span>
+                            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Miễn phí</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-1.5 border-t border-dashed border-light-border dark:border-dark-border flex justify-between items-center font-bold">
+                          <span className="text-light-text dark:text-dark-text">Thành tiền kiện {idx + 1}:</span>
+                          <span className="text-primary text-sm font-extrabold">{formatPrice(packTotal)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Overall Payment Summary */}
+            <div className="space-y-3.5 text-sm pt-2 border-t border-light-border dark:border-dark-border">
+              <div className="flex items-center justify-between text-xs font-bold text-light-muted dark:text-dark-muted uppercase tracking-wider">
+                <span>{selectedVendorGroups.length > 1 ? 'Tổng thanh toán tất cả các đơn' : 'Chi tiết thanh toán'}</span>
+              </div>
+
               <div className="flex justify-between text-light-muted dark:text-dark-muted">
                 <span>Số sản phẩm chọn:</span>
                 <span className="font-bold text-light-text dark:text-dark-text">
@@ -382,6 +438,12 @@ export default function Cart() {
                   {formatPrice(selectedSubtotal)}
                 </span>
               </div>
+              {pricing.data && (
+                <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+                  <span>Tổng giảm voucher:</span>
+                  <strong className="font-bold">-{formatPrice(pricing.data.discountAmount)}</strong>
+                </div>
+              )}
               <div className="flex justify-between text-light-muted dark:text-dark-muted">
                 <span>Phí vận chuyển:</span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Miễn phí</span>
@@ -390,13 +452,17 @@ export default function Cart() {
               <div className="border-t border-light-border dark:border-dark-border pt-4 flex justify-between items-center">
                 <div>
                   <span className="font-bold text-light-text dark:text-dark-text block">Tổng thanh toán</span>
-                  <span className="text-[11px] text-light-muted dark:text-dark-muted">Đã bao gồm thuế và phí</span>
+                  <span className="text-[11px] text-light-muted dark:text-dark-muted">
+                    {selectedVendorGroups.length > 1
+                      ? `Cho ${selectedVendorGroups.length} đơn hàng độc lập`
+                      : 'Đã bao gồm thuế và phí'}
+                  </span>
                 </div>
                 <span data-testid="cart-total" className="font-black text-2xl text-primary">{formatPrice(pricing.data?.totalAmount ?? selectedSubtotal)}</span>
               </div>
             </div>
 
-            <button 
+            <button
               type="button"
               onClick={handleProceedCheckout}
               disabled={selectedItemIds.size === 0 || !pricing.ready}
