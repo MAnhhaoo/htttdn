@@ -429,29 +429,22 @@ export default function ProductDetail() {
             <div className="hidden lg:block w-[1px] h-16 bg-light-border dark:bg-dark-border" />
 
             {/* Right: Stats Grid */}
-            <div className="grid grid-cols-2 gap-y-3.5 gap-x-8 sm:gap-x-12 text-xs text-light-muted dark:text-dark-muted flex-1 lg:max-w-md">
-              <div className="flex items-center justify-between gap-3">
+            <div className="grid grid-cols-3 gap-y-3.5 gap-x-6 sm:gap-x-8 text-xs text-light-muted dark:text-dark-muted flex-1 lg:max-w-md">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
                 <span>Đánh Giá</span>
                 <span className="font-semibold text-red-500 dark:text-red-400">
                   {vendorProfile?.stats?.rating || 5.0} ★ ({vendorProfile?.stats?.reviewCount || 0})
                 </span>
               </div>
 
-              <div className="flex items-center justify-between gap-3">
-                <span>Tỉ Lệ Phản Hồi</span>
-                <span className="font-semibold text-red-500 dark:text-red-400">
-                  {vendorProfile?.stats?.responseRate || '100%'}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
                 <span>Sản Phẩm</span>
                 <span className="font-semibold text-red-500 dark:text-red-400">
                   {vendorProfile?.stats?.totalProducts || 0}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-2">
                 <span>Tham Gia</span>
                 <span className="font-semibold text-red-500 dark:text-red-400">
                   {vendorProfile?.stats?.joinedText || 'Gần đây'}
