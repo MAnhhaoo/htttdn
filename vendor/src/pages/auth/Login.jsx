@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { Store, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Button, Input } from '../../components/ui';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function VendorLogin() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ email: location.state?.email || '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -43,6 +44,12 @@ export default function VendorLogin() {
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Vendor Center</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-2">Sign in to manage your store</p>
         </div>
+
+        {location.state?.registered && (
+          <div role="status" className="mb-6 p-4 bg-emerald-50 text-emerald-700 text-sm rounded-lg border border-emerald-100">
+            Đăng ký gian hàng thành công. Hồ sơ đang chờ duyệt. Vui lòng đăng nhập để tiếp tục.
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100">

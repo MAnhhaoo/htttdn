@@ -31,19 +31,55 @@ export class AccessControlGuard implements CanActivate {
     private readonly reflector: Reflector,
   ) {}
 
+  /**
+   * Các API mà gian hàng chưa được duyệt vẫn được phép ghi
+   * (cập nhật hồ sơ, gia hạn gói, đọc thông báo, đăng xuất...).
+   */
+  private static readonly PENDING_VENDOR_WRITE_ALLOWLIST =
+    /(^|\/)(vendors\/profile|vendors\/subscription\/renew|users\/profile|notifications|auth)(\/|$)/;
+
+  private async resolveUser(userID: string): Promise<{ user: any; role: UserRole }> {
+    const select = { status: true, deletedAt: true };
+    let user: any = await this.prismaService.admin.findUnique({ where: { id: userID }, select });
+    let role: UserRole = 'admin';
+    if (!user) { user = await this.prismaService.client.findUnique({ where: { id: userID }, select }); role = 'client'; }
+    if (!user) { user = await this.prismaService.vendor.findUnique({ where: { id: userID }, select: { ...select, approvalStatus: true } }); role = 'vendor'; }
+    if (!user) { user = await this.prismaService.employee.findUnique({ where: { id: userID }, select }); role = 'employee'; }
+    return { user, role };
+  }
+
+  /** Gian hàng chờ duyệt/bị từ chối chỉ được xem, không được thao tác ghi dữ liệu kinh doanh. */
+  private assertVendorApproved(role: UserRole, user: any, request: Request) {
+    if (role !== 'vendor' || !user?.approvalStatus || user.approvalStatus === 'approved') {
+      return;
+    }
+    const method = String(request.method).toUpperCase();
+    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+      return;
+    }
+    const path = String(request.path || request.originalUrl || '').split('?')[0];
+    if (AccessControlGuard.PENDING_VENDOR_WRITE_ALLOWLIST.test(path)) {
+      return;
+    }
+    throw new ForbiddenException(
+      user.approvalStatus === 'rejected'
+        ? 'Gian hàng đã bị từ chối, không thể thực hiện thao tác này'
+        : 'Gian hàng đang chờ quản trị viên duyệt, chưa thể thực hiện thao tác này',
+    );
+  }
+
   private async canAccessResources(
     userID: string,
     action: Actions,
+    request: Request,
   ): Promise<boolean> {
-    let user: any = await this.prismaService.admin.findUnique({where: {id: userID}, select: {status: true, deletedAt: true}});
-    let role: UserRole = 'admin';
-    if (!user) { user = await this.prismaService.client.findUnique({where: {id: userID}, select: {status: true, deletedAt: true}}); role = 'client'; }
-    if (!user) { user = await this.prismaService.vendor.findUnique({where: {id: userID}, select: {status: true, deletedAt: true}}); role = 'vendor'; }
-    if (!user) { user = await this.prismaService.employee.findUnique({where: {id: userID}, select: {status: true, deletedAt: true}}); role = 'employee'; }
+    const { user, role } = await this.resolveUser(userID);
 
     if (!user || user.status !== 'active' || user.deletedAt) {
       return false;
     }
+
+    this.assertVendorApproved(role, user, request);
 
     const allowedActions = ROLE_ACTION[role] ?? [];
 
@@ -103,11 +139,7 @@ export class AccessControlGuard implements CanActivate {
     );
 
     if (requiredRoles?.length) {
-      let currentUser: any = await this.prismaService.admin.findUnique({where: {id: authenticatedUser.userID}, select: {status: true, deletedAt: true}});
-      let role: UserRole = 'admin';
-      if (!currentUser) { currentUser = await this.prismaService.client.findUnique({where: {id: authenticatedUser.userID}, select: {status: true, deletedAt: true}}); role = 'client'; }
-      if (!currentUser) { currentUser = await this.prismaService.vendor.findUnique({where: {id: authenticatedUser.userID}, select: {status: true, deletedAt: true}}); role = 'vendor'; }
-      if (!currentUser) { currentUser = await this.prismaService.employee.findUnique({where: {id: authenticatedUser.userID}, select: {status: true, deletedAt: true}}); role = 'employee'; }
+      const { user: currentUser, role } = await this.resolveUser(authenticatedUser.userID);
       if (
         !currentUser ||
         currentUser.status !== 'active' ||
@@ -124,6 +156,7 @@ export class AccessControlGuard implements CanActivate {
           'Bạn không có quyền thực hiện chức năng này',
         );
       }
+      this.assertVendorApproved(role, currentUser, request);
 
       return true;
     }
@@ -136,6 +169,7 @@ export class AccessControlGuard implements CanActivate {
     const canAccess = await this.canAccessResources(
       authenticatedUser.userID,
       action,
+      request,
     );
 
     if (!canAccess) {

@@ -10,6 +10,8 @@ import { PaginationUtilService } from '../../common/utils/paginaton-util/paginti
 
 import { QueryUtilService } from '../../common/utils/query-util/query-util.service';
 
+import { assertEmailAvailable } from '../../common/utils/account-email/account-email.util';
+
 import {
   GetOptionsParams,
   Options} from '../../common/query/options.interface';
@@ -170,6 +172,10 @@ export class VendorsService
 
   async createVendor(createVendorDto: CreateVendorDto) {
     const { address, ...vendorData } = createVendorDto as any;
+    if (typeof vendorData.email === 'string') {
+      vendorData.email = vendorData.email.trim().toLowerCase();
+      await assertEmailAvailable(this.prismaService, vendorData.email);
+    }
     return this.extended.create({
       data: vendorData});
   }
@@ -198,6 +204,18 @@ export class VendorsService
   }) {
     const { where, data: dataUpdate } = params;
     const { address, ...vendorData } = dataUpdate as any;
+
+    if (typeof vendorData.email === 'string') {
+      vendorData.email = vendorData.email.trim().toLowerCase();
+      const current = where.id
+        ? { id: where.id }
+        : await this.prismaService.vendor.findUnique({ where, select: { id: true } });
+      await assertEmailAvailable(
+        this.prismaService,
+        vendorData.email,
+        current ? { role: 'vendor', id: current.id } : undefined,
+      );
+    }
 
     const data = await this.extended.update({
       data: vendorData,

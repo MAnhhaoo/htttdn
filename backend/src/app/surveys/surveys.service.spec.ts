@@ -31,7 +31,8 @@ describe('SurveysService', () => {
 
   const managementSurvey = (createdById = vendorId) => ({
     id: surveyId,
-    createdById,
+    vendorId: createdById,
+    adminId: null,
     title: 'Khảo sát',
     description: null,
     imageUrl: null,
@@ -71,7 +72,7 @@ describe('SurveysService', () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          createdById: vendorId,
+          vendorId,
           status: SurveyStatus.draft,
           questions: {
             create: [
@@ -82,7 +83,7 @@ describe('SurveysService', () => {
     );
   });
 
-  it('does not let an admin or another vendor edit survey content they did not create', async () => {
+  it('does not let another vendor edit survey content they did not create', async () => {
     const prisma = {
       survey: { findFirst: jest.fn().mockResolvedValue(managementSurvey()) }};
     const service = new SurveysService(prisma as unknown as PrismaService);
@@ -91,7 +92,7 @@ describe('SurveysService', () => {
       service.update(
         surveyId,
         { title: 'Nội dung đã sửa' },
-        user('77777777-7777-4777-8777-777777777777', 'admin'),
+        user('77777777-7777-4777-8777-777777777777', 'vendor'),
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });

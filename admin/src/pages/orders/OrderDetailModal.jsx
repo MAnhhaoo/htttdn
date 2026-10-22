@@ -21,8 +21,6 @@ import {
 } from 'lucide-react';
 
 export default function OrderDetailModal({ isOpen, onClose, order, onStatusChange, onOrderUpdated }) {
-  if (!order) return null;
-
   // Assignment Modal State
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [employees, setEmployees] = useState([]);
@@ -30,6 +28,7 @@ export default function OrderDetailModal({ isOpen, onClose, order, onStatusChang
   const [selectedEmpId, setSelectedEmpId] = useState('');
   const [assignNote, setAssignNote] = useState('');
   const [assigning, setAssigning] = useState(false);
+  if (!order) return null;
 
   // Retrieve items directly from real order details
   const orderItems = (order.details || []).map((od) => ({

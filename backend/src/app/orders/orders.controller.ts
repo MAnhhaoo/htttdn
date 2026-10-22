@@ -14,7 +14,7 @@ import { User } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
-import { CheckoutDto } from './dto/checkout.dto';
+import { CheckoutDto, PreviewCheckoutDto } from './dto/checkout.dto';
 import { UpdateOrderStatusDto, UpdateVendorOrderStatusDto } from './dto/update-order-status.dto';
 import { AssignOrderDto } from './dto/assign-order.dto';
 import { GetOrdersPaginationDto } from './dto/get-order.dto';
@@ -23,6 +23,12 @@ import { OrdersService } from './orders.service';
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
+
+  @Post('preview')
+  @Roles('client')
+  preview(@Body() dto: PreviewCheckoutDto, @User() user: UserInfo) {
+    return this.ordersService.previewCheckout(user.userID, dto);
+  }
 
   @Post('checkout')
   @Roles('client')

@@ -21,6 +21,7 @@ import { GetCategoriesPaginationDto } from './dto/get-category.dto';
 import { Category } from './entities/category.entity';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { StringUtilService } from 'src/common/utils/string-util/string-util.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class CategoryService
@@ -34,6 +35,7 @@ export class CategoryService
 
     private readonly queryUtil: QueryUtilService,
     private readonly stringUtilService: StringUtilService,
+    private readonly realtime: RealtimeService,
   ) {
     super(prismaService, 'category');
   }
@@ -102,16 +104,27 @@ export class CategoryService
     const existingCategory = await this.extended.findUnique({
       where: { slug }});
 
+    if (existingCategory?.deletedAt) {
+      const category = await this.extended.update({
+        where: { id: existingCategory.id },
+        data: { name: createCategoryDto.name, deletedAt: null },
+      });
+      this.realtime.emitCategoryUpdated(category.id);
+      return category;
+    }
+
     if (existingCategory) {
       throw new ConflictException(
         `Danh mục "${createCategoryDto.name}" đã tồn tại`,
       );
     }
 
-    return this.extended.create({
+    const category = await this.extended.create({
       data: {
-        ...createCategoryDto,
+        name: createCategoryDto.name,
         slug}});
+    this.realtime.emitCategoryUpdated(category.id);
+    return category;
   }
   async updateCategory(params: {
     where: Prisma.CategoryWhereUniqueInput;
@@ -119,12 +132,14 @@ export class CategoryService
   }) {
     const { where, data: dataUpdate } = params;
     const data = await this.extended.update({
-      data: dataUpdate,
+      data: { name: dataUpdate.name },
       where});
+    this.realtime.emitCategoryUpdated(data.id);
     return data;
   }
   async deleteCategory(where: Prisma.CategoryWhereUniqueInput) {
     const data = await this.extended.softDelete(where);
+    if (data.count) this.realtime.emitCategoryUpdated(where.id);
     return data;
   }
 }

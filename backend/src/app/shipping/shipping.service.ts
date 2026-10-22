@@ -1,11 +1,15 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, ShipmentStatus } from '@prisma/client';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
+import { OrdersService } from '../orders/orders.service';
 import {
   AssignCarrierDto,
   GetShipmentsQueryDto,
@@ -14,15 +18,15 @@ import {
 
 @Injectable()
 export class ShippingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly realtime: RealtimeService, private readonly orders: OrdersService) {}
 
-  async listShipments(query: GetShipmentsQueryDto) {
+  async listShipments(query: GetShipmentsQueryDto, user?: UserInfo) {
     const { page = 1, itemPerPage = 10, q, status, carrierId } = query;
     const skip = (page - 1) * itemPerPage;
 
     const where: Prisma.ShipmentWhereInput = {
       ...(status ? { status: status as ShipmentStatus } : {}),
-      ...(carrierId ? { carrierId } : {}),
+      ...(user?.role === 'employee' ? { carrierId: user.userID } : carrierId ? { carrierId } : {}),
       ...(q
         ? {
             OR: [
@@ -97,7 +101,7 @@ export class ShippingService {
     };
   }
 
-  async getShipmentById(id: string) {
+  async getShipmentById(id: string, user?: UserInfo) {
     const shipment = await this.prisma.shipment.findUnique({
       where: { id },
       include: {
@@ -149,6 +153,7 @@ export class ShippingService {
     if (!shipment) {
       throw new NotFoundException('Không tìm thấy vận đơn');
     }
+    this.assertAssigned(shipment, user);
 
     return shipment;
   }
@@ -169,6 +174,28 @@ export class ShippingService {
     if (!shipment) {
       throw new NotFoundException('Không tìm thấy vận đơn');
     }
+    this.assertAssigned(shipment, user);
+    if (shipment.status === dto.status) return shipment;
+    if (shipment.order.status === OrderStatus.cancelled || shipment.order.status === OrderStatus.completed) {
+      throw new BadRequestException('Đơn hàng đã kết thúc, không thể thay đổi vận đơn');
+    }
+    const transitions: Record<ShipmentStatus, ShipmentStatus[]> = {
+      pending: ['assigned', 'picking_up', 'failed', 'returned'],
+      assigned: ['picking_up', 'in_transit', 'failed', 'returned'],
+      picking_up: ['in_transit', 'out_for_delivery', 'failed', 'returned'],
+      in_transit: ['out_for_delivery', 'delivered', 'failed', 'returned'],
+      out_for_delivery: ['delivered', 'failed', 'returned'],
+      failed: ['assigned', 'picking_up', 'out_for_delivery', 'returned'],
+      delivered: [], returned: [],
+    };
+    if (!transitions[shipment.status].includes(dto.status)) throw new BadRequestException(`Không thể chuyển vận đơn từ ${shipment.status} sang ${dto.status}`);
+    if (shipment.order.status === OrderStatus.pending && !['failed', 'returned'].includes(dto.status)) throw new BadRequestException('Chờ xác nhận đơn hàng trước khi vận chuyển');
+    if (dto.status === ShipmentStatus.returned) {
+      await this.orders.updateStatus(shipment.orderId, { status: OrderStatus.cancelled, note: dto.description || dto.failedReason || 'Hoàn hàng về kho' }, user);
+      const returned = await this.prisma.shipment.findUniqueOrThrow({ where: { id } });
+      await this.emitShipment(returned);
+      return returned;
+    }
 
     const defaultDescriptions: Record<string, string> = {
       pending: 'Vận đơn đang chờ tiếp nhận',
@@ -185,7 +212,7 @@ export class ShippingService {
 
     const result = await this.prisma.$transaction(async (tx) => {
       const updatedShipment = await tx.shipment.update({
-        where: { id },
+        where: { id, status: shipment.status },
         data: {
           status: dto.status as ShipmentStatus,
           notes: dto.notes !== undefined ? dto.notes : shipment.notes,
@@ -286,8 +313,14 @@ export class ShippingService {
       }
 
       return updatedShipment;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(error => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2034', 'P2025'].includes(error.code)) {
+        throw new ConflictException('Vận đơn vừa thay đổi, vui lòng tải lại và thử lại');
+      }
+      throw error;
     });
 
+    await this.emitShipment(result);
     return result;
   }
 
@@ -307,6 +340,12 @@ export class ShippingService {
     if (!carrier) {
       throw new NotFoundException('Không tìm thấy nhân viên vận chuyển');
     }
+    if (user.role !== 'admin') throw new ForbiddenException('Chỉ Admin được phân công vận chuyển');
+    if (['in_transit', 'out_for_delivery', 'delivered', 'returned'].includes(shipment.status)) {
+      throw new BadRequestException('Không thể phân công lại vận đơn đang giao hoặc đã kết thúc');
+    }
+    const activeCarrier = await this.prisma.employee.count({ where: { id: carrier.id, status: 'active', deletedAt: null } });
+    if (!activeCarrier) throw new BadRequestException('Nhân viên không còn hoạt động');
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const s = await tx.shipment.update({
@@ -333,6 +372,30 @@ export class ShippingService {
       return s;
     });
 
+    await this.emitShipment(updated);
     return updated;
+  }
+
+  private async emitShipment(shipment: { id: string; orderId: string; status: ShipmentStatus; carrierId: string | null }) {
+    const payload = { shipmentId: shipment.id, orderId: shipment.orderId, status: shipment.status };
+    this.realtime.emitToAdmins('shipment:updated', payload);
+    this.realtime.emitToEmployees('shipment:updated', payload);
+    if (shipment.carrierId) this.realtime.emitToUser(shipment.carrierId, 'shipment:updated', payload);
+    const order = await this.prisma.order.findUnique({
+      where: { id: shipment.orderId },
+      select: { clientId: true, vendorOrders: { select: { vendorId: true } } },
+    });
+    if (order) {
+      this.realtime.emitToUser(order.clientId, 'shipment:updated', payload);
+      for (const { vendorId } of order.vendorOrders) {
+        this.realtime.emitToVendor(vendorId, 'shipment:updated', payload);
+      }
+    }
+  }
+
+  private assertAssigned(shipment: { carrierId: string | null }, user?: UserInfo) {
+    if (user?.role === 'employee' && shipment.carrierId !== user.userID) {
+      throw new ForbiddenException('Bạn chỉ được xem và xử lý vận đơn được phân công cho mình');
+    }
   }
 }

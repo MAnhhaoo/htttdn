@@ -23,7 +23,9 @@ export interface GeneratedEmployee {
   address: string | null;
   department: string;
   position: string;
+  employmentType: 'full_time' | 'part_time';
   salary: number;
+  hourlyRate: number | null;
   hireDate: Date;
   status: 'active' | 'inactive';
   assignedOrderScope: string;

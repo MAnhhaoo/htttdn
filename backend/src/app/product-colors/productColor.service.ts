@@ -10,12 +10,13 @@ import { PrismaBaseService } from 'src/common/service/prisma-base.service';
 
 import { CreateProductColorDto } from './dto/create-productColor.dto';
 import { UpdateProductColorDto } from './dto/update-productColor.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class ProductColorService extends PrismaBaseService<'productColor'> {
   private readonly maxImages = 20;
 
-  constructor(private readonly prismaDb: PrismaService) {
+  constructor(private readonly prismaDb: PrismaService, private readonly realtime: RealtimeService) {
     super(prismaDb, 'productColor');
   }
 
@@ -79,7 +80,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
 
     // Màu đã bị xóa mềm thì khôi phục.
     if (existingColor?.deletedAt) {
-      return this.extended.update({
+      const restored = await this.extended.update({
         where: {
           id: existingColor.id},
         data: {
@@ -90,10 +91,12 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
           // Không có ảnh mới thì giữ nguyên ảnh cũ.
           ...(uniqueImageUrls.length > 0 && {
             imageUrls: uniqueImageUrls})}});
+      this.realtime.emitProductUpdated(productId, vendorId);
+      return restored;
     }
 
     // Màu chưa từng tồn tại thì tạo mới.
-    return this.extended.create({
+    const created = await this.extended.create({
       data: {
         color,
         imageUrls: uniqueImageUrls,
@@ -101,6 +104,8 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
         product: {
           connect: {
             id: productId}}}});
+    this.realtime.emitProductUpdated(productId, vendorId);
+    return created;
   }
 
   /**
@@ -185,7 +190,7 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
       this.validateImageLimit(uniqueImageUrls);
     }
 
-    return this.extended.update({
+    const updated = await this.extended.update({
       where: { id, productId: currentColor.productId, deletedAt: null },
       data: {
         // Chỉ cập nhật tên màu nếu client gửi color.
@@ -195,6 +200,8 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
         // Chỉ thay ảnh nếu client upload ảnh mới.
         ...(uniqueImageUrls !== undefined && {
           imageUrls: uniqueImageUrls})}});
+    this.realtime.emitProductUpdated(currentColor.productId, vendorId);
+    return updated;
   }
 
   /**
@@ -220,10 +227,12 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
 
     this.validateImageLimit(uniqueImageUrls);
 
-    return this.extended.update({
+    const updated = await this.extended.update({
       where: { id, productId: productColor.productId, deletedAt: null },
       data: {
         imageUrls: uniqueImageUrls}});
+    this.realtime.emitProductUpdated(productColor.productId, vendorId);
+    return updated;
   }
 
   /**
@@ -235,10 +244,12 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
   async deleteProductColor(id: string, vendorId: string) {
     const productColor = await this.getOwnedActiveColor(id, vendorId);
 
-    return this.extended.update({
+    const deleted = await this.extended.update({
       where: { id, productId: productColor.productId, deletedAt: null },
       data: {
         deletedAt: new Date()}});
+    this.realtime.emitProductUpdated(productColor.productId, vendorId);
+    return deleted;
   }
 
   /**
@@ -258,10 +269,12 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
       throw new ConflictException('Màu sản phẩm chưa bị xóa');
     }
 
-    return this.extended.update({
+    const restored = await this.extended.update({
       where: { id, productId: productColor.productId },
       data: {
         deletedAt: null}});
+    this.realtime.emitProductUpdated(productColor.productId, vendorId);
+    return restored;
   }
 
   private async getOwnedActiveColor(id: string, vendorId: string) {

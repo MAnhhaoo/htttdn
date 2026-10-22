@@ -1,7 +1,8 @@
 import { Modal, Button, Badge } from '../../components/ui';
+import { Link } from 'react-router-dom';
 import { formatCurrency, formatDate } from '../../utils/formatHelpers';
 
-export default function OrderDetailModal({ isOpen, onClose, order, onStatusChange, vendorId }) {
+export default function OrderDetailModal({ isOpen, onClose, order, vendorId }) {
   if (!order) return null;
 
   // Retrieve all items for this order that belong to this vendor
@@ -31,13 +32,10 @@ export default function OrderDetailModal({ isOpen, onClose, order, onStatusChang
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Close</Button>
-          {onStatusChange && (
-            <div className="flex gap-2 ml-auto">
-              {order.status === 'pending' && <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => onStatusChange('shipping')}>Mark as Shipping</Button>}
-              {order.status === 'shipping' && <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => onStatusChange('completed')}>Mark as Completed</Button>}
-              {(order.status === 'pending' || order.status === 'shipping') && 
-                <Button variant="danger" onClick={() => onStatusChange('cancelled')}>Cancel Order</Button>}
-            </div>
+          {!['completed', 'cancelled'].includes(order.status) && (
+            <Link className="ml-auto text-sm font-semibold text-indigo-600" to={`/fulfillment?search=${encodeURIComponent(order.orderCode)}`}>
+              Mở đóng gói &amp; bàn giao
+            </Link>
           )}
         </>
       }

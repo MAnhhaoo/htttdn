@@ -6,7 +6,7 @@ import { faker } from '../utils/faker';
 import { buildInsert, sqlSection } from '../utils/sqlBuilder';
 import { PRODUCT_CATALOG } from '../data/productCatalog';
 import type { GeneratedCategory } from './categories.generator';
-import type { GeneratedUser } from './users.generator';
+import type { GeneratedVendor } from './users.generator';
 
 export interface GeneratedProduct {
   id: string;
@@ -25,7 +25,7 @@ export interface GeneratedProduct {
 
 export function generateProducts(
   categories: GeneratedCategory[],
-  vendors: GeneratedUser[],
+  vendors: GeneratedVendor[],
 ) {
   const data: GeneratedProduct[] = [];
   const usedSlugs = new Set<string>();

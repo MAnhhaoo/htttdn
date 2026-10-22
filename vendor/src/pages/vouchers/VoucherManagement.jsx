@@ -57,10 +57,9 @@ export default function VoucherManagement() {
     }
   };
 
-  const handleSave = async (savedData) => {
-    // We can just refetch after save
-    await fetchVouchers();
+  const handleSave = async () => {
     setIsModalOpen(false);
+    await fetchVouchers();
   };
 
   if (loading) {

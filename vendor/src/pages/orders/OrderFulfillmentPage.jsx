@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Boxes, Truck, CheckCircle2, Clock, Ban, Search, RefreshCw, 
   Eye, Printer, AlertTriangle, Package, MapPin, UserCheck, 
@@ -11,10 +12,11 @@ import { Badge, Button, Input, Modal } from '../../components/ui';
 
 export default function OrderFulfillmentPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [vendorOrders, setVendorOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   
   // Modals
   const [packingSlipModal, setPackingSlipModal] = useState(null);
@@ -22,22 +24,33 @@ export default function OrderFulfillmentPage() {
   const [cancelReason, setCancelReason] = useState('Hết hàng tồn kho tại cửa hàng');
   const [cancelNote, setCancelNote] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const latestRequest = useRef(0);
 
-  const fetchFulfillmentOrders = async () => {
+  const fetchFulfillmentOrders = useCallback(async () => {
+    const request = ++latestRequest.current;
     try {
       setLoading(true);
       const data = await orderService.getFulfillmentOrders();
+      if (request !== latestRequest.current) return;
       setVendorOrders(Array.isArray(data) ? data : []);
+      setLoadError('');
     } catch (err) {
       console.error('Error fetching fulfillment orders:', err);
+      if (request === latestRequest.current) setLoadError('Không tải được danh sách kiện hàng. Vui lòng thử làm mới.');
     } finally {
-      setLoading(false);
+      if (request === latestRequest.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchFulfillmentOrders();
-  }, []);
+  }, [fetchFulfillmentOrders]);
+
+  useEffect(() => {
+    window.addEventListener('miva:orders', fetchFulfillmentOrders);
+    return () => window.removeEventListener('miva:orders', fetchFulfillmentOrders);
+  }, [fetchFulfillmentOrders]);
 
   // Update Status Action
   const handleUpdateStatus = async (item, newStatus, customNote = '') => {
@@ -58,7 +71,7 @@ export default function OrderFulfillmentPage() {
       await fetchFulfillmentOrders();
     } catch (err) {
       console.error('Failed to update vendor order status:', err);
-      alert('Không thể cập nhật trạng thái: ' + (err.response?.data?.message || err.message));
+      alert('Không thể cập nhật trạng thái: ' + (err.response?.data?.errors?.[0]?.message || err.response?.data?.message || err.message));
     } finally {
       setActionLoading(false);
     }
@@ -76,7 +89,7 @@ export default function OrderFulfillmentPage() {
       await fetchFulfillmentOrders();
     } catch (err) {
       console.error('Failed to cancel vendor order:', err);
-      alert('Hủy kiện hàng thất bại: ' + (err.response?.data?.message || err.message));
+      alert('Hủy kiện hàng thất bại: ' + (err.response?.data?.errors?.[0]?.message || err.response?.data?.message || err.message));
     } finally {
       setActionLoading(false);
     }
@@ -149,6 +162,7 @@ export default function OrderFulfillmentPage() {
 
   return (
     <div className="space-y-6">
+      {loadError && <p role="alert" className="text-sm text-red-600">{loadError}</p>}
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -309,6 +323,8 @@ export default function OrderFulfillmentPage() {
             const isProcessing = vo.status === 'processing';
             const isReadyForPickup = vo.status === 'ready_for_pickup';
             const isCancelled = vo.status === 'cancelled';
+            const waitingForConfirmation = vo.order?.status === 'pending';
+            const parentClosed = ['cancelled', 'completed'].includes(vo.order?.status);
             const isCompleted = vo.status === 'delivered';
             const isShipping = vo.status === 'shipping';
 
@@ -442,11 +458,17 @@ export default function OrderFulfillmentPage() {
 
                     {/* Operational Action Buttons */}
                     <div className="space-y-2 pt-2">
+                      {waitingForConfirmation && (
+                        <p className="text-xs text-amber-700">Chờ Admin hoặc nhân viên MIVA xác nhận đơn hàng trước khi đóng gói.</p>
+                      )}
+                      {parentClosed && !isCancelled && !isCompleted && (
+                        <p className="text-xs text-slate-500">Đơn hàng đã kết thúc, không thể cập nhật kiện hàng.</p>
+                      )}
                       {isPendingOrConfirmed && (
                         <div className="flex items-center gap-2">
                           <Button
                             onClick={() => handleUpdateStatus(vo, 'processing')}
-                            disabled={actionLoading}
+                            disabled={actionLoading || waitingForConfirmation || parentClosed}
                             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 flex items-center justify-center gap-2"
                           >
                             <Boxes className="w-4 h-4" />
@@ -456,7 +478,7 @@ export default function OrderFulfillmentPage() {
                           <Button
                             variant="danger"
                             onClick={() => setCancelModalItem(vo)}
-                            disabled={actionLoading}
+                            disabled={actionLoading || parentClosed}
                             className="text-xs py-2.5 px-3 flex items-center justify-center gap-1.5"
                             title="Hủy kiện nếu hết hàng"
                           >
@@ -470,17 +492,17 @@ export default function OrderFulfillmentPage() {
                         <div className="flex items-center gap-2">
                           <Button
                             onClick={() => handleUpdateStatus(vo, 'ready_for_pickup')}
-                            disabled={actionLoading}
+                            disabled={actionLoading || waitingForConfirmation || parentClosed}
                             className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-2 shadow-xs"
                           >
                             <Check className="w-4 h-4" />
-                            Đã đóng gói xong - Gửi hàng cho Ship
+                            Đã đóng gói xong - Sẵn sàng bàn giao
                           </Button>
 
                           <Button
                             variant="danger"
                             onClick={() => setCancelModalItem(vo)}
-                            disabled={actionLoading}
+                            disabled={actionLoading || parentClosed}
                             className="text-xs py-2.5 px-3 flex items-center justify-center gap-1.5"
                             title="Hủy kiện nếu phát hiện lỗi"
                           >
@@ -494,7 +516,7 @@ export default function OrderFulfillmentPage() {
                         <div className="flex items-center gap-2">
                           <Button
                             onClick={() => handleUpdateStatus(vo, 'shipping')}
-                            disabled={actionLoading}
+                            disabled={actionLoading || waitingForConfirmation || parentClosed}
                             className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2.5 flex items-center justify-center gap-2"
                           >
                             <Truck className="w-4 h-4" />

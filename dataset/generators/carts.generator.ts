@@ -5,7 +5,7 @@
 import { faker } from '../utils/faker';
 import { buildInsert, sqlSection } from '../utils/sqlBuilder';
 import { CONFIG } from '../config/dataset.config';
-import type { GeneratedUser } from './users.generator';
+import type { GeneratedClient } from './users.generator';
 import type { GeneratedProductVariant } from './productVariants.generator';
 
 export interface GeneratedCart {
@@ -26,7 +26,7 @@ export interface GeneratedCartItem {
 }
 
 export function generateCarts(
-  customers: GeneratedUser[],
+  customers: GeneratedClient[],
   variants: GeneratedProductVariant[],
 ) {
   const carts: GeneratedCart[] = [];

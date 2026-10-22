@@ -14,6 +14,10 @@ import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
 import { PaymentsService } from './payments.service';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+
+class DemoPaymentDto extends createZodDto(z.object({ success: z.boolean() }).strict()) {}
 
 @Controller('payments')
 export class PaymentsController {
@@ -47,9 +51,9 @@ export class PaymentsController {
   @Roles('client')
   async processDemoPayment(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body('success') success: boolean,
+    @Body() dto: DemoPaymentDto,
+    @User() user: UserInfo,
   ) {
-    const status = success ? 'completed' : 'failed';
-    return this.paymentsService.updateStatus(id, { status } as any);
+    return this.paymentsService.processDemoPayment(id, dto.success, user);
   }
 }

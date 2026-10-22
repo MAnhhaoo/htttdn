@@ -3,7 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException} from '@nestjs/common';
-import { OrderStatus, PaymentStatus } from '@prisma/client';
+import { OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
 
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -40,16 +40,49 @@ export class PaymentsService {
     return payment;
   }
 
+  async processDemoPayment(id: string, success: boolean, user: UserInfo) {
+    const payment = await this.prisma.payment.findUnique({ where: { id }, include: paymentInclude });
+    if (!payment) throw new NotFoundException('Thanh toán không tồn tại');
+    if (payment.order.clientId !== user.userID) throw new ForbiddenException('Bạn không có quyền thanh toán đơn hàng này');
+    if (payment.method === PaymentMethod.cod) throw new BadRequestException('Đơn COD được thanh toán khi giao hàng');
+    return this.updateStatus(id, { status: success ? PaymentStatus.paid : PaymentStatus.failed });
+  }
+
   async updateStatus(id: string, dto: UpdatePaymentStatusDto) {
     const current = await this.prisma.payment.findUnique({
       where: { id },
       include: paymentInclude});
     if (!current) throw new NotFoundException('Thanh toán không tồn tại');
+    if (current.status === dto.status) return current;
+    const transitions: Record<PaymentStatus, PaymentStatus[]> = {
+      pending: ['paid', 'failed', 'cancelled'], failed: ['pending', 'paid', 'cancelled'],
+      paid: ['refunded'], cancelled: [], refunded: [],
+    };
+    if (!transitions[current.status].includes(dto.status)) throw new BadRequestException('Không thể chuyển trạng thái thanh toán này');
     if (
       current.order.status === OrderStatus.cancelled &&
       dto.status === PaymentStatus.paid
     ) {
       throw new BadRequestException('Không thể thanh toán đơn đã hủy');
+    }
+    // Giữ trạng thái thanh toán đồng bộ với đơn hàng
+    if (
+      dto.status === PaymentStatus.cancelled &&
+      current.order.status !== OrderStatus.cancelled
+    ) {
+      throw new BadRequestException(
+        'Chỉ hủy thanh toán khi đơn hàng đã hủy. Hãy hủy đơn hàng để hệ thống tự đồng bộ thanh toán, voucher và tồn kho',
+      );
+    }
+    if (
+      dto.status === PaymentStatus.paid &&
+      current.method === PaymentMethod.cod &&
+      current.order.status !== OrderStatus.shipping &&
+      current.order.status !== OrderStatus.completed
+    ) {
+      throw new BadRequestException(
+        'Đơn COD chỉ được xác nhận đã thanh toán khi đang giao hoặc đã hoàn tất',
+      );
     }
     const now = new Date();
     const payment = await this.prisma.payment.update({
@@ -65,6 +98,7 @@ export class PaymentsService {
       status: payment.status};
     this.realtime.emitToUser(payment.order.clientId, 'payment:updated', payload);
     this.realtime.emitToAdmins('payment:updated', payload);
+    this.realtime.emitToEmployees('payment:updated', payload);
     for (const vendorId of new Set(
       payment.order.details.map(
         (item) => item.productVariant.productColor.product.vendorId,

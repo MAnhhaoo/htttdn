@@ -6,6 +6,8 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { StringUtilService } from 'src/common/utils/string-util/string-util.service';
+import { assertEmailAvailable } from '../../common/utils/account-email/account-email.util';
+import { RealtimeService } from '../realtime/realtime.service';
 import {
   CreateEmployeeDto,
   GetEmployeesPaginationDto,
@@ -17,6 +19,7 @@ export class EmployeesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stringUtilService: StringUtilService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   private async generateEmployeeCode(): Promise<string> {
@@ -138,12 +141,10 @@ export class EmployeesService {
   }
 
   async createEmployee(adminId: string, dto: CreateEmployeeDto) {
-    const existing = await this.prisma.employee.findFirst({
-      where: { email: dto.email, deletedAt: null },
-    });
-    if (existing) {
-      throw new BadRequestException('Email đã tồn tại trong hệ thống');
-    }
+    const email = dto.email.trim().toLowerCase();
+    // Email phải duy nhất trên toàn hệ thống (khách hàng, vendor, admin, nhân viên,
+    // kể cả tài khoản đã xóa mềm vì cột email vẫn unique).
+    await assertEmailAvailable(this.prisma, email);
 
     const hashedPassword = await this.stringUtilService.hash(dto.password);
     const employeeCode = await this.generateEmployeeCode();
@@ -152,7 +153,7 @@ export class EmployeesService {
       data: {
         employeeCode,
         fullName: dto.fullName,
-        email: dto.email,
+        email,
         password: hashedPassword,
         phone: dto.phone || null,
         avatarUrl: dto.avatarUrl || null,
@@ -262,6 +263,9 @@ export class EmployeesService {
   }
 
   async updateStatus(id: string, status: 'active' | 'inactive') {
+    if (status !== 'active' && status !== 'inactive') {
+      throw new BadRequestException('Trạng thái chỉ được là active hoặc inactive');
+    }
     const existing = await this.prisma.employee.findUnique({ where: { id } });
     if (!existing || existing.deletedAt) {
       throw new NotFoundException('Không tìm thấy thông tin nhân viên');
@@ -405,6 +409,7 @@ export class EmployeesService {
             },
           },
         });
+        this.realtime.emitToUser(emp.id, 'notification:created', { id: newNotif.id });
       }
 
       return {
@@ -434,6 +439,7 @@ export class EmployeesService {
           },
         },
       });
+      this.realtime.emitToUser(emp.id, 'notification:created', { id: newNotif.id });
 
       return {
         message: `Đã gửi thông báo tới nhân viên ${emp.fullName}`,
@@ -484,6 +490,8 @@ export class EmployeesService {
       },
     });
 
+    this.realtime.emitToUser(employeeId, 'notification:updated', { id: notifId });
+
     return { success: true };
   }
 
@@ -509,6 +517,8 @@ export class EmployeesService {
         },
       },
     });
+
+    this.realtime.emitToUser(employeeId, 'notification:updated', { updatedCount: updatedNotifs.length });
 
     return { success: true, count: updatedNotifs.length };
   }

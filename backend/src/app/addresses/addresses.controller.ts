@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
 } from '@nestjs/common';
@@ -37,7 +38,7 @@ export class AddressesController {
 
   @Get(':id')
   @Roles('client', 'vendor', 'admin')
-  getAddress(@CurrentUser() user: UserInfo, @Param('id') id: string) {
+  getAddress(@CurrentUser() user: UserInfo, @Param('id', ParseUUIDPipe) id: string) {
     return this.addressesService.getAddress(user.userID, id);
   }
 
@@ -45,7 +46,7 @@ export class AddressesController {
   @Roles('client', 'vendor', 'admin')
   updateAddress(
     @CurrentUser() user: UserInfo,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() updateAddressDto: UpdateAddressDto,
   ) {
     return this.addressesService.updateAddress(user.userID, id, updateAddressDto);
@@ -53,7 +54,7 @@ export class AddressesController {
 
   @Delete(':id')
   @Roles('client', 'vendor', 'admin')
-  deleteAddress(@CurrentUser() user: UserInfo, @Param('id') id: string) {
+  deleteAddress(@CurrentUser() user: UserInfo, @Param('id', ParseUUIDPipe) id: string) {
     return this.addressesService.deleteAddress(user.userID, id);
   }
 }

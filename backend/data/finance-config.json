@@ -6,6 +6,20 @@
       "commissionTaxRate": 8,
       "vendorRegistrationFee": 2000000,
       "note": "Cấu hình tài chính khởi tạo ban đầu (8% hoa hồng sàn, 2.000.000đ phí đăng ký vendor)"
+    },
+    {
+      "id": "config-1792592780717",
+      "effectiveFrom": "2026-10-21T14:26:20.717Z",
+      "commissionTaxRate": 8,
+      "vendorRegistrationFee": 2000000,
+      "note": "Điều chỉnh cấu hình mới: Thuế sàn undefined%, Phí đăng ký vendor undefinedđ"
+    },
+    {
+      "id": "config-1792592968730",
+      "effectiveFrom": "2026-10-21T14:29:28.730Z",
+      "commissionTaxRate": 8,
+      "vendorRegistrationFee": 2000000,
+      "note": "Điều chỉnh cấu hình mới: Thuế sàn undefined%, Phí đăng ký vendor undefinedđ"
     }
   ]
 }

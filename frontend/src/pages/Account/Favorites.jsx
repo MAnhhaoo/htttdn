@@ -1,7 +1,7 @@
 import React from 'react';
 import { Heart } from 'lucide-react';
 import { useFavorites } from '../../hooks/useFavorites';
-import ProductCard from '../../components/Product/ProductCard/ProductCard';
+import ProductCard from '../../components/product/ProductCard/ProductCard';
 
 export default function Favorites() {
   const { data: favorites = [], isLoading } = useFavorites();

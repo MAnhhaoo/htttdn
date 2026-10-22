@@ -26,38 +26,8 @@ export class AuthController {
    */
   @Post('sign-up')
   @SkipAuth()
-  async signUp(
-    @Body() signUpDto: SignUpDto,
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const user = await this.authService.signUp(signUpDto);
-
-    try {
-      const result = await this.authService.signIn({
-        email: signUpDto.email,
-        password: signUpDto.password,
-      });
-
-      const appRole = request.headers['x-app-role'] as string;
-      const suffix = appRole ? `_${appRole}` : '';
-      const accessKey = `${TokenKeys.ACCESS_TOKEN_KEY}${suffix}`;
-      const refreshKey = `${TokenKeys.REFRESH_TOKEN_KEY}${suffix}`;
-
-      response.cookie(accessKey, result.data.accessToken, {
-        ...COOKIE_CONFIG_DEFAULT,
-        maxAge: ms(CookiesToken.ACCESS_TOKEN_EXPIRE_IN),
-      });
-
-      response.cookie(refreshKey, result.data.refreshToken, {
-        ...COOKIE_CONFIG_DEFAULT,
-        maxAge: ms(CookiesToken.REFRESH_TOKEN_EXPIRE_IN),
-      });
-    } catch {
-      // If auto-login fails, proceed with returning user
-    }
-
-    return user;
+  signUp(@Body() signUpDto: SignUpDto) {
+    return this.authService.signUp(signUpDto);
   }
 
   /**
@@ -65,36 +35,8 @@ export class AuthController {
    */
   @Post('sign-up/vendor')
   @SkipAuth()
-  async signUpVendor(
-    @Body() signUpDto: SignUpDto,
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
+  async signUpVendor(@Body() signUpDto: SignUpDto) {
     const user = await this.authService.signUpVendor(signUpDto);
-
-    try {
-      const result = await this.authService.signIn({
-        email: signUpDto.email,
-        password: signUpDto.password,
-      });
-
-      const appRole = (request.headers['x-app-role'] as string) || 'vendor';
-      const suffix = appRole ? `_${appRole}` : '';
-      const accessKey = `${TokenKeys.ACCESS_TOKEN_KEY}${suffix}`;
-      const refreshKey = `${TokenKeys.REFRESH_TOKEN_KEY}${suffix}`;
-
-      response.cookie(accessKey, result.data.accessToken, {
-        ...COOKIE_CONFIG_DEFAULT,
-        maxAge: ms(CookiesToken.ACCESS_TOKEN_EXPIRE_IN),
-      });
-
-      response.cookie(refreshKey, result.data.refreshToken, {
-        ...COOKIE_CONFIG_DEFAULT,
-        maxAge: ms(CookiesToken.REFRESH_TOKEN_EXPIRE_IN),
-      });
-    } catch {
-      // If auto-login fails, proceed with returning user
-    }
 
     return {
       message: 'Đăng ký gian hàng thành công',
@@ -117,9 +59,9 @@ export class AuthController {
     @Res({ passthrough: true })
     response: Response,
   ) {
-    const result = await this.authService.signIn(signInDto);
-
     const appRole = request.headers['x-app-role'] as string;
+    const result = await this.authService.signIn(signInDto, appRole);
+
     const suffix = appRole ? `_${appRole}` : '';
     const accessKey = `${TokenKeys.ACCESS_TOKEN_KEY}${suffix}`;
     const refreshKey = `${TokenKeys.REFRESH_TOKEN_KEY}${suffix}`;

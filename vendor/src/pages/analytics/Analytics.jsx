@@ -65,6 +65,8 @@ export default function Analytics() {
     };
 
     fetchAnalytics();
+    window.addEventListener('miva:dashboard', fetchAnalytics);
+    return () => window.removeEventListener('miva:dashboard', fetchAnalytics);
   }, [user?.id, user?.userID]);
 
   const { stats, revenueData, topProductsData } = useMemo(() => {

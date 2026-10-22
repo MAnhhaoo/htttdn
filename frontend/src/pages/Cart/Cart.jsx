@@ -13,6 +13,8 @@ import { useCart } from '../../hooks/useCart';
 import { formatPrice } from '../../utils/formatPrice';
 import Loading from '../../components/common/Loading/Loading';
 import EmptyState from '../../components/common/EmptyState/EmptyState';
+import { useCheckoutPricing } from '../../hooks/useCheckoutPricing';
+import VoucherPricing from '../../components/cart/VoucherPricing';
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -70,6 +72,7 @@ export default function Cart() {
   const selectedItems = useMemo(() => {
     return items.filter((i) => selectedItemIds.has(i.id));
   }, [items, selectedItemIds]);
+  const pricing = useCheckoutPricing(selectedItems);
 
   const selectedSubtotal = useMemo(() => {
     return selectedItems.reduce(
@@ -124,7 +127,7 @@ export default function Cart() {
 
   const handleCheckoutShopOnly = (vendorItems) => {
     const ids = vendorItems.map((i) => i.id);
-    navigate('/checkout', { state: { cartItemIds: ids } });
+    navigate('/checkout', { state: { cartItemIds: ids, voucherSelections: pricing.selections.filter(selection => selection.vendorId === (vendorItems[0]?.productVariant?.productColor?.product?.vendorId || 'platform')) } });
   };
 
   const handleProceedCheckout = () => {
@@ -132,7 +135,7 @@ export default function Cart() {
       alert('Vui lòng chọn ít nhất 1 sản phẩm để tiến hành thanh toán');
       return;
     }
-    navigate('/checkout', { state: { cartItemIds: Array.from(selectedItemIds) } });
+    navigate('/checkout', { state: { cartItemIds: Array.from(selectedItemIds), voucherSelections: pricing.selections } });
   };
 
   if (isLoadingCart) return <Loading text="Đang tải giỏ hàng..." />;
@@ -285,6 +288,7 @@ export default function Cart() {
                             <div className="flex items-center border border-light-border dark:border-dark-border rounded-lg bg-gray-50 dark:bg-dark-bg h-9">
                               <button 
                                 onClick={() => updateQuantity({ id: item.id, quantity: item.quantity - 1 })}
+                                aria-label={`Giảm số lượng ${item.productVariant?.productColor?.product?.name}`}
                                 disabled={item.quantity <= 1}
                                 className="w-9 h-full flex items-center justify-center text-light-muted hover:text-primary disabled:opacity-40 cursor-pointer"
                               >
@@ -293,6 +297,7 @@ export default function Cart() {
                               <span className="w-9 text-center font-semibold text-xs sm:text-sm">{item.quantity}</span>
                               <button 
                                 onClick={() => updateQuantity({ id: item.id, quantity: item.quantity + 1 })}
+                                aria-label={`Tăng số lượng ${item.productVariant?.productColor?.product?.name}`}
                                 disabled={item.quantity >= item.productVariant?.stock}
                                 className="w-9 h-full flex items-center justify-center text-light-muted hover:text-primary disabled:opacity-40 cursor-pointer"
                               >
@@ -356,7 +361,9 @@ export default function Cart() {
               </p>
             </div>
             
+            <VoucherPricing items={selectedItems} pricing={pricing} />
             <div className="space-y-3.5 text-sm">
+              {pricing.data && <div className="flex justify-between text-emerald-700 dark:text-emerald-400"><span>Giảm giá voucher:</span><strong>-{formatPrice(pricing.data.discountAmount)}</strong></div>}
               <div className="flex justify-between text-light-muted dark:text-dark-muted">
                 <span>Số sản phẩm chọn:</span>
                 <span className="font-bold text-light-text dark:text-dark-text">
@@ -385,14 +392,14 @@ export default function Cart() {
                   <span className="font-bold text-light-text dark:text-dark-text block">Tổng thanh toán</span>
                   <span className="text-[11px] text-light-muted dark:text-dark-muted">Đã bao gồm thuế và phí</span>
                 </div>
-                <span className="font-black text-2xl text-primary">{formatPrice(selectedSubtotal)}</span>
+                <span data-testid="cart-total" className="font-black text-2xl text-primary">{formatPrice(pricing.data?.totalAmount ?? selectedSubtotal)}</span>
               </div>
             </div>
 
             <button 
               type="button"
               onClick={handleProceedCheckout}
-              disabled={selectedItemIds.size === 0}
+              disabled={selectedItemIds.size === 0 || !pricing.ready}
               className="w-full h-12 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20 active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               <span>Mua hàng ({selectedItems.length})</span>

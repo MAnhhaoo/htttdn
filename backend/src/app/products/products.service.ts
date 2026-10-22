@@ -14,6 +14,7 @@ import {
   GetVendorProductsPaginationDto} from './dto/get-product.dto';
 import { Prisma, ProductStatus } from '@prisma/client';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 
 const productRelations = {
   category: {
@@ -51,6 +52,7 @@ export class ProductService extends PrismaBaseService<'product'> {
     private readonly paginationUtilService: PaginationUtilService,
     private readonly queryUtil: QueryUtilService,
     private readonly stringUtilService: StringUtilService,
+    private readonly realtime: RealtimeService,
   ) {
     super(prismaService, 'product');
   }
@@ -77,7 +79,7 @@ export class ProductService extends PrismaBaseService<'product'> {
 
     const hasColors = createProductDto.colors && createProductDto.colors.length > 0;
 
-    return this.extended.create({
+    const created = await this.extended.create({
       data: {
         name: createProductDto.name,
         description: createProductDto.description,
@@ -103,6 +105,8 @@ export class ProductService extends PrismaBaseService<'product'> {
       },
       include: productRelations,
     });
+    this.realtime.emitProductUpdated(created.id, created.vendorId);
+    return created;
   }
   async getProducts(query: GetProductsPaginationDto) {
     const { category, status, vendorId, ...rest } = query as any;
@@ -476,6 +480,7 @@ export class ProductService extends PrismaBaseService<'product'> {
       }
     }
 
+    this.realtime.emitProductUpdated(updated.id, updated.vendorId);
     return updated;
   }
 
@@ -489,13 +494,15 @@ export class ProductService extends PrismaBaseService<'product'> {
       }
     }
 
-    return this.prismaService.product.update({
+    const deleted = await this.prismaService.product.update({
       where: { id },
       data: {
         status: 'inactive',
         deletedAt: new Date(),
       },
     });
+    this.realtime.emitProductUpdated(deleted.id, deleted.vendorId);
+    return deleted;
   }
 
   private async getOwnedProduct(id: string, vendorId: string) {

@@ -10,6 +10,8 @@ import { PaginationUtilService } from '../../common/utils/paginaton-util/paginti
 
 import { QueryUtilService } from '../../common/utils/query-util/query-util.service';
 
+import { assertEmailAvailable } from '../../common/utils/account-email/account-email.util';
+
 import {
   GetOptionsParams,
   Options} from '../../common/query/options.interface';
@@ -148,6 +150,10 @@ export class ClientsService
 
   async createClient(createClientDto: CreateClientDto) {
     const { address, ...clientData } = createClientDto as any;
+    if (typeof clientData.email === 'string') {
+      clientData.email = clientData.email.trim().toLowerCase();
+      await assertEmailAvailable(this.prismaService, clientData.email);
+    }
     const client = await this.extended.create({
       data: clientData,
     });
@@ -213,6 +219,18 @@ export class ClientsService
   }) {
     const { where, data: dataUpdate } = params;
     const { address, ...clientData } = dataUpdate as any;
+
+    if (typeof clientData.email === 'string') {
+      clientData.email = clientData.email.trim().toLowerCase();
+      const current = where.id
+        ? { id: where.id }
+        : await this.prismaService.client.findUnique({ where, select: { id: true } });
+      await assertEmailAvailable(
+        this.prismaService,
+        clientData.email,
+        current ? { role: 'client', id: current.id } : undefined,
+      );
+    }
 
     const data = await this.extended.update({
       data: clientData,

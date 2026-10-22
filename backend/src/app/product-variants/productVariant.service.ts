@@ -7,10 +7,11 @@ import { PrismaService } from 'src/common/prisma/prisma.service';
 import { PrismaBaseService } from 'src/common/service/prisma-base.service';
 import { CreateProductVariantDto } from './dto/createProductVariant.dto';
 import { UpdateProductVariantDto } from './dto/updateProductVariant.dto';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class ProductVariantService extends PrismaBaseService<'productVariant'> {
-  constructor(private readonly prismaDb: PrismaService) {
+  constructor(private readonly prismaDb: PrismaService, private readonly realtime: RealtimeService) {
     super(prismaDb, 'productVariant');
   }
   async createProductVariant(
@@ -23,7 +24,7 @@ export class ProductVariantService extends PrismaBaseService<'productVariant'> {
 
     await this.checkDuplicateSize(productColorId, size);
 
-    return this.extended.create({
+    const created = await this.extended.create({
       data: {
         size,
         price,
@@ -36,6 +37,8 @@ export class ProductVariantService extends PrismaBaseService<'productVariant'> {
         },
       },
     });
+    await this.emitForColor(productColorId, vendorId);
+    return created;
   }
 
   async getProductVariantsByProductColorId(productColorId: string) {
@@ -58,19 +61,30 @@ export class ProductVariantService extends PrismaBaseService<'productVariant'> {
       await this.checkDuplicateSize(variant.productColorId, data.size, id);
     }
 
-    return this.extended.update({
+    const updated = await this.extended.update({
       where: { id, productColorId: variant.productColorId, deletedAt: null },
       data,
     });
+    await this.emitForColor(variant.productColorId, vendorId);
+    return updated;
   }
 
   async deleteProductVariant(id: string, vendorId: string) {
     const variant = await this.getActiveVariant(id, vendorId);
 
-    return this.extended.update({
+    const deleted = await this.extended.update({
       where: { id, productColorId: variant.productColorId, deletedAt: null },
       data: { deletedAt: new Date() },
     });
+    await this.emitForColor(variant.productColorId, vendorId);
+    return deleted;
+  }
+
+  private async emitForColor(productColorId: string, vendorId: string) {
+    const color = await this.prismaDb.productColor.findUnique({
+      where: { id: productColorId }, select: { productId: true },
+    });
+    if (color) this.realtime.emitProductUpdated(color.productId, vendorId);
   }
 
   private async getActiveProductColor(

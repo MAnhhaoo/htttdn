@@ -15,5 +15,9 @@ export const authService = {
 
   getProfile: async () => {
     return await apiClient.get('/users/profile');
+  },
+
+  updateProfile: async (data) => {
+    return await apiClient.patch('/users/profile', data);
   }
 };

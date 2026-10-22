@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 
 
@@ -19,10 +20,23 @@ import { PreviewVoucherDto } from './dto/preview-voucher.dto';
 import { UpdateVoucherDto } from './dto/update-voucher.dto';
 import { VoucherStatusDto } from './dto/voucher-status.dto';
 import { VouchersService } from './vouchers.service';
+import { SkipAuth } from '../auth/auth.decorator';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+
+class CatalogOffersDto extends createZodDto(z.object({
+  productIds: z.string().transform(value => value.split(',')).pipe(z.array(z.uuid()).min(1).max(100)),
+}).strict()) {}
 
 @Controller('vouchers')
 export class VouchersController {
   constructor(private readonly vouchersService: VouchersService) {}
+
+  @Get('catalog')
+  @SkipAuth()
+  catalog(@Query() query: CatalogOffersDto) {
+    return this.vouchersService.catalogOffers(query.productIds);
+  }
 
   @Post()
   @Roles('admin', 'vendor')

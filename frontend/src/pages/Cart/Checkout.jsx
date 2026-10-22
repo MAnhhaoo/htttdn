@@ -18,6 +18,8 @@ import { addressService } from '../../services/addressService';
 import { formatPrice } from '../../utils/formatPrice';
 import Input from '../../components/common/Input/Input';
 import Button from '../../components/common/Button/Button';
+import { useCheckoutPricing } from '../../hooks/useCheckoutPricing';
+import VoucherPricing from '../../components/cart/VoucherPricing';
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -101,6 +103,7 @@ export default function Checkout() {
       0,
     );
   }, [checkoutItems]);
+  const pricing = useCheckoutPricing(checkoutItems, location.state?.voucherSelections || []);
 
   if (items.length === 0) {
     return <Navigate to="/cart" replace />;
@@ -172,6 +175,10 @@ export default function Checkout() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!pricing.ready) {
+      alert(pricing.error || 'Vui lòng chờ tính giá sau giảm.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       let receiverName = '';
@@ -229,6 +236,8 @@ export default function Checkout() {
         shippingAddress: shippingAddress.trim(),
         paymentMethod: paymentMethod,
         voucherCodes: [],
+        voucherSelections: pricing.selections,
+        expectedTotalAmount: Number(pricing.data.totalAmount),
         cartItemIds: checkoutItems.map((i) => i.id),
       };
 
@@ -257,6 +266,7 @@ export default function Checkout() {
         error.message || 
         'Không thể thực hiện thanh toán. Vui lòng thử lại!';
       alert(errMessage);
+      pricing.refresh();
     } finally {
       setIsSubmitting(false);
     }
@@ -444,6 +454,7 @@ export default function Checkout() {
               size="lg" 
               className="w-full text-base font-bold shadow-lg shadow-primary/20 h-12 cursor-pointer" 
               isLoading={isSubmitting}
+              disabled={!pricing.ready}
             >
               Xác nhận đặt {vendorPackages.length} đơn hàng
             </Button>
@@ -501,6 +512,7 @@ export default function Checkout() {
               ))}
             </div>
 
+            <VoucherPricing items={checkoutItems} pricing={pricing} />
             {/* Total Cost Breakdown */}
             <div className="border-t border-light-border dark:border-dark-border pt-4 space-y-3">
               <div className="flex justify-between text-sm">
@@ -511,12 +523,13 @@ export default function Checkout() {
                 <span className="text-light-muted dark:text-dark-muted">Phí giao hàng</span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Miễn phí</span>
               </div>
+              {pricing.data && <div className="flex justify-between text-sm text-emerald-700 dark:text-emerald-400"><span>Giảm giá voucher</span><strong>-{formatPrice(pricing.data.discountAmount)}</strong></div>}
               <div className="border-t border-light-border dark:border-dark-border pt-3 flex justify-between items-center">
                 <div>
                   <span className="font-bold text-light-text dark:text-dark-text block">Tổng cộng tất cả</span>
                   <span className="text-[11px] text-light-muted dark:text-dark-muted">Cho {vendorPackages.length} đơn hàng</span>
                 </div>
-                <span className="font-black text-2xl text-primary">{formatPrice(checkoutSubtotal)}</span>
+                <span data-testid="checkout-total" className="font-black text-2xl text-primary">{formatPrice(pricing.data?.totalAmount ?? checkoutSubtotal)}</span>
               </div>
             </div>
           </div>

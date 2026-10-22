@@ -84,6 +84,11 @@ export default function ShippingManagement() {
     fetchShipments();
   }, [fetchShipments]);
 
+  useEffect(() => {
+    window.addEventListener('miva:shipping', fetchShipments);
+    return () => window.removeEventListener('miva:shipping', fetchShipments);
+  }, [fetchShipments]);
+
   // Open Assign Modal
   const handleOpenAssign = (shipment) => {
     setSelectedShipment(shipment);
