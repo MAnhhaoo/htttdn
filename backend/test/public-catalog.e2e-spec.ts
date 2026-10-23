@@ -72,7 +72,9 @@ describe('Public catalog (HTTP integration)', () => {
   });
 
   it('rejects unsupported public catalog filters', async () => {
-    await request(server()).get('/api/products?status=inactive').expect(400);
+    const response = await request(server()).get('/api/products?status=inactive').expect(400);
+    expect(response.body.message).toBe(response.body.errors[0].message);
+    expect(response.body.message).not.toBe('ERROR');
     await request(server()).get('/api/products?page=0').expect(400);
     await request(server()).get('/api/categories?itemPerPage=101').expect(400);
   });
@@ -87,5 +89,6 @@ describe('Public catalog (HTTP integration)', () => {
   it('still protects catalog write operations', async () => {
     await request(server()).post('/api/products').send({}).expect(401);
     await request(server()).post('/api/categories').send({}).expect(401);
+    await request(server()).get('/api/products/admin/all').expect(401);
   });
 });

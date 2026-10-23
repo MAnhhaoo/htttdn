@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 
 import { Prisma } from '@prisma/client';
 
@@ -412,24 +412,23 @@ export class VendorsService
     user: any,
     data?: { plan?: string; commissionRate?: number; note?: string },
   ) {
-    if (user.role === 'employee') {
-      const emp = await this.prismaService.employee.findUnique({ where: { id: user.userID } });
-      const perms: any = emp?.permissions || {};
-      if (perms.restrictions?.canManageVendors === true && !perms.vendors?.canApproveVendor) {
-        throw new ForbiddenException('Nhân viên không có quyền phê duyệt hồ sơ đối tác');
-      }
-    }
+    await this.assertCanReviewRegistration(user);
 
     const vendor = await this.extended.findUnique({ where: { id } });
-    if (!vendor) {
+    if (!vendor || vendor.deletedAt) {
       throw new NotFoundException('Không tìm thấy đối tác');
+    }
+    const isNewRegistration = vendor.approvalStatus === 'pending_approval';
+    const isRenewal = vendor.approvalStatus === 'approved' && vendor.renewalRequested;
+    if (!isNewRegistration && !isRenewal) {
+      throw new ConflictException('Hồ sơ không còn chờ phê duyệt');
     }
 
     const now = new Date();
     const plan = data?.plan || vendor.renewalPlan || vendor.subscriptionPlan || '1_year';
     const years = plan === '2_years' ? 2 : 1;
     const fee = plan === '2_years' ? 2000000 : 1200000;
-    const commissionRate = data?.commissionRate !== undefined ? data.commissionRate : (vendor.commissionRate || 8.00);
+    const commissionRate = data?.commissionRate !== undefined ? data.commissionRate : (vendor.commissionRate ?? 8.00);
 
     let newExpiresAt: Date;
     if (vendor.renewalRequested && vendor.subscriptionExpiresAt && vendor.subscriptionExpiresAt > now) {
@@ -440,8 +439,13 @@ export class VendorsService
 
     const approverName = user.fullName || user.userEmail || (user.role === 'admin' ? 'Quản trị viên' : 'Nhân viên kiểm duyệt');
 
-    const updated = await this.extended.update({
-      where: { id },
+    const changed = await this.prismaService.vendor.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        approvalStatus: isNewRegistration ? 'pending_approval' : 'approved',
+        ...(isRenewal ? { renewalRequested: true } : {}),
+      },
       data: {
         approvalStatus: 'approved',
         status: 'active',
@@ -456,38 +460,61 @@ export class VendorsService
         renewalPlan: null,
         renewalRequestedAt: null,
       },
-      omit: { password: true },
     });
-
-    return updated;
+    if (!changed.count) throw new ConflictException('Hồ sơ vừa được xử lý');
+    return this.extended.findUnique({ where: { id }, omit: { password: true } });
   }
 
   async rejectRegistration(id: string, user: any, reason: string) {
-    if (user.role === 'employee') {
-      const emp = await this.prismaService.employee.findUnique({ where: { id: user.userID } });
-      const perms: any = emp?.permissions || {};
-      if (perms.restrictions?.canManageVendors === true && !perms.vendors?.canApproveVendor) {
-        throw new ForbiddenException('Nhân viên không có quyền phê duyệt hồ sơ đối tác');
-      }
-    }
+    await this.assertCanReviewRegistration(user);
 
     const vendor = await this.extended.findUnique({ where: { id } });
-    if (!vendor) {
+    if (!vendor || vendor.deletedAt) {
       throw new NotFoundException('Không tìm thấy đối tác');
     }
+    const isNewRegistration = vendor.approvalStatus === 'pending_approval';
+    const isRenewal = vendor.approvalStatus === 'approved' && vendor.renewalRequested;
+    if (!isNewRegistration && !isRenewal) {
+      throw new ConflictException('Hồ sơ không còn chờ phê duyệt');
+    }
 
-    const updated = await this.extended.update({
-      where: { id },
+    const changed = await this.prismaService.vendor.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        approvalStatus: isNewRegistration ? 'pending_approval' : 'approved',
+        ...(isRenewal ? { renewalRequested: true } : {}),
+      },
       data: {
-        approvalStatus: 'rejected',
-        status: 'inactive',
+        ...(isNewRegistration
+          ? { approvalStatus: 'rejected', status: 'inactive' }
+          : { subscriptionFee: vendor.subscriptionPlan === '2_years' ? 2000000 : 1200000 }),
         rejectedReason: reason || 'Hồ sơ đăng ký hoặc yêu cầu gia hạn chưa đạt yêu cầu.',
         renewalRequested: false,
+        renewalPlan: null,
+        renewalRequestedAt: null,
       },
-      omit: { password: true },
     });
+    if (!changed.count) throw new ConflictException('Hồ sơ vừa được xử lý');
+    return this.extended.findUnique({ where: { id }, omit: { password: true } });
+  }
 
-    return updated;
+  private async assertCanReviewRegistration(user: { role: string; userID: string }) {
+    if (user.role !== 'employee') return;
+    const employee = await this.prismaService.employee.findUnique({
+      where: { id: user.userID },
+      select: { department: true, permissions: true },
+    });
+    const permissions = (employee?.permissions || {}) as {
+      restrictions?: { canManageVendors?: boolean };
+      vendors?: { canApproveVendor?: boolean };
+    };
+    const explicitlyAllowed = permissions.vendors?.canApproveVendor === true;
+    const departmentAllowed = employee?.department.includes('Liên kết Vendor') &&
+      permissions.restrictions?.canManageVendors !== true;
+    if (!explicitlyAllowed && !departmentAllowed) {
+      throw new ForbiddenException('Nhân viên không có quyền phê duyệt hồ sơ đối tác');
+    }
   }
 
   async getPublicVendorProfile(id: string) {

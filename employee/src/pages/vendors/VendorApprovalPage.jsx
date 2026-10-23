@@ -38,14 +38,16 @@ export const VendorApprovalPage = () => {
 
   // Form states
   const [approvePlan, setApprovePlan] = useState('1_year');
-  const [approveCommission, setApproveCommission] = useState(5.0);
+  const [approveCommission, setApproveCommission] = useState(8.0);
   const [approveNote, setApproveNote] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Check employee permission
   const permissions = user?.permissions || {};
-  const isRestricted = permissions.restrictions?.canManageVendors === true && !permissions.vendors?.canApproveVendor;
+  const canApprove = permissions.vendors?.canApproveVendor === true ||
+    (user?.department?.includes('Liên kết Vendor') && permissions.restrictions?.canManageVendors !== true);
+  const isRestricted = !canApprove;
 
   const fetchRegistrations = useCallback(async () => {
     setLoading(true);
@@ -254,7 +256,7 @@ export const VendorApprovalPage = () => {
                       <td className="py-3 px-3">
                         <div className="font-bold text-emerald-600 flex items-center gap-0.5">
                           <Percent className="w-3 h-3" />
-                          {vendor.commissionRate || 5.0}%
+                          {vendor.commissionRate ?? 8.0}%
                         </div>
                         <div className="text-[10px] text-slate-400">/ đơn hoàn tất</div>
                       </td>
@@ -307,13 +309,13 @@ export const VendorApprovalPage = () => {
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {!isRestricted && (vendor.approvalStatus === 'pending_approval' || vendor.renewalRequested || isExp) && (
+                          {!isRestricted && (vendor.approvalStatus === 'pending_approval' || vendor.renewalRequested) && (
                             <>
                               <button
                                 onClick={() => {
                                   setSelectedVendor(vendor);
                                   setApprovePlan(vendor.renewalPlan || vendor.subscriptionPlan || '1_year');
-                                  setApproveCommission(vendor.commissionRate || 5.0);
+                                  setApproveCommission(vendor.commissionRate ?? 8.0);
                                   setApproveNote('');
                                   setApproveModalOpen(true);
                                 }}
@@ -482,7 +484,7 @@ export const VendorApprovalPage = () => {
               <div><strong>Địa chỉ:</strong> {selectedVendor.address || 'Chưa cập nhật'}</div>
               <div><strong>Gói kinh doanh:</strong> {selectedVendor.subscriptionPlan === '2_years' ? '2 Năm' : '1 Năm'}</div>
               <div><strong>Phí duy trì:</strong> {formatPrice(selectedVendor.subscriptionFee)}</div>
-              <div><strong>Hoa hồng sàn:</strong> {selectedVendor.commissionRate || 5}% / đơn giao thành công</div>
+              <div><strong>Hoa hồng sàn:</strong> {selectedVendor.commissionRate ?? 8}% / đơn giao thành công</div>
               <div><strong>Ngày hết hạn:</strong> {formatDate(selectedVendor.subscriptionExpiresAt)}</div>
               {selectedVendor.approvedBy && (
                 <div className="p-2 bg-indigo-50 rounded text-indigo-900">

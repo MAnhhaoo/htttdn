@@ -13,7 +13,7 @@ export class RenewSubscriptionDto extends createZodDto(
 
 export class ApproveRegistrationDto extends createZodDto(
   z.object({
-    plan: z.string().max(50).optional(),
+    plan: SubscriptionPlan.optional(),
     commissionRate: z.coerce
       .number()
       .min(0, 'Hoa hồng không được âm')

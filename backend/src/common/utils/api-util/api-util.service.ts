@@ -10,7 +10,10 @@ export class ApiUtilService {
     ...params
   }: FormatResponseParams) {
     const messageData = data?.message;
-    const messageDefault = errors ? 'ERROR' : message;
+    const firstErrorMessage = errors?.find(
+      (error) => typeof error?.message === 'string' && error.message.trim(),
+    )?.message;
+    const messageDefault = errors ? firstErrorMessage || 'ERROR' : message;
     const messageResponse = messageData ? messageData : messageDefault;
     return {
       errors,

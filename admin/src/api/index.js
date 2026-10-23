@@ -42,7 +42,7 @@ export const categoriesApi = {
 // ==================== PRODUCTS ====================
 
 export const productsApi = {
-  getProducts: (params = {}) => axiosClient.get('/products', { params }),
+  getProducts: (params = {}) => axiosClient.get('/products/admin/all', { params }),
   createProduct: (data) => axiosClient.post('/products', data),
   updateProduct: (id, data) => axiosClient.patch(`/products/${id}`, data),
   deleteProduct: (id) => axiosClient.delete(`/products/${id}`),

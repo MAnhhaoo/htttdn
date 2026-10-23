@@ -408,7 +408,7 @@ export default function VendorRegistrationManagement() {
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {(vendor.approvalStatus === 'pending_approval' || vendor.renewalRequested || isExp) && (
+                          {(vendor.approvalStatus === 'pending_approval' || vendor.renewalRequested) && (
                             <>
                               <button
                                 onClick={() => openApproveModal(vendor)}
@@ -522,7 +522,7 @@ export default function VendorRegistrationManagement() {
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
               />
               <span className="text-[11px] text-slate-400 dark:text-slate-400 mt-1 block">
-                Mặc định: 5.00%. Áp dụng tự động khi đơn hàng giao thành công.
+                Mặc định: 8.00%. Áp dụng tự động khi đơn hàng giao thành công.
               </span>
             </div>
 

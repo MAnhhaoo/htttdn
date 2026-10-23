@@ -108,6 +108,17 @@ describe('ProductService', () => {
     );
   });
 
+  it('keeps inactive and all-status filters in the admin product list', async () => {
+    await service.getAdminProducts({ page: 1, itemPerPage: 10, status: ProductStatus.inactive });
+    expect(productDelegate.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ status: ProductStatus.inactive }) }),
+    );
+    await service.getAdminProducts({ page: 1, itemPerPage: 10, status: 'all' });
+    expect(productDelegate.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: expect.not.objectContaining({ status: expect.anything() }) }),
+    );
+  });
+
   it('requires an active product and active category for public detail', async () => {
     await service.getProductById(product.id);
 

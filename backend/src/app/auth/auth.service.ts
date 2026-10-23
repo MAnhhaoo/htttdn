@@ -11,6 +11,7 @@ import { StringUtilService } from '../../common/utils/string-util/string-util.se
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { SignInDto, SignUpDto } from './dto/sign.dto';
 import { JWTToken, TokenKeys } from './consts/jwt.const';
+import { assertVendorApproved } from '../../common/utils/vendor-approval/vendor-approval.util';
 import {
   ACCOUNT_ROLES,
   AccountRole,
@@ -136,6 +137,7 @@ export class AuthService {
       ? (appRole as AccountRole)
       : undefined;
     const candidates = (await findAccountsByEmail(this.prisma, email))
+      .filter(({ role }) => appRole !== 'vendor' || role === 'vendor')
       .filter(({ user }) => user.status === 'active' && !user.deletedAt)
       .sort((a, b) => Number(b.role === preferred) - Number(a.role === preferred));
 
@@ -152,6 +154,8 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
+
+    if (role === 'vendor') assertVendorApproved(user.approvalStatus);
 
     const tokens = await this.createToken({
       userID: user.id,
@@ -187,6 +191,8 @@ export class AuthService {
     if (!user || user.status !== 'active' || user.deletedAt) {
       throw new UnauthorizedException('Tài khoản không còn hoạt động');
     }
+
+    if (payload.role === 'vendor') assertVendorApproved(user.approvalStatus);
 
     const tokens = await this.createToken({
       userID: user.id,

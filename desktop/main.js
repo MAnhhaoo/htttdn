@@ -47,7 +47,7 @@ const MIME = {
 }
 
 // ---------------------------------------------------------------------------
-// Local server (production): phục vụ file tĩnh của frontend + proxy /api, /uploads
+// Local server (production): phục vụ file tĩnh của frontend + proxy API/realtime
 // -> Giữ nguyên BrowserRouter và baseURL '/api' của frontend, không cần sửa code web.
 // ---------------------------------------------------------------------------
 function proxyToBackend(req, res) {
@@ -101,10 +101,39 @@ function serveStatic(req, res) {
 function startLocalServer() {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
-      if (req.url.startsWith('/api') || req.url.startsWith('/uploads')) {
+      if (req.url.startsWith('/api') || req.url.startsWith('/uploads') || req.url.startsWith('/socket.io')) {
         return proxyToBackend(req, res)
       }
       serveStatic(req, res)
+    })
+    server.on('upgrade', (req, socket, head) => {
+      if (!req.url.startsWith('/socket.io')) return socket.destroy()
+
+      const client = BACKEND_URL.protocol === 'https:' ? require('https') : http
+      const proxyReq = client.request({
+        protocol: BACKEND_URL.protocol,
+        hostname: BACKEND_URL.hostname,
+        port: BACKEND_URL.port || (BACKEND_URL.protocol === 'https:' ? 443 : 80),
+        path: req.url,
+        method: req.method,
+        headers: { ...req.headers, host: BACKEND_URL.host },
+      })
+      proxyReq.on('upgrade', (response, upstream, upstreamHead) => {
+        socket.write(`HTTP/1.1 ${response.statusCode} ${response.statusMessage}\r\n`)
+        for (const [name, value] of Object.entries(response.headers)) {
+          socket.write(`${name}: ${value}\r\n`)
+        }
+        socket.write('\r\n')
+        if (head.length) upstream.write(head)
+        if (upstreamHead.length) socket.write(upstreamHead)
+        upstream.pipe(socket).pipe(upstream)
+      })
+      proxyReq.on('response', response => {
+        socket.end(`HTTP/1.1 ${response.statusCode} ${response.statusMessage}\r\n\r\n`)
+      })
+      proxyReq.on('error', () => socket.destroy())
+      socket.on('error', () => proxyReq.destroy())
+      proxyReq.end()
     })
     server.on('error', reject)
     // port 0 = hệ điều hành tự chọn port trống

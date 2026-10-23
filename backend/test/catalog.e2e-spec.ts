@@ -6,7 +6,6 @@ import {
   Product,
   ProductColor,
   ProductVariant,
-  User,
 } from '@prisma/client';
 import { hashSync } from 'bcrypt';
 import { readdir } from 'node:fs/promises';
@@ -19,7 +18,7 @@ import { initApp } from '../src/init';
 
 describe('Product detail and variants (HTTP integration)', () => {
   let app: INestApplication;
-  let users: User[];
+  let users: any[];
   let products: Product[];
   let colors: ProductColor[];
   let variants: ProductVariant[];
@@ -34,13 +33,12 @@ describe('Product detail and variants (HTTP integration)', () => {
     deletedVariant: '66666666-6666-4666-8666-666666666666',
   };
 
-  const userDelegate = {
+  const accountDelegate = (role: 'client' | 'vendor' | 'admin' | 'employee') => ({
+    findFirst: jest.fn(({ where }) => users.find(item =>
+      item.role === role && item.email.toLowerCase() === where.email.equals.toLowerCase(),
+    ) ?? null),
     findUnique: jest.fn(({ where, select, omit }) => {
-      const user = users.find((item) =>
-        Object.entries(where as Record<string, unknown>).every(
-          ([key, value]) => item[key] === value,
-        ),
-      );
+      const user = users.find(item => item.role === role && item.id === where.id);
       if (!user) return null;
       return Object.fromEntries(
         Object.entries(user).filter(([key]) =>
@@ -48,6 +46,12 @@ describe('Product detail and variants (HTTP integration)', () => {
         ),
       );
     }),
+  });
+  const accountDelegates = {
+    client: accountDelegate('client'),
+    vendor: accountDelegate('vendor'),
+    admin: accountDelegate('admin'),
+    employee: accountDelegate('employee'),
   };
 
   const productDelegate = {
@@ -97,8 +101,8 @@ describe('Product detail and variants (HTTP integration)', () => {
       const product = products.find(
         (item) =>
           item.id === where.id &&
-          item.vendorId === where.vendorId &&
-          item.deletedAt === where.deletedAt,
+          (where.vendorId === undefined || item.vendorId === where.vendorId) &&
+          (where.deletedAt === undefined || item.deletedAt === where.deletedAt),
       );
       if (!product) throw new Error('Product not found');
       Object.assign(product, {
@@ -160,6 +164,7 @@ describe('Product detail and variants (HTTP integration)', () => {
   };
 
   const rawColorDelegate = {
+    findUnique: jest.fn(({ where }) => colors.find(color => color.id === where.id) ?? null),
     findFirst: jest.fn(({ where }) =>
       colors.find(
         (color) =>
@@ -238,12 +243,12 @@ describe('Product detail and variants (HTTP integration)', () => {
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue({
-        user: userDelegate,
+        ...accountDelegates,
         product: productDelegate,
         productColor: rawColorDelegate,
         productVariant: variantDelegate,
         extended: {
-          user: userDelegate,
+          ...accountDelegates,
           product: productDelegate,
           productColor: colorDelegate,
           productVariant: variantDelegate,
@@ -260,11 +265,12 @@ describe('Product detail and variants (HTTP integration)', () => {
     const now = new Date();
     users = (['vendor', 'vendorB', 'customer'] as const).map((identity) => ({
       id: ids[identity],
-      role: identity === 'vendorB' ? 'vendor' : identity,
+      role: identity === 'vendorB' ? 'vendor' : identity === 'customer' ? 'client' : identity,
       email: `${identity.toLowerCase()}@example.com`,
       fullName: identity,
       password: hashSync('Test-password-123!', 4),
       status: 'active',
+      approvalStatus: 'approved',
       deletedAt: null,
       phone: null,
       address: null,

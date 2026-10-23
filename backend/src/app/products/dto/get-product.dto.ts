@@ -8,10 +8,13 @@ const GetProductsPaginationSchema = PaginationQuerySchema.extend({
   minPrice: z.coerce.number().min(0).optional(),
   maxPrice: z.coerce.number().min(0).optional(),
   category: z.string().optional(),
-  status: z.string().optional(),
   q: z.string().optional(),
   search: z.string().optional(),
   vendorId: z.string().optional(),
+}).strict();
+
+const GetAdminProductsPaginationSchema = GetProductsPaginationSchema.extend({
+  status: z.union([z.enum(ProductStatus), z.literal('all')]).optional(),
 }).strict();
 
 const GetVendorProductsPaginationSchema = PaginationQuerySchema.extend({
@@ -20,6 +23,10 @@ const GetVendorProductsPaginationSchema = PaginationQuerySchema.extend({
 
 class GetProductsPaginationDto extends createZodDto(
   GetProductsPaginationSchema,
+) {}
+
+class GetAdminProductsPaginationDto extends createZodDto(
+  GetAdminProductsPaginationSchema,
 ) {}
 
 class GetVendorProductsPaginationDto extends createZodDto(
@@ -32,5 +39,6 @@ class ExportProductsDto {
 
 export {
   GetProductsPaginationDto,
+  GetAdminProductsPaginationDto,
   GetVendorProductsPaginationDto,
   ExportProductsDto};

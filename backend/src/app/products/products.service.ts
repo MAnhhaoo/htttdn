@@ -11,6 +11,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { StringUtilService } from 'src/common/utils/string-util/string-util.service';
 import {
   GetProductsPaginationDto,
+  GetAdminProductsPaginationDto,
   GetVendorProductsPaginationDto} from './dto/get-product.dto';
 import { Prisma, ProductStatus } from '@prisma/client';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -109,11 +110,7 @@ export class ProductService extends PrismaBaseService<'product'> {
     return created;
   }
   async getProducts(query: GetProductsPaginationDto) {
-    const { category, status, vendorId, ...rest } = query as any;
-    const isStatusAll = status === 'all';
-    const isValidStatus = status && Object.values(ProductStatus).includes(status);
-    const targetStatus = isStatusAll ? undefined : (isValidStatus ? status : (status ? undefined : ProductStatus.active));
-
+    const { category, vendorId, ...rest } = query;
     const isUUID = category && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(category);
     const categoryCondition = category && category !== 'all'
       ? {
@@ -126,7 +123,27 @@ export class ProductService extends PrismaBaseService<'product'> {
       : { deletedAt: null };
 
     return this.findProducts(rest, {
-      ...(targetStatus ? { status: targetStatus } : {}),
+      status: ProductStatus.active,
+      ...(vendorId ? { vendorId } : {}),
+      category: categoryCondition,
+    });
+  }
+
+  async getAdminProducts(query: GetAdminProductsPaginationDto) {
+    const { category, status, vendorId, ...rest } = query;
+    const isUUID = category && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(category);
+    const categoryCondition = category && category !== 'all'
+      ? {
+          OR: [
+            { slug: category },
+            ...(isUUID ? [{ id: category }] : []),
+          ],
+          deletedAt: null,
+        }
+      : { deletedAt: null };
+
+    return this.findProducts(rest, {
+      ...(status && status !== 'all' ? { status } : {}),
       ...(vendorId ? { vendorId } : {}),
       category: categoryCondition,
     });

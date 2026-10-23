@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../../services/apiClient';
 import Button from '../../components/common/Button/Button';
 import { formatPrice } from '../../utils/formatPrice';
@@ -7,24 +7,40 @@ import { formatPrice } from '../../utils/formatPrice';
 export default function PaymentDemo() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [order, setOrder] = useState(null);
   const [payment, setPayment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const remainingOrderIds = (searchParams.get('remaining') || '')
+    .split(',')
+    .filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+  const continueToNextOrder = () => {
+    const [nextId, ...rest] = remainingOrderIds;
+    if (!nextId) {
+      navigate('/orders');
+      return;
+    }
+    const remaining = rest.length ? `?remaining=${encodeURIComponent(rest.join(','))}` : '';
+    navigate(`/payment-demo/${nextId}${remaining}`);
+  };
 
   useEffect(() => {
     const fetchOrderAndPayment = async () => {
+      setLoading(true);
+      setOrder(null);
+      setPayment(null);
       try {
         const orderRes = await apiClient.get(`/orders/${orderId}`);
-        setOrder(orderRes.data);
+        setOrder(orderRes?.data ?? orderRes);
         
         const paymentRes = await apiClient.get(`/payments/order/${orderId}`);
-        // Can be an array or single object
-        const paymentData = Array.isArray(paymentRes.data) ? paymentRes.data[0] : paymentRes.data;
+        const paymentResult = paymentRes?.data ?? paymentRes;
+        const paymentData = Array.isArray(paymentResult) ? paymentResult[0] : paymentResult;
         setPayment(paymentData);
       } catch (err) {
-        console.error(err);
-        alert('Không tìm thấy đơn hàng hoặc phiên thanh toán');
+        alert(err.response?.data?.errors?.[0]?.message || err.response?.data?.message || err.message || 'Không tìm thấy đơn hàng hoặc phiên thanh toán');
         navigate('/orders');
       } finally {
         setLoading(false);
@@ -46,9 +62,9 @@ export default function PaymentDemo() {
       } else {
         alert('Thanh toán thất bại! Bạn có thể thử lại từ trang Đơn hàng.');
       }
-      navigate('/orders');
+      continueToNextOrder();
     } catch (err) {
-      alert('Có lỗi xảy ra khi giả lập thanh toán');
+      alert(err.response?.data?.errors?.[0]?.message || err.response?.data?.message || err.message || 'Có lỗi xảy ra khi giả lập thanh toán');
       setProcessing(false);
     }
   };
@@ -69,8 +85,13 @@ export default function PaymentDemo() {
             Cổng thanh toán giả lập
           </h1>
           <p className="text-light-muted dark:text-dark-muted">
-            Dành cho đồ án MIVA - Thanh toán {payment.paymentMethod === 'credit_card' ? 'Thẻ tín dụng' : 'Trả sau'}
+            Dành cho đồ án MIVA - Thanh toán {payment.method === 'credit_card' ? 'Thẻ tín dụng' : 'Trả sau'}
           </p>
+          {remainingOrderIds.length > 0 && (
+            <p className="text-sm text-light-muted dark:text-dark-muted mt-2">
+              Còn {remainingOrderIds.length} đơn hàng cần thanh toán sau đơn này.
+            </p>
+          )}
         </div>
 
         <div className="bg-light-bg dark:bg-dark-bg rounded-xl p-6 mb-8">
@@ -89,6 +110,11 @@ export default function PaymentDemo() {
         </div>
 
         <div className="flex flex-col gap-4">
+          {['paid', 'cancelled', 'refunded'].includes(payment.status) ? (
+            <Button onClick={continueToNextOrder} className="w-full h-14 text-lg">
+              {remainingOrderIds.length ? 'Tiếp tục thanh toán đơn tiếp theo' : 'Xem đơn hàng'}
+            </Button>
+          ) : <>
           <Button 
             onClick={() => handlePayment(true)} 
             isLoading={processing}
@@ -112,6 +138,7 @@ export default function PaymentDemo() {
           >
             Quay lại trang Đơn hàng
           </Button>
+          </>}
         </div>
       </div>
     </div>

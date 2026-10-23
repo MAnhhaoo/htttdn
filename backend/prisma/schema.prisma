@@ -256,6 +256,7 @@ model Vendor {
   avatarUrl String?    @db.VarChar(1000)
   storeName String?    @db.VarChar(255)
   taxId     String?    @db.VarChar(100)
+  address   String?    @db.VarChar(500)
   status                UserStatus @default(active)
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt

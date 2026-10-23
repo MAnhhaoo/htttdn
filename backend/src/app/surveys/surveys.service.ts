@@ -802,15 +802,10 @@ export class SurveysService {
     return response;
   }
 
-  private async getResponse(id: string, clientId?: string) {
-    let response = await this.prisma.surveyResponse.findFirst({
-      where: clientId ? { id, clientId } : { id },
+  private async getResponse(id: string, clientId: string) {
+    const response = await this.prisma.surveyResponse.findFirst({
+      where: { id, clientId },
       select: this.responsePromptSelect()});
-    if (!response) {
-      response = await this.prisma.surveyResponse.findUnique({
-        where: { id },
-        select: this.responsePromptSelect()});
-    }
     if (!response) throw new NotFoundException('Khảo sát không tồn tại');
     return response;
   }

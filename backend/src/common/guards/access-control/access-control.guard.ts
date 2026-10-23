@@ -17,6 +17,7 @@ import { Actions, ROLE_ACTION } from './access-control.const';
 import { ROLES_KEY } from './roles.decorator';
 import { RequestMethod } from '../../utils/api-util/api-util.const';
 import { UserRole } from './roles.decorator';
+import { assertVendorApproved } from '../../utils/vendor-approval/vendor-approval.util';
 
 /**
  * Dùng TokenPayload (đầy đủ trường từ JWT) thay vì type cục bộ
@@ -31,13 +32,6 @@ export class AccessControlGuard implements CanActivate {
     private readonly reflector: Reflector,
   ) {}
 
-  /**
-   * Các API mà gian hàng chưa được duyệt vẫn được phép ghi
-   * (cập nhật hồ sơ, gia hạn gói, đọc thông báo, đăng xuất...).
-   */
-  private static readonly PENDING_VENDOR_WRITE_ALLOWLIST =
-    /(^|\/)(vendors\/profile|vendors\/subscription\/renew|users\/profile|notifications|auth)(\/|$)/;
-
   private async resolveUser(userID: string): Promise<{ user: any; role: UserRole }> {
     const select = { status: true, deletedAt: true };
     let user: any = await this.prismaService.admin.findUnique({ where: { id: userID }, select });
@@ -48,30 +42,9 @@ export class AccessControlGuard implements CanActivate {
     return { user, role };
   }
 
-  /** Gian hàng chờ duyệt/bị từ chối chỉ được xem, không được thao tác ghi dữ liệu kinh doanh. */
-  private assertVendorApproved(role: UserRole, user: any, request: Request) {
-    if (role !== 'vendor' || !user?.approvalStatus || user.approvalStatus === 'approved') {
-      return;
-    }
-    const method = String(request.method).toUpperCase();
-    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
-      return;
-    }
-    const path = String(request.path || request.originalUrl || '').split('?')[0];
-    if (AccessControlGuard.PENDING_VENDOR_WRITE_ALLOWLIST.test(path)) {
-      return;
-    }
-    throw new ForbiddenException(
-      user.approvalStatus === 'rejected'
-        ? 'Gian hàng đã bị từ chối, không thể thực hiện thao tác này'
-        : 'Gian hàng đang chờ quản trị viên duyệt, chưa thể thực hiện thao tác này',
-    );
-  }
-
   private async canAccessResources(
     userID: string,
     action: Actions,
-    request: Request,
   ): Promise<boolean> {
     const { user, role } = await this.resolveUser(userID);
 
@@ -79,7 +52,7 @@ export class AccessControlGuard implements CanActivate {
       return false;
     }
 
-    this.assertVendorApproved(role, user, request);
+    if (role === 'vendor') assertVendorApproved(user.approvalStatus);
 
     const allowedActions = ROLE_ACTION[role] ?? [];
 
@@ -156,7 +129,7 @@ export class AccessControlGuard implements CanActivate {
           'Bạn không có quyền thực hiện chức năng này',
         );
       }
-      this.assertVendorApproved(role, currentUser, request);
+      if (role === 'vendor') assertVendorApproved(currentUser.approvalStatus);
 
       return true;
     }
@@ -169,7 +142,6 @@ export class AccessControlGuard implements CanActivate {
     const canAccess = await this.canAccessResources(
       authenticatedUser.userID,
       action,
-      request,
     );
 
     if (!canAccess) {

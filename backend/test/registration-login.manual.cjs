@@ -66,6 +66,18 @@ async function main() {
       assert.equal(wrongPassword.status(), 401);
       await page.locator('input[type="email"]').fill(email);
       await page.locator('input[type="password"]').fill(password);
+      if (role === 'vendor') {
+        const pendingLogin = page.waitForResponse(response =>
+          response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/auth/sign-in');
+        await page.locator('button[type="submit"]').click();
+        assert.equal((await pendingLogin).status(), 403);
+        await page.getByText('Tài khoản đang chờ admin duyệt.', { exact: false }).waitFor();
+        assert.equal(new URL(page.url()).pathname, '/login');
+        assert.equal((await context.cookies()).filter(cookie => /^(accessToken|refreshToken)/.test(cookie.name)).length, 0);
+        // Approve only this newly created test fixture, then retry the same login.
+        await prisma.vendor.update({ where: { id: account.id }, data: { approvalStatus: 'approved', approvedAt: new Date() } });
+        console.log('PASS: pending vendor cannot log in or obtain cookies before approval');
+      }
       await page.locator('button[type="submit"]').click();
       await page.waitForURL(role === 'client' ? `${base}/` : `${base}/dashboard`);
       assert.ok((await context.cookies()).some((cookie) => cookie.name === `accessToken_${role}`));

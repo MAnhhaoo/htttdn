@@ -12,7 +12,11 @@ export const apiClient = axios.create({
 apiClient.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    console.error('API Error:', error.response?.data || error.message);
+    if (!error.response) {
+      error.message = error.code === 'ECONNABORTED'
+        ? 'Yêu cầu quá thời gian. Vui lòng thử lại.'
+        : 'Không thể kết nối tới máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+    }
     return Promise.reject(error);
   }
 );

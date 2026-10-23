@@ -132,9 +132,9 @@ async function main() {
     console.log('PASS: checkout creates one parcel/shipment, updates vendor/admin/customer and decrements stock in realtime');
 
     await fulfillment.getByPlaceholder(/Tìm theo Mã kiện/).fill(order.orderCode);
-    const start = fulfillment.getByRole('button', { name: 'Tiếp nhận & Bắt đầu đóng gói', exact: true });
-    await start.waitFor();
-    assert.equal(await start.isDisabled(), true);
+    const pendingConfirmation = fulfillment.getByRole('button', { name: 'Xác nhận đơn hàng', exact: true });
+    await pendingConfirmation.waitFor();
+    assert.equal(await pendingConfirmation.isDisabled(), true);
     assert.equal((await vendorContext.request.patch(`${vbase}/api/orders/vendor-orders/${parcel.id}/status`, {
       headers: vendorHeaders, data: { status: 'processing' },
     })).status(), 400);
@@ -143,6 +143,8 @@ async function main() {
       headers: adminHeaders, data: { status: 'confirmed' },
     }));
     assert.equal((await prisma.vendorOrder.findUniqueOrThrow({ where: { id: parcel.id } })).status, 'confirmed');
+    const start = fulfillment.getByRole('button', { name: 'Tiếp nhận & Bắt đầu đóng gói', exact: true });
+    await start.waitFor();
     await fulfillment.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent.includes('Tiếp nhận & Bắt đầu đóng gói') && !button.disabled));
     assert.equal(await prisma.vendorOrder.count({ where: { orderId: order.id } }), 1);
     assert.equal(await prisma.shipment.count({ where: { orderId: order.id } }), 1);

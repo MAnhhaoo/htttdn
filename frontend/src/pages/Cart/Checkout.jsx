@@ -20,12 +20,13 @@ import Input from '../../components/common/Input/Input';
 import Button from '../../components/common/Button/Button';
 import { useCheckoutPricing } from '../../hooks/useCheckoutPricing';
 import VoucherPricing from '../../components/cart/VoucherPricing';
+import Loading from '../../components/common/Loading/Loading';
 
 export default function Checkout() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { items } = useCart();
+  const { items, isLoadingCart } = useCart();
   const { user } = useAuth();
   
   const [addresses, setAddresses] = useState([]);
@@ -105,6 +106,9 @@ export default function Checkout() {
   }, [checkoutItems]);
   const pricing = useCheckoutPricing(checkoutItems, location.state?.voucherSelections || []);
 
+  if (isLoadingCart) {
+    return <Loading text="Đang tải giỏ hàng..." />;
+  }
   if (items.length === 0) {
     return <Navigate to="/cart" replace />;
   }
@@ -247,14 +251,17 @@ export default function Checkout() {
       const numOrders = createdOrders.length;
       
       // Invalidate cart and orders queries
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      queryClient.invalidateQueries({ queryKey: ['cart'], refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: ['orders'] });
 
       alert(`Đặt hàng thành công! Hệ thống đã tạo ${numOrders} đơn hàng độc lập cho ${numOrders} cửa hàng để đóng gói riêng biệt.`);
 
       if (paymentMethod === 'credit_card' || paymentMethod === 'pay_later') {
-        const firstId = resData.id || createdOrders[0]?.id;
-        navigate(`/payment-demo/${firstId}`);
+        const [firstId, ...remainingIds] = createdOrders.map(order => order.id);
+        const remaining = remainingIds.length
+          ? `?remaining=${encodeURIComponent(remainingIds.join(','))}`
+          : '';
+        navigate(`/payment-demo/${firstId}${remaining}`);
       } else {
         navigate('/orders');
       }

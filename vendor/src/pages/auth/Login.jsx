@@ -21,7 +21,7 @@ export default function VendorLogin() {
       await login(formData);
       navigate('/dashboard');
     } catch (err) {
-      const msg = err.response?.data?.message;
+      const msg = err.response?.data?.errors?.[0]?.message || err.response?.data?.message;
       if (Array.isArray(msg)) {
         setError(msg[0]);
       } else if (typeof msg === 'string') {
@@ -47,7 +47,7 @@ export default function VendorLogin() {
 
         {location.state?.registered && (
           <div role="status" className="mb-6 p-4 bg-emerald-50 text-emerald-700 text-sm rounded-lg border border-emerald-100">
-            Đăng ký gian hàng thành công. Hồ sơ đang chờ duyệt. Vui lòng đăng nhập để tiếp tục.
+            Đăng ký gian hàng thành công. Vui lòng chờ admin duyệt hồ sơ trước khi đăng nhập.
           </div>
         )}
 

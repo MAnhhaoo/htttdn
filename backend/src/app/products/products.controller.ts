@@ -23,6 +23,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 
 import {
   GetProductsPaginationDto,
+  GetAdminProductsPaginationDto,
   GetVendorProductsPaginationDto,
 } from './dto/get-product.dto';
 
@@ -98,6 +99,12 @@ export class ProductsController {
     @CurrentUser() user: UserInfo,
   ) {
     return this.productService.getVendorProducts(query, user.userID);
+  }
+
+  @Get('admin/all')
+  @Roles('admin')
+  getAdminProducts(@Query() query: GetAdminProductsPaginationDto) {
+    return this.productService.getAdminProducts(query);
   }
 
   @Get()

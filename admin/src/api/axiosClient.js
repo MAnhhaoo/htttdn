@@ -29,6 +29,11 @@ const processQueue = (error, token = null) => {
 axiosClient.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (!error.response) {
+      error.message = error.code === 'ECONNABORTED'
+        ? 'Yêu cầu quá thời gian. Vui lòng thử lại.'
+        : 'Không thể kết nối tới máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+    }
     const originalRequest = error.config;
 
     // Nếu 401 và chưa retry

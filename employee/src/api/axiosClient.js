@@ -20,6 +20,11 @@ axiosClient.interceptors.request.use((config) => {
 axiosClient.interceptors.response.use(
   (response) => response.data?.data !== undefined ? response.data.data : response.data,
   (error) => {
+    if (!error.response) {
+      error.message = error.code === 'ECONNABORTED'
+        ? 'Yêu cầu quá thời gian. Vui lòng thử lại.'
+        : 'Không thể kết nối tới máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+    }
     if (error.response?.status === 401) {
       if (!window.location.pathname.includes('/login')) {
         localStorage.removeItem('employee_token');

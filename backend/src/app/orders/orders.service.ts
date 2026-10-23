@@ -204,9 +204,11 @@ export class OrdersService {
   }
 
   async checkout(clientId: string, dto: CheckoutDto) {
-    const result = await this.prisma
-      .$transaction(
-        async (tx) => {
+    let result: { orders: any[]; order: any; surveyNotifications: any[] } | undefined;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        result = await this.prisma.$transaction(
+          async (tx) => {
           const { targetItems, vendorGroups, codesByVendor } = await this.prepareCheckout(tx, clientId, dto);
 
           const createdOrders: any[] = [];
@@ -453,18 +455,20 @@ export class OrdersService {
           };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      )
-      .catch((error: unknown) => {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2034'
-        ) {
-          throw new ConflictException(
-            'Dữ liệu vừa thay đổi, vui lòng thực hiện checkout lại',
-          );
+      );
+        break;
+      } catch (error: unknown) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+          if (attempt < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
+            continue;
+          }
+          throw new ConflictException('Dữ liệu vừa thay đổi, vui lòng thực hiện checkout lại');
         }
         throw error;
-      });
+      }
+    }
+    if (!result) throw new ConflictException('Dữ liệu vừa thay đổi, vui lòng thực hiện checkout lại');
 
     for (const o of result.orders) {
       this.emitOrder(o, 'order:created');
@@ -1758,6 +1762,9 @@ export class OrdersService {
     if (!order) {
       throw new NotFoundException('Không tìm thấy đơn hàng');
     }
+    if (order.status === OrderStatus.completed || order.status === OrderStatus.cancelled) {
+      throw new BadRequestException('Không thể phân công đơn hàng đã kết thúc');
+    }
 
     const employee = await this.prisma.employee.findUnique({
       where: { id: dto.employeeId },
@@ -1767,10 +1774,15 @@ export class OrdersService {
         employeeCode: true,
         phone: true,
         department: true,
+        status: true,
+        deletedAt: true,
       },
     });
     if (!employee) {
       throw new NotFoundException('Không tìm thấy nhân viên được chỉ định');
+    }
+    if (employee.status !== 'active' || employee.deletedAt) {
+      throw new BadRequestException('Nhân viên được chỉ định không còn hoạt động');
     }
 
     const dept = (employee.department || '').toLowerCase();
