@@ -36,6 +36,8 @@ describe('Authentication and users (four-table HTTP integration)', () => {
     Object.entries(where).every(([key, value]) => {
       if (key === 'email' && typeof value === 'object')
         return row.email.toLowerCase() === value.equals.toLowerCase();
+      if (key === 'id' && value && typeof value === 'object' && 'not' in value)
+        return row.id !== value.not;
       return row[key] === value;
     });
   const accountDelegate = (role: string) => ({
@@ -78,6 +80,7 @@ describe('Authentication and users (four-table HTTP integration)', () => {
       id, role, email: `${role}@example.com`, fullName: role,
       password: passwordHash, phone: null, avatarUrl: null,
       storeName: role === 'vendor' ? 'Test Store' : undefined,
+      taxId: role === 'vendor' ? '0101234567' : undefined,
       approvalStatus: role === 'vendor' ? 'approved' : undefined,
       addresses: [], status: 'active', deletedAt: null,
       createdAt: new Date(), updatedAt: new Date(),
@@ -127,12 +130,19 @@ describe('Authentication and users (four-table HTTP integration)', () => {
   it.each(['client', 'vendor'] as const)(
     'lets %s update their profile but rejects privileged fields', async (role) => {
       const tokens = await login(role);
+      const payload = role === 'vendor'
+        ? { fullName: 'Updated', storeName: 'Updated Store', taxId: '0999888777' }
+        : { fullName: 'Updated' };
       const response = await request(app.getHttpServer())
         .patch('/api/users/profile')
         .auth(tokens.accessToken, { type: 'bearer' })
-        .send({ fullName: 'Updated' })
+        .send(payload)
         .expect(200);
       expect(response.body.fullName).toBe('Updated');
+      if (role === 'vendor') {
+        expect(response.body.storeName).toBe('Updated Store');
+        expect(response.body.taxId).toBe('0999888777');
+      }
       expect(response.body).not.toHaveProperty('password');
       for (const body of [
         { role: 'admin' }, { status: 'inactive' },
@@ -158,21 +168,47 @@ describe('Authentication and users (four-table HTTP integration)', () => {
     expect(records.find(row => row.id === ids.vendor).fullName).toBe('vendor');
   });
 
-  it('allows admin list and status changes without exposing password hashes', async () => {
+  it('allows admin list and lock-only status changes without exposing password hashes', async () => {
     const tokens = await login('admin');
     const list = await request(app.getHttpServer())
       .get('/api/users?role=client')
       .auth(tokens.accessToken, { type: 'bearer' })
       .expect(200);
     expect(list.body.list).toHaveLength(1);
+    expect(list.body).toMatchObject({ page: 1, currentPage: 1, itemPerPage: 10, totalItems: 1, totalPages: 1 });
     expect(JSON.stringify(list.body)).not.toContain(passwordHash);
     const update = await request(app.getHttpServer())
-      .patch(`/api/users/${ids.client}`)
+      .patch(`/api/users/${ids.client}/status`)
       .auth(tokens.accessToken, { type: 'bearer' })
       .send({ status: 'inactive' })
       .expect(200);
     expect(update.body.status).toBe('inactive');
+    expect(update.body.deletedAt).toBeNull();
     expect(update.body).not.toHaveProperty('password');
+
+    // Unlock account
+    const unlocked = await request(app.getHttpServer())
+      .patch(`/api/users/${ids.client}/status`)
+      .auth(tokens.accessToken, { type: 'bearer' })
+      .send({ status: 'active' })
+      .expect(200);
+    expect(unlocked.body.status).toBe('active');
+    expect(unlocked.body.deletedAt).toBeNull();
+
+    // Legacy DELETE delegates to lock (status = inactive, deletedAt = null)
+    const lockedViaDelete = await request(app.getHttpServer())
+      .delete(`/api/users/${ids.client}`)
+      .auth(tokens.accessToken, { type: 'bearer' })
+      .expect(200);
+    expect(lockedViaDelete.body.status).toBe('inactive');
+    expect(lockedViaDelete.body.deletedAt).toBeNull();
+
+    // Prevent admin self-lock
+    await request(app.getHttpServer())
+      .patch(`/api/users/${ids.admin}/status`)
+      .auth(tokens.accessToken, { type: 'bearer' })
+      .send({ status: 'inactive' })
+      .expect(400);
   });
 
   it('rejects access and refresh tokens used for the wrong purpose', async () => {

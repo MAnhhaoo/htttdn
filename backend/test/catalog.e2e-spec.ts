@@ -180,6 +180,12 @@ describe('Product detail and variants (HTTP integration)', () => {
   };
 
   const variantDelegate = {
+    findUnique: jest.fn(({ where }) => {
+      const key = where.productColorId_size;
+      return key
+        ? variants.find((variant) => variant.productColorId === key.productColorId && variant.size === key.size) ?? null
+        : variants.find((variant) => variant.id === where.id) ?? null;
+    }),
     findFirst: jest.fn(({ where }) =>
       variants.find((variant) => {
         if (variant.deletedAt) return false;
@@ -247,6 +253,9 @@ describe('Product detail and variants (HTTP integration)', () => {
         product: productDelegate,
         productColor: rawColorDelegate,
         productVariant: variantDelegate,
+        $transaction: jest.fn((callback) =>
+          callback({ product: productDelegate, productColor: rawColorDelegate, productVariant: variantDelegate }),
+        ),
         extended: {
           ...accountDelegates,
           product: productDelegate,

@@ -1,4 +1,4 @@
-import { Prisma, ProductStatus } from '@prisma/client';
+import { ProductStatus } from '@prisma/client';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { PaginationQuerySchema } from '../../../common/utils/paginaton-util/pagination-util.interface';
@@ -33,12 +33,8 @@ class GetVendorProductsPaginationDto extends createZodDto(
   GetVendorProductsPaginationSchema,
 ) {}
 
-class ExportProductsDto {
-  ids: NonNullable<Prisma.ProductWhereUniqueInput['id']>[];
-}
-
 export {
   GetProductsPaginationDto,
   GetAdminProductsPaginationDto,
   GetVendorProductsPaginationDto,
-  ExportProductsDto};
+};

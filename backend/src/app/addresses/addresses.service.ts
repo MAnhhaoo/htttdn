@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaBaseService } from '../../common/service/prisma-base.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateAddressDto, UpdateAddressDto } from './dto/address.dto';
@@ -45,7 +44,7 @@ export class AddressesService extends PrismaBaseService<'clientAddress'> {
   }
 
   async updateAddress(clientId: string, id: string, data: UpdateAddressDto) {
-    const address = await this.getAddress(clientId, id);
+    await this.getAddress(clientId, id);
 
     if (data.isDefault) {
       await this.prismaService.clientAddress.updateMany({
@@ -59,7 +58,7 @@ export class AddressesService extends PrismaBaseService<'clientAddress'> {
   }
 
   async deleteAddress(clientId: string, id: string) {
-    const address = await this.getAddress(clientId, id);
+    await this.getAddress(clientId, id);
 
     return this.prismaService.clientAddress.update({
       where: { id },

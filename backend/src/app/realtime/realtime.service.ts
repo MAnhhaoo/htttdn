@@ -39,4 +39,8 @@ export class RealtimeService {
   emitCategoryUpdated(categoryId?: string) {
     this.server?.to(['catalog', 'admins', 'vendors']).emit('category:updated', { categoryId });
   }
+
+  disconnectUser(userId: string) {
+    this.server?.in(`user:${userId}`).disconnectSockets(true);
+  }
 }

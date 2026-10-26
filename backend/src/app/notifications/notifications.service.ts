@@ -1,12 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
+import {
+  formatPaginatedList,
+  normalizePagination,
+} from 'src/common/utils/paginaton-util/pagintion-util.service';
 import { GetNotificationsQueryDto } from './dto/get-notification.dto';
 import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService, private readonly realtime: RealtimeService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {}
 
   private getTargetWhere(user: UserInfo) {
     if (user.role === 'admin') return { adminId: user.userID };
@@ -15,7 +22,12 @@ export class NotificationsService {
   }
 
   async list(user: UserInfo, query: GetNotificationsQueryDto) {
-    const { page = 1, itemPerPage = 20, unreadOnly } = query;
+    const { page, itemPerPage, skip } = normalizePagination({
+      page: query.page,
+      itemPerPage: query.itemPerPage,
+      defaultItemPerPage: 20,
+    });
+    const { unreadOnly } = query;
     const targetWhere = this.getTargetWhere(user);
     const where = { ...targetWhere, ...(unreadOnly ? { isRead: false } : {}) };
 
@@ -23,7 +35,7 @@ export class NotificationsService {
       this.prisma.notification.count({ where }),
       this.prisma.notification.findMany({
         where,
-        skip: (page - 1) * itemPerPage,
+        skip,
         take: itemPerPage,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -51,13 +63,7 @@ export class NotificationsService {
       }),
     ]);
 
-    return {
-      list,
-      page,
-      itemPerPage,
-      totalItems,
-      totalPages: Math.ceil(totalItems / itemPerPage) || 1,
-    };
+    return formatPaginatedList(list, totalItems, { page, itemPerPage });
   }
 
   async unreadCount(user: UserInfo) {
@@ -78,7 +84,9 @@ export class NotificationsService {
     if (!changed.count) {
       throw new NotFoundException('Thông báo không tồn tại');
     }
-    const notification = await this.prisma.notification.findUniqueOrThrow({ where: { id } });
+    const notification = await this.prisma.notification.findUniqueOrThrow({
+      where: { id },
+    });
     this.realtime.emitToUser(user.userID, 'notification:updated', { id });
     return notification;
   }
@@ -90,7 +98,10 @@ export class NotificationsService {
       where: { ...targetWhere, isRead: false },
       data: { isRead: true, readAt: now },
     });
-    if (result.count) this.realtime.emitToUser(user.userID, 'notification:updated', { updatedCount: result.count });
+    if (result.count)
+      this.realtime.emitToUser(user.userID, 'notification:updated', {
+        updatedCount: result.count,
+      });
     return { updatedCount: result.count, readAt: now };
   }
 }

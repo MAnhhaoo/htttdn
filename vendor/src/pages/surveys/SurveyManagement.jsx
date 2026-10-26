@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ClipboardList, Plus, Search, Filter, Eye, BarChart3, CheckCircle2, Clock, 
   AlertCircle, ChevronRight, X, Trash2, ArrowUpRight, Check, Send, Store, 
-  HelpCircle, Star, Sparkles, Calendar, Users
+  HelpCircle, Star, Sparkles, Calendar, Users, ShieldCheck
 } from 'lucide-react';
 import { surveyService } from '../../services/surveyService';
 import {
@@ -17,6 +18,7 @@ import {
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
 
 export default function SurveyManagement() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'create' | 'results' | 'from_admin'
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -27,6 +29,13 @@ export default function SurveyManagement() {
   const [selectedSurveyId, setSelectedSurveyId] = useState(null);
   const [surveyResults, setSurveyResults] = useState(null);
   const [resultsLoading, setResultsLoading] = useState(false);
+
+  // Admin Surveys Inbox state (for Vendor responding to Admin surveys)
+  const [adminInbox, setAdminInbox] = useState([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [activeInboxItem, setActiveInboxItem] = useState(null);
+  const [vendorAnswers, setVendorAnswers] = useState({});
+  const [inboxSubmitting, setInboxSubmitting] = useState(false);
 
   // Preview Modal
   const [previewSurvey, setPreviewSurvey] = useState(null);
@@ -51,6 +60,116 @@ export default function SurveyManagement() {
   useEffect(() => {
     loadSurveys();
   }, [statusFilter]);
+
+  useEffect(() => {
+    loadAdminInbox();
+  }, []);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    const respId = searchParams.get('responseId');
+    if (tabParam === 'from_admin') {
+      setActiveTab('from_admin');
+      if (respId) {
+        handleOpenAdminSurvey(respId);
+      }
+    }
+  }, [searchParams]);
+
+  const loadAdminInbox = async () => {
+    try {
+      setInboxLoading(true);
+      const res = await surveyService.getInbox({ page: 1, itemPerPage: 50 });
+      const items = res?.data?.list || res?.list || res?.data?.items || res?.items || (Array.isArray(res) ? res : []);
+      setAdminInbox(items);
+    } catch (err) {
+      console.error('Failed to load admin survey inbox:', err);
+    } finally {
+      setInboxLoading(false);
+    }
+  };
+
+  const handleOpenAdminSurvey = async (responseId) => {
+    try {
+      setInboxLoading(true);
+      try {
+        await surveyService.openResponse(responseId);
+      } catch {
+        // ignore
+      }
+      const res = await surveyService.getInboxDetail(responseId);
+      const detail = res?.data || res;
+      setActiveInboxItem(detail);
+      const initAns = {};
+      if (Array.isArray(detail?.answers)) {
+        detail.answers.forEach((a) => {
+          if (a.ratingValue !== null && a.ratingValue !== undefined) {
+            initAns[a.questionId] = { ratingValue: a.ratingValue };
+          } else if (a.textAnswer !== null && a.textAnswer !== undefined) {
+            initAns[a.questionId] = { textAnswer: a.textAnswer };
+          } else if (a.optionId) {
+            const q = detail.survey?.questions?.find((item) => item.id === a.questionId);
+            if (q?.type === 'multiple_choice') {
+              initAns[a.questionId] = initAns[a.questionId] || { optionIds: [] };
+              initAns[a.questionId].optionIds.push(a.optionId);
+            } else {
+              initAns[a.questionId] = { optionId: a.optionId };
+            }
+          }
+        });
+      }
+      setVendorAnswers(initAns);
+    } catch (err) {
+      alert('Không thể mở khảo sát: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setInboxLoading(false);
+    }
+  };
+
+  const handleSubmitVendorSurvey = async (e) => {
+    if (e) e.preventDefault();
+    if (!activeInboxItem) return;
+    const qs = activeInboxItem.survey?.questions || [];
+    for (const q of qs) {
+      if (q.required) {
+        const v = vendorAnswers[q.id];
+        if (
+          !v ||
+          (q.type === 'rating' && !v.ratingValue) ||
+          (q.type === 'single_choice' && !v.optionId) ||
+          (q.type === 'multiple_choice' && (!v.optionIds || v.optionIds.length === 0)) ||
+          (q.type === 'text' && (!v.textAnswer || !v.textAnswer.trim()))
+        ) {
+          alert(`Vui lòng trả lời câu hỏi bắt buộc: "${q.question}"`);
+          return;
+        }
+      }
+    }
+    try {
+      setInboxSubmitting(true);
+      const formatted = [];
+      Object.entries(vendorAnswers).forEach(([questionId, ans]) => {
+        if (ans.optionIds?.length) {
+          formatted.push({ questionId, optionIds: ans.optionIds });
+        } else if (ans.optionId) {
+          formatted.push({ questionId, optionIds: [ans.optionId] });
+        } else if (ans.ratingValue !== undefined && ans.ratingValue !== null) {
+          formatted.push({ questionId, ratingValue: ans.ratingValue });
+        } else if (ans.textAnswer?.trim()) {
+          formatted.push({ questionId, textAnswer: ans.textAnswer.trim() });
+        }
+      });
+      await surveyService.submitResponse(activeInboxItem.id, { answers: formatted });
+      setFeedbackMsg('Đã gửi phản hồi khảo sát về Ban Quản Trị MIVA thành công!');
+      setActiveInboxItem(null);
+      setSearchParams({});
+      await loadAdminInbox();
+    } catch (err) {
+      alert('Không thể gửi khảo sát: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setInboxSubmitting(false);
+    }
+  };
 
   const loadSurveys = async () => {
     try {
@@ -276,7 +395,7 @@ export default function SurveyManagement() {
           Khảo sát của Shop ({surveys.length})
         </button>
         <button
-          onClick={() => setActiveTab('create')}
+          onClick={() => { setActiveTab('create'); setActiveInboxItem(null); }}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
             activeTab === 'create'
               ? 'border-indigo-600 text-indigo-600'
@@ -284,6 +403,17 @@ export default function SurveyManagement() {
           }`}
         >
           + Tạo khảo sát khách hàng
+        </button>
+        <button
+          onClick={() => { setActiveTab('from_admin'); setActiveInboxItem(null); loadAdminInbox(); }}
+          className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
+            activeTab === 'from_admin'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          Khảo sát từ MIVA Admin ({adminInbox.length})
         </button>
         {selectedSurveyId && (
           <button
@@ -993,6 +1123,172 @@ export default function SurveyManagement() {
                 ))}
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {/* ──────────────── TAB 4: SURVEYS FROM MIVA ADMIN ──────────────── */}
+      {activeTab === 'from_admin' && (
+        <div className="space-y-6">
+          {activeInboxItem ? (
+            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Ban Quản Trị MIVA
+                  </span>
+                  <h2 className="text-xl font-bold text-slate-900 dark:text-white mt-2">
+                    {activeInboxItem.survey?.title}
+                  </h2>
+                  {activeInboxItem.survey?.description && (
+                    <p className="text-sm text-slate-500 mt-1">{activeInboxItem.survey.description}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setActiveInboxItem(null); setSearchParams({}); }}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  ← Quay lại danh sách
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitVendorSurvey} className="space-y-5">
+                {activeInboxItem.survey?.questions?.map((q, idx) => {
+                  const ans = vendorAnswers[q.id] || {};
+                  const isReadonly = activeInboxItem.status === 'submitted';
+                  return (
+                    <div key={q.id} className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-3">
+                      <div className="font-semibold text-sm text-slate-900 dark:text-white">
+                        {idx + 1}. {q.question} {q.required && <span className="text-rose-500">*</span>}
+                      </div>
+                      {q.type === 'rating' && (
+                        <div className="flex gap-2">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              type="button"
+                              key={star}
+                              disabled={isReadonly}
+                              onClick={() => setVendorAnswers((prev) => ({ ...prev, [q.id]: { ratingValue: star } }))}
+                              className="p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-800"
+                            >
+                              <Star className={`w-7 h-7 ${star <= (ans.ratingValue || 0) ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {q.type === 'single_choice' && (
+                        <div className="space-y-2">
+                          {q.options?.map((opt) => (
+                            <label key={opt.id} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`q-${q.id}`}
+                                disabled={isReadonly}
+                                checked={ans.optionId === opt.id}
+                                onChange={() => setVendorAnswers((prev) => ({ ...prev, [q.id]: { optionId: opt.id } }))}
+                              />
+                              <span>{opt.content}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      {q.type === 'multiple_choice' && (
+                        <div className="space-y-2">
+                          {q.options?.map((opt) => {
+                            const checked = (ans.optionIds || []).includes(opt.id);
+                            return (
+                              <label key={opt.id} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  disabled={isReadonly}
+                                  checked={checked}
+                                  onChange={() => {
+                                    const curr = ans.optionIds || [];
+                                    const next = checked ? curr.filter((id) => id !== opt.id) : [...curr, opt.id];
+                                    setVendorAnswers((prev) => ({ ...prev, [q.id]: { optionIds: next } }));
+                                  }}
+                                />
+                                <span>{opt.content}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {q.type === 'text' && (
+                        <textarea
+                          rows={3}
+                          disabled={isReadonly}
+                          value={ans.textAnswer || ''}
+                          onChange={(e) => setVendorAnswers((prev) => ({ ...prev, [q.id]: { textAnswer: e.target.value } }))}
+                          placeholder="Nhập ý kiến đóng góp của Đối tác..."
+                          className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+
+                {activeInboxItem.status !== 'submitted' && (
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={inboxSubmitting}
+                      className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm disabled:opacity-50"
+                    >
+                      <Send className="w-4 h-4" />
+                      {inboxSubmitting ? 'Đang gửi...' : 'Gửi phản hồi tới MIVA Admin'}
+                    </button>
+                  </div>
+                )}
+              </form>
+            </div>
+          ) : inboxLoading ? (
+            <div className="py-16 text-center text-slate-400">Đang tải khảo sát từ MIVA Admin...</div>
+          ) : adminInbox.length === 0 ? (
+            <div className="py-16 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-400">
+              <ClipboardList className="w-10 h-10 mx-auto mb-2 opacity-30" />
+              <p className="text-sm font-medium">Hiện chưa có khảo sát nào từ Ban Quản Trị MIVA</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {adminInbox.map((item) => {
+                const isSubmitted = item.status === 'submitted';
+                return (
+                  <div key={item.id} className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4 shadow-sm">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
+                          <ShieldCheck className="w-3.5 h-3.5" /> MIVA Admin
+                        </span>
+                        {isSubmitted && (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Đã gửi phản hồi
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-bold text-base text-slate-900 dark:text-white mt-1.5">
+                        {item.survey?.title || 'Khảo sát Đối tác MIVA'}
+                      </h3>
+                      {item.survey?.description && (
+                        <p className="text-xs text-slate-500 mt-0.5">{item.survey.description}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAdminSurvey(item.id)}
+                      className={`px-4 py-2 rounded-xl text-xs font-semibold ${
+                        isSubmitted
+                          ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
+                      }`}
+                    >
+                      {isSubmitted ? 'Xem lại phản hồi' : 'Thực hiện khảo sát'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}

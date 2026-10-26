@@ -6,12 +6,10 @@ import ms from 'ms';
 import { AuthService } from './auth.service';
 import { SkipAuth } from './auth.decorator';
 import { SignInDto, SignInResponseDto, SignUpDto } from './dto/sign.dto';
-import { ForgotPasswordDto, ResetPasswordDto } from './dto/password.dto';
 import { TokenKeys } from './consts/jwt.const';
 
 import { User } from '../../common/decorators/user.decorator';
 import type { UserInfo } from '../../common/decorators/user.decorator';
-import { Cookies } from '../../common/decorators/cookie/cookie.decorator';
 import {
   COOKIE_CONFIG_DEFAULT,
   CookiesToken,

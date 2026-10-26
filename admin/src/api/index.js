@@ -15,7 +15,7 @@ export const usersApi = {
   getUsers: (params = {}) => axiosClient.get('/users', { params }),
   getUser: (id) => axiosClient.get(`/users/${id}`),
   updateUser: (id, data) => axiosClient.patch(`/users/${id}`, data),
-  deleteUser: (id) => axiosClient.delete(`/users/${id}`),
+  updateUserStatus: (id, status) => axiosClient.patch(`/users/${id}/status`, { status }),
 };
 
 // ==================== VENDORS ====================
@@ -24,7 +24,6 @@ export const vendorsApi = {
   getVendors: (params = {}) => axiosClient.get('/vendors', { params }),
   getVendor: (id) => axiosClient.get(`/vendors/${id}`),
   updateVendor: (id, data) => axiosClient.patch(`/vendors/${id}`, data),
-  deleteVendor: (id) => axiosClient.delete(`/vendors/${id}`),
   getRegistrations: (params = {}) => axiosClient.get('/vendors/admin/registrations', { params }),
   approveRegistration: (id, data = {}) => axiosClient.patch(`/vendors/admin/registrations/${id}/approve`, data),
   rejectRegistration: (id, data = {}) => axiosClient.patch(`/vendors/admin/registrations/${id}/reject`, data),
@@ -114,7 +113,6 @@ export const employeesApi = {
   createEmployee: (data) => axiosClient.post('/employees', data),
   updateEmployee: (id, data) => axiosClient.patch(`/employees/${id}`, data),
   updateStatus: (id, status) => axiosClient.patch(`/employees/${id}/status`, { status }),
-  deleteEmployee: (id) => axiosClient.delete(`/employees/${id}`),
   getSalaryHistory: (id) => axiosClient.get(`/employees/${id}/salary-history`),
   updateSchedule: (id, data) => axiosClient.patch(`/employees/${id}/schedule`, data),
   sendNotification: (data) => axiosClient.post('/employees/notifications/send', data),
@@ -163,6 +161,3 @@ export const notificationsApi = {
   markAsRead: (id) => axiosClient.patch(`/notifications/${id}/read`),
   markAllAsRead: () => axiosClient.patch('/notifications/read-all'),
 };
-
-
-

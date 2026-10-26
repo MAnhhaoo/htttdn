@@ -17,6 +17,10 @@ import {
 
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
+import {
+  formatPaginatedList,
+  normalizePagination,
+} from 'src/common/utils/paginaton-util/pagintion-util.service';
 import { RealtimeService } from 'src/app/realtime/realtime.service';
 import { SurveysService } from 'src/app/surveys/surveys.service';
 import { VouchersService } from 'src/app/vouchers/vouchers.service';
@@ -26,11 +30,21 @@ import { AssignOrderDto } from './dto/assign-order.dto';
 import { GetOrdersPaginationDto } from './dto/get-order.dto';
 import { randomBytes } from 'crypto';
 
+export const DEPARTMENT_KEYWORDS = {
+  VENDOR_COORDINATION: 'Điều phối',
+  SHIPPING: 'Vận chuyển',
+  DELIVERY: 'Giao nhận',
+  EXCEPTION: 'Sự cố',
+} as const;
+
 /**
  * Hậu tố ngẫu nhiên 8 ký tự hex cho mã kiện/vận đơn (VO-/SHIP-yyyymm-XXXXXXXX).
  * Mã cũ chỉ có 4 chữ số (9000 giá trị/tháng) nên dễ trùng cột UNIQUE.
  */
 const uniqueCodeSuffix = () => randomBytes(4).toString('hex').toUpperCase();
+
+const getYearMonth = (date = new Date()) =>
+  `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 const orderInclude = {
   client: {
@@ -141,6 +155,56 @@ export class OrdersService {
     private readonly surveysService: SurveysService,
   ) {}
 
+  private async createShipmentWithInitialEvent(
+    db: Prisma.TransactionClient | PrismaService,
+    params: {
+      orderId: string;
+      vendorOrderId?: string;
+      carrierId: string | null;
+      status: ShipmentStatus;
+      shippingAddress: string | null;
+      receiverName: string | null;
+      receiverPhone: string | null;
+      notes: string;
+      eventLocation?: string;
+      eventDescription?: string;
+      actorRole?: string;
+      actorId?: string;
+      yearMonth?: string;
+    },
+  ) {
+    const tracking = `SHIP-${params.yearMonth || getYearMonth()}-${uniqueCodeSuffix()}`;
+    const shipment = await db.shipment.create({
+      data: {
+        trackingNumber: tracking,
+        orderId: params.orderId,
+        vendorOrderId: params.vendorOrderId,
+        carrierId: params.carrierId,
+        carrierType: 'employee',
+        status: params.status,
+        shippingAddress: params.shippingAddress,
+        receiverName: params.receiverName,
+        receiverPhone: params.receiverPhone,
+        notes: params.notes,
+      },
+    });
+
+    if (params.eventDescription && db.shipmentEvent) {
+      await db.shipmentEvent.create({
+        data: {
+          shipmentId: shipment.id,
+          status: params.status,
+          location: params.eventLocation || 'Trung tâm điều phối MIVA Hub',
+          description: params.eventDescription,
+          actorRole: params.actorRole || 'system',
+          ...(params.actorId ? { actorId: params.actorId } : {}),
+        },
+      });
+    }
+
+    return shipment;
+  }
+
   private async prepareCheckout(tx: Prisma.TransactionClient, clientId: string, dto: PreviewCheckoutDto) {
     const cart = await tx.cart.findUnique({ where: { clientId }, include: { items: { include: {
       productVariant: { include: { productColor: { include: { product: true } } } },
@@ -213,8 +277,7 @@ export class OrdersService {
 
           const createdOrders: any[] = [];
           const allSurveyNotifications: any[] = [];
-          const now = new Date();
-          const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+          const yearMonth = getYearMonth();
 
           for (const [vId, vendorItems] of vendorGroups.entries()) {
             const calculated = await this.vouchersService.calculate(
@@ -341,50 +404,31 @@ export class OrdersService {
             // 1. Phân công cho Chuyên viên thuộc Bộ phận Điều phối & Liên kết Vendor tiếp nhận và kiểm duyệt
             const handlingEmp = await this.findBestHandlingEmployee(tx);
             // 2. Tự động phân công bưu tá thuộc Phòng Vận chuyển & Giao nhận
-            let shipperEmp: { id: string; fullName: string; employeeCode: string; department: string } | null = null;
-            try {
-              shipperEmp = await this.findBestShipperEmployee(tx);
-            } catch {
-              // ignore
-            }
-
-            const tracking = `SHIP-${yearMonth}-${uniqueCodeSuffix()}`;
+            const shipperEmp = await this.findBestShipperEmployee(tx);
 
             // Kiện hàng khởi tạo và tự động phân công bưu tá Phòng Vận chuyển & Giao nhận
-            const s = await tx.shipment.create({
-              data: {
-                trackingNumber: tracking,
-                orderId: order.id,
-                vendorOrderId: vOrder ? vOrder.id : undefined,
-                carrierId: shipperEmp ? shipperEmp.id : null,
-                carrierType: 'employee',
-                status: shipperEmp ? ShipmentStatus.assigned : ShipmentStatus.pending,
-                shippingAddress: order.shippingAddress,
-                receiverName: order.receiverName,
-                receiverPhone: order.receiverPhone,
-                notes: shipperEmp
-                  ? `Bưu tá tiếp nhận: ${shipperEmp.fullName} (${shipperEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`
-                  : (handlingEmp
-                      ? `Chuyên viên điều phối phụ trách: ${handlingEmp.fullName} (${handlingEmp.employeeCode}) - ${handlingEmp.department}.`
-                      : 'Kiện hàng đang chờ tiếp nhận'),
-              },
+            await this.createShipmentWithInitialEvent(tx, {
+              yearMonth,
+              orderId: order.id,
+              vendorOrderId: vOrder ? vOrder.id : undefined,
+              carrierId: shipperEmp ? shipperEmp.id : null,
+              status: shipperEmp ? ShipmentStatus.assigned : ShipmentStatus.pending,
+              shippingAddress: order.shippingAddress,
+              receiverName: order.receiverName,
+              receiverPhone: order.receiverPhone,
+              notes: shipperEmp
+                ? `Bưu tá tiếp nhận: ${shipperEmp.fullName} (${shipperEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`
+                : (handlingEmp
+                    ? `Chuyên viên điều phối phụ trách: ${handlingEmp.fullName} (${handlingEmp.employeeCode}) - ${handlingEmp.department}.`
+                    : 'Kiện hàng đang chờ tiếp nhận'),
+              eventLocation: 'Trung tâm điều phối MIVA Hub',
+              eventDescription: shipperEmp
+                ? `Đơn hàng mới tạo. Hệ thống tự động phân công bưu tá [${shipperEmp.fullName} / ${shipperEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận kiện hàng`
+                : (handlingEmp
+                    ? `Đơn hàng mới tạo. Hệ thống chuyển tới chuyên viên [${handlingEmp.fullName} / ${handlingEmp.employeeCode}] (Bộ phận Điều phối & Liên kết Vendor) tiếp nhận và kiểm duyệt`
+                    : 'Đơn hàng mới tạo, chờ Bộ phận Điều phối & Liên kết Vendor tiếp nhận'),
+              actorRole: 'system',
             });
-
-            if (tx.shipmentEvent) {
-              await tx.shipmentEvent.create({
-                data: {
-                  shipmentId: s.id,
-                  status: shipperEmp ? ShipmentStatus.assigned : ShipmentStatus.pending,
-                  location: 'Trung tâm điều phối MIVA Hub',
-                  description: shipperEmp
-                    ? `Đơn hàng mới tạo. Hệ thống tự động phân công bưu tá [${shipperEmp.fullName} / ${shipperEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận kiện hàng`
-                    : (handlingEmp
-                        ? `Đơn hàng mới tạo. Hệ thống chuyển tới chuyên viên [${handlingEmp.fullName} / ${handlingEmp.employeeCode}] (Bộ phận Điều phối & Liên kết Vendor) tiếp nhận và kiểm duyệt`
-                        : 'Đơn hàng mới tạo, chờ Bộ phận Điều phối & Liên kết Vendor tiếp nhận'),
-                  actorRole: 'system',
-                },
-              });
-            }
 
             if (handlingEmp) {
               await tx.orderStatusHistory.create({
@@ -706,11 +750,7 @@ export class OrdersService {
         vendorOrder.shipment
       ) {
         if (!vendorOrder.shipment.carrierId) {
-          try {
-            assignedShipper = await this.findBestShipperEmployee(tx);
-          } catch {
-            // ignore in mock environments
-          }
+          assignedShipper = await this.findBestShipperEmployee(tx);
         } else {
           const existingCarrier = await tx.employee.findUnique({
             where: { id: vendorOrder.shipment.carrierId },
@@ -806,9 +846,14 @@ export class OrdersService {
   }
 
   async listAll(
-    { page = 1, itemPerPage = 10, search, status }: GetOrdersPaginationDto,
+    query: GetOrdersPaginationDto,
     user?: UserInfo,
   ) {
+    const { search, status } = query;
+    const { page, itemPerPage, skip } = normalizePagination({
+      page: query.page,
+      itemPerPage: query.itemPerPage,
+    });
     const baseWhere: Prisma.OrderWhereInput = {};
 
     // Nếu người dùng là nhân viên (employee), hiển thị đơn hàng theo đúng phân công và ban nghiệp vụ
@@ -820,9 +865,9 @@ export class OrdersService {
 
       if (emp) {
         const isManager = emp.assignedOrderScope === 'all_orders';
-        const isVendorLink = emp.department.includes('Điều phối');
-        const isShipping = emp.department.includes('Vận chuyển');
-        const isExceptions = emp.department.includes('Sự cố');
+        const isVendorLink = emp.department.includes(DEPARTMENT_KEYWORDS.VENDOR_COORDINATION);
+        const isShipping = emp.department.includes(DEPARTMENT_KEYWORDS.SHIPPING);
+        const isExceptions = emp.department.includes(DEPARTMENT_KEYWORDS.EXCEPTION);
 
         if (isManager) {
           if (isVendorLink) {
@@ -945,171 +990,14 @@ export class OrdersService {
       where,
       include: orderInclude,
       orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * itemPerPage,
+      skip,
       take: itemPerPage,
     });
 
-    // Tự động phân công nếu phát hiện đơn hàng chưa có nhân sự phụ trách đúng phòng ban
-    let needsRefetch = false;
-    for (const order of list) {
-      const historyList = order.statusHistory || [];
-      const hasHistoryEmp = historyList.some((h) => Boolean(h.employeeId));
-      const hasCarrier = order.shipments?.some((s) => Boolean(s.carrierId));
-
-      // 1. Luôn tự động phân công nhân viên giao hàng (Phòng Vận chuyển & Giao nhận) nếu chưa có
-      if (!hasCarrier) {
-        try {
-          const shipper = await this.findBestShipperEmployee();
-          if (shipper) {
-            if (order.shipments && order.shipments.length > 0) {
-              await this.prisma.shipment.updateMany({
-                where: { orderId: order.id, carrierId: null },
-                data: {
-                  carrierId: shipper.id,
-                  carrierType: 'employee',
-                  status: ShipmentStatus.assigned,
-                  notes: `[Tự động phân công] Bưu tá [${shipper.fullName} / ${shipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao kiện`,
-                  updatedAt: new Date(),
-                },
-              });
-              for (const ship of order.shipments) {
-                if (!ship.carrierId) {
-                  await this.prisma.shipmentEvent.create({
-                    data: {
-                      shipmentId: ship.id,
-                      status: ShipmentStatus.assigned,
-                      location: 'Trung tâm phân phối MIVA Hub',
-                      description: `Hệ thống tự động phân công bưu tá [${shipper.fullName} / ${shipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận`,
-                      actorRole: 'system',
-                    },
-                  });
-                }
-              }
-            } else {
-              const now = new Date();
-              const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-              const tracking = `SHIP-${yearMonth}-${uniqueCodeSuffix()}`;
-              const createdShipment = await this.prisma.shipment.create({
-                data: {
-                  trackingNumber: tracking,
-                  orderId: order.id,
-                  carrierId: shipper.id,
-                  carrierType: 'employee',
-                  status: ShipmentStatus.assigned,
-                  shippingAddress: order.shippingAddress,
-                  receiverName: order.receiverName,
-                  receiverPhone: order.receiverPhone,
-                  notes: `[Tự động phân công] Bưu tá [${shipper.fullName} / ${shipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận`,
-                },
-              });
-              await this.prisma.shipmentEvent.create({
-                data: {
-                  shipmentId: createdShipment.id,
-                  status: ShipmentStatus.assigned,
-                  location: 'Trung tâm phân phối MIVA Hub',
-                  description: `Hệ thống tự động phân công bưu tá [${shipper.fullName} / ${shipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận`,
-                  actorRole: 'system',
-                },
-              });
-            }
-
-            await this.prisma.orderStatusHistory.create({
-              data: {
-                orderId: order.id,
-                employeeId: shipper.id,
-                fromStatus: order.status,
-                toStatus: order.status,
-                note: `[Tự động phân công] Bưu tá [${shipper.fullName} / ${shipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận đơn`,
-              },
-            });
-            needsRefetch = true;
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      // 2. Phân công Ban Xử lý Sự cố nếu đơn bị hủy
-      if (order.status === OrderStatus.cancelled) {
-        const hasException = historyList.some(
-          (h) =>
-            h.employee?.department?.toLowerCase().includes('sự cố') ||
-            h.note?.toLowerCase().includes('sự cố'),
-        );
-        if (!hasException) {
-          try {
-            const expEmp = await this.findBestExceptionEmployee();
-            if (expEmp) {
-              await this.prisma.orderStatusHistory.create({
-                data: {
-                  orderId: order.id,
-                  employeeId: expEmp.id,
-                  fromStatus: OrderStatus.cancelled,
-                  toStatus: OrderStatus.cancelled,
-                  note: `[Tự động phân công] Hệ thống phân công chuyên viên [${expEmp.fullName} / ${expEmp.employeeCode}] (Bộ phận Xử lý Sự cố & Ngoại lệ Đơn) giải quyết hồ sơ đơn hủy`,
-                },
-              });
-              needsRefetch = true;
-            }
-          } catch {
-            // ignore
-          }
-        }
-      } else {
-        // 3. pending, confirmed, processing -> Ban Điều phối & Liên kết Vendor
-        const hasHandling = historyList.some(
-          (h) =>
-            h.employee?.department?.toLowerCase().includes('điều phối') ||
-            h.employee?.department?.toLowerCase().includes('vendor') ||
-            h.note?.toLowerCase().includes('điều phối'),
-        );
-        if (!hasHandling) {
-          try {
-            const handlingEmp = await this.findBestHandlingEmployee();
-            if (handlingEmp) {
-              await this.prisma.orderStatusHistory.create({
-                data: {
-                  orderId: order.id,
-                  employeeId: handlingEmp.id,
-                  fromStatus: order.status,
-                  toStatus: order.status,
-                  note: `[Tự động phân công] Chuyên viên [${handlingEmp.fullName} / ${handlingEmp.employeeCode}] (Bộ phận Điều phối & Liên kết Vendor) tiếp nhận và xử lý đơn`,
-                },
-              });
-              needsRefetch = true;
-            }
-          } catch {
-            // ignore
-          }
-        }
-      }
-
-      if (!hasHistoryEmp && !hasCarrier && !needsRefetch) {
-        try {
-          await this.autoAssignOrder(order.id, { role: 'admin', userID: 'system-auto' } as any);
-          needsRefetch = true;
-        } catch {
-          // ignore
-        }
-      }
-    }
-
-    const finalList = needsRefetch
-      ? await this.prisma.order.findMany({
-          where,
-          include: orderInclude,
-          orderBy: { createdAt: 'desc' },
-          skip: (page - 1) * itemPerPage,
-          take: itemPerPage,
-        })
-      : list;
-
+    // Danh sách chỉ đọc dữ liệu. Việc phân công nhân sự được thực hiện khi tạo đơn, đổi trạng thái
+    // hoặc qua POST /orders/admin/auto-assign-all, không thực hiện trong thao tác GET.
     return {
-      list: finalList,
-      page,
-      itemPerPage,
-      totalItems,
-      totalPages: Math.ceil(totalItems / itemPerPage) || 1,
+      ...formatPaginatedList(list, totalItems, { page, itemPerPage }),
       countsByStatus,
     };
   }
@@ -1138,21 +1026,14 @@ export class OrdersService {
               },
             });
           } else {
-            const now = new Date();
-            const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-            const tracking = `SHIP-${yearMonth}-${uniqueCodeSuffix()}`;
-            await this.prisma.shipment.create({
-              data: {
-                trackingNumber: tracking,
-                orderId: order.id,
-                carrierId: shipper.id,
-                carrierType: 'employee',
-                status: ShipmentStatus.assigned,
-                shippingAddress: order.shippingAddress,
-                receiverName: order.receiverName,
-                receiverPhone: order.receiverPhone,
-                notes: `[Tự động phân công] Bưu tá [${shipper.fullName} / ${shipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận`,
-              },
+            await this.createShipmentWithInitialEvent(this.prisma, {
+              orderId: order.id,
+              carrierId: shipper.id,
+              status: ShipmentStatus.assigned,
+              shippingAddress: order.shippingAddress,
+              receiverName: order.receiverName,
+              receiverPhone: order.receiverPhone,
+              notes: `[Tự động phân công] Bưu tá [${shipper.fullName} / ${shipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận`,
             });
           }
 
@@ -1280,7 +1161,7 @@ export class OrdersService {
 
       if (dto.status === OrderStatus.confirmed) {
         const canConfirm =
-          emp?.department?.includes('Điều phối') ||
+          emp?.department?.includes(DEPARTMENT_KEYWORDS.VENDOR_COORDINATION) ||
           perms.orders?.canConfirmOrder ||
           perms.orders?.canTransferToVendor;
         if (!canConfirm) {
@@ -1290,7 +1171,7 @@ export class OrdersService {
         }
       } else if (dto.status === OrderStatus.cancelled) {
         const canCancel =
-          emp?.department?.includes('Sự cố') ||
+          emp?.department?.includes(DEPARTMENT_KEYWORDS.EXCEPTION) ||
           perms.orders?.canHandleExceptions ||
           perms.orders?.canRejectUnconfirmed;
         if (!canCancel) {
@@ -1397,8 +1278,7 @@ export class OrdersService {
           }
         }
 
-        const now = new Date();
-        const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const yearMonth = getYearMonth();
 
         for (const [vId, vendorDetails] of vendorGroups.entries()) {
           let vOrder = await tx.vendorOrder.findFirst({
@@ -1443,31 +1323,20 @@ export class OrdersService {
           });
 
           if (!existingShipment) {
-            const shipTracking = `SHIP-${yearMonth}-${uniqueCodeSuffix()}`;
-            const shipment = await tx.shipment.create({
-              data: {
-                trackingNumber: shipTracking,
-                orderId: id,
-                vendorOrderId: vOrder.id,
-                carrierId: null,
-                carrierType: 'employee',
-                status: ShipmentStatus.pending,
-                shippingAddress: current.shippingAddress,
-                receiverName: current.receiverName,
-                receiverPhone: current.receiverPhone,
-                notes: 'Kiện hàng đã được điều phối chuyển cho Vendor. Chờ Shop đóng gói hoàn tất để điều phối bưu tá vận chuyển.',
-              },
-            });
-
-            await tx.shipmentEvent.create({
-              data: {
-                shipmentId: shipment.id,
-                status: ShipmentStatus.pending,
-                location: 'Trung tâm phân phối MIVA Hub',
-                description: 'Đơn hàng được xác nhận và khởi tạo vận đơn. Chờ đối tác Vendor đóng gói hoàn tất để điều phối bưu tá.',
-                actorRole: user.role,
-                actorId: user.userID,
-              },
+            await this.createShipmentWithInitialEvent(tx, {
+              yearMonth,
+              orderId: id,
+              vendorOrderId: vOrder.id,
+              carrierId: null,
+              status: ShipmentStatus.pending,
+              shippingAddress: current.shippingAddress,
+              receiverName: current.receiverName,
+              receiverPhone: current.receiverPhone,
+              notes: 'Kiện hàng đã được điều phối chuyển cho Vendor. Chờ Shop đóng gói hoàn tất để điều phối bưu tá vận chuyển.',
+              eventLocation: 'Trung tâm phân phối MIVA Hub',
+              eventDescription: 'Đơn hàng được xác nhận và khởi tạo vận đơn. Chờ đối tác Vendor đóng gói hoàn tất để điều phối bưu tá.',
+              actorRole: user.role,
+              actorId: user.userID,
             });
           }
         }
@@ -1603,11 +1472,7 @@ export class OrdersService {
         dto.notifyTarget === 'admin';
 
       if (isIncident) {
-        try {
-          assignedExceptionEmp = await this.findBestExceptionEmployee(tx);
-        } catch {
-          // ignore in mock environments
-        }
+        assignedExceptionEmp = await this.findBestExceptionEmployee(tx);
         if (assignedExceptionEmp) {
           await tx.orderStatusHistory.create({
             data: {
@@ -1656,37 +1521,31 @@ export class OrdersService {
    * Tìm nhân viên tiếp nhận & chuyển đơn thuộc Bộ phận Điều phối & Liên kết Vendor
    */
   async findBestHandlingEmployee(tx?: Prisma.TransactionClient, excludeEmployeeId?: string) {
-    const client = tx || this.prisma;
-    const candidates = await client.employee.findMany({
-      where: {
-        status: 'active',
-        deletedAt: null,
-        department: { contains: 'Điều phối', mode: 'insensitive' },
-        ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
-      },
-      select: {
-        id: true,
-        fullName: true,
-        employeeCode: true,
-        department: true,
-        phone: true,
-      },
-    });
-
-    if (!candidates.length) return null;
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    return this.pickRandomActiveEmployee(DEPARTMENT_KEYWORDS.VENDOR_COORDINATION, tx, excludeEmployeeId);
   }
 
   /**
    * Tìm nhân viên xử lý sự cố & ngoại lệ thuộc Bộ phận Xử lý Sự cố & Ngoại lệ Đơn
    */
   async findBestExceptionEmployee(tx?: Prisma.TransactionClient) {
+    return this.pickRandomActiveEmployee(DEPARTMENT_KEYWORDS.EXCEPTION, tx);
+  }
+
+  /**
+   * Chọn ngẫu nhiên một nhân viên đang hoạt động có phòng ban chứa từ khóa.
+   */
+  private async pickRandomActiveEmployee(
+    departmentKeyword: string,
+    tx?: Prisma.TransactionClient,
+    excludeEmployeeId?: string,
+  ) {
     const client = tx || this.prisma;
     const candidates = await client.employee.findMany({
       where: {
         status: 'active',
         deletedAt: null,
-        department: { contains: 'Sự cố', mode: 'insensitive' },
+        department: { contains: departmentKeyword, mode: 'insensitive' },
+        ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
       },
       select: {
         id: true,
@@ -1712,8 +1571,8 @@ export class OrdersService {
         status: 'active',
         deletedAt: null,
         OR: [
-          { department: { contains: 'Vận chuyển', mode: 'insensitive' } },
-          { department: { contains: 'Giao nhận', mode: 'insensitive' } },
+          { department: { contains: DEPARTMENT_KEYWORDS.SHIPPING, mode: 'insensitive' } },
+          { department: { contains: DEPARTMENT_KEYWORDS.DELIVERY, mode: 'insensitive' } },
         ],
         ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
       },
@@ -1748,10 +1607,6 @@ export class OrdersService {
       (c) => (c.assignedShipments?.length || 0) === minLoad,
     );
     return leastBusy[Math.floor(Math.random() * leastBusy.length)];
-  }
-
-  async findBestAvailableEmployee(tx?: Prisma.TransactionClient, excludeEmployeeId?: string) {
-    return this.findBestShipperEmployee(tx, excludeEmployeeId);
   }
 
   async assignOrder(id: string, dto: AssignOrderDto, user: UserInfo) {
@@ -1794,38 +1649,23 @@ export class OrdersService {
       let historyNote = '';
 
       if (isShipper) {
-        let shipments = await tx.shipment.findMany({ where: { orderId: id } });
+        const shipments = await tx.shipment.findMany({ where: { orderId: id } });
 
         if (!shipments.length) {
-          const now = new Date();
-          const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-          const tracking = `SHIP-${yearMonth}-${uniqueCodeSuffix()}`;
-
-          const s = await tx.shipment.create({
-            data: {
-              trackingNumber: tracking,
-              orderId: id,
-              carrierId: employee.id,
-              carrierType: 'employee',
-              status: ShipmentStatus.assigned,
-              shippingAddress: order.shippingAddress,
-              receiverName: order.receiverName,
-              receiverPhone: order.receiverPhone,
-              notes:
-                dto.note ||
-                `Admin chỉ định bưu tá ${employee.fullName} (${employee.employeeCode})`,
-            },
-          });
-
-          await tx.shipmentEvent.create({
-            data: {
-              shipmentId: s.id,
-              status: ShipmentStatus.assigned,
-              location: 'Trung tâm điều phối MIVA Hub',
-              description: `Admin chỉ định bưu tá giao nhận ${employee.fullName} (${employee.employeeCode})${dto.note ? `: ${dto.note}` : ''}`,
-              actorRole: user.role,
-              actorId: user.userID,
-            },
+          await this.createShipmentWithInitialEvent(tx, {
+            orderId: id,
+            carrierId: employee.id,
+            status: ShipmentStatus.assigned,
+            shippingAddress: order.shippingAddress,
+            receiverName: order.receiverName,
+            receiverPhone: order.receiverPhone,
+            notes:
+              dto.note ||
+              `Admin chỉ định bưu tá ${employee.fullName} (${employee.employeeCode})`,
+            eventLocation: 'Trung tâm điều phối MIVA Hub',
+            eventDescription: `Admin chỉ định bưu tá giao nhận ${employee.fullName} (${employee.employeeCode})${dto.note ? `: ${dto.note}` : ''}`,
+            actorRole: user.role,
+            actorId: user.userID,
           });
         } else {
           for (const s of shipments) {
@@ -2039,34 +1879,19 @@ export class OrdersService {
       const bestEmp = await this.findBestShipperEmployee();
       if (!bestEmp) break;
 
-      const now = new Date();
-      const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
-      const tracking = `SHIP-${yearMonth}-${uniqueCodeSuffix()}`;
-
       await this.prisma.$transaction(async (tx) => {
-        const s = await tx.shipment.create({
-          data: {
-            trackingNumber: tracking,
-            orderId: order.id,
-            carrierId: bestEmp.id,
-            carrierType: 'employee',
-            status: ShipmentStatus.assigned,
-            shippingAddress: order.shippingAddress,
-            receiverName: order.receiverName,
-            receiverPhone: order.receiverPhone,
-            notes: `Hệ thống tự động phân công cho ${bestEmp.fullName} (${bestEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`,
-          },
-        });
-
-        await tx.shipmentEvent.create({
-          data: {
-            shipmentId: s.id,
-            status: ShipmentStatus.assigned,
-            location: 'Trung tâm phân phối MIVA Hub',
-            description: `Hệ thống tự động phân công kiện hàng cho bưu tá ${bestEmp.fullName} (${bestEmp.employeeCode}) (Phòng Vận chuyển & Giao nhận)`,
-            actorRole: user.role,
-            actorId: user.userID,
-          },
+        await this.createShipmentWithInitialEvent(tx, {
+          orderId: order.id,
+          carrierId: bestEmp.id,
+          status: ShipmentStatus.assigned,
+          shippingAddress: order.shippingAddress,
+          receiverName: order.receiverName,
+          receiverPhone: order.receiverPhone,
+          notes: `Hệ thống tự động phân công cho ${bestEmp.fullName} (${bestEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`,
+          eventLocation: 'Trung tâm phân phối MIVA Hub',
+          eventDescription: `Hệ thống tự động phân công kiện hàng cho bưu tá ${bestEmp.fullName} (${bestEmp.employeeCode}) (Phòng Vận chuyển & Giao nhận)`,
+          actorRole: user.role,
+          actorId: user.userID,
         });
 
         await tx.orderStatusHistory.create({
@@ -2108,9 +1933,9 @@ export class OrdersService {
 
       if (emp) {
         if (emp.assignedOrderScope === 'all_orders') return;
-        const isVendorLink = emp.department.includes('Điều phối');
-        const isShipping = emp.department.includes('Vận chuyển');
-        const isExceptions = emp.department.includes('Sự cố');
+        const isVendorLink = emp.department.includes(DEPARTMENT_KEYWORDS.VENDOR_COORDINATION);
+        const isShipping = emp.department.includes(DEPARTMENT_KEYWORDS.SHIPPING);
+        const isExceptions = emp.department.includes(DEPARTMENT_KEYWORDS.EXCEPTION);
 
         if (isVendorLink && (order.status === OrderStatus.pending || order.status === OrderStatus.confirmed)) return;
         if (isShipping && (order.status === OrderStatus.shipping || (order.shipments || []).some((s: any) => s.carrierId === user.userID))) return;

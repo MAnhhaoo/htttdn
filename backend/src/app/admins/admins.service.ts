@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 
 import { Prisma } from '@prisma/client';
 
@@ -12,37 +17,32 @@ import { QueryUtilService } from '../../common/utils/query-util/query-util.servi
 
 import { assertEmailAvailable } from '../../common/utils/account-email/account-email.util';
 
-import {
-  GetOptionsParams,
-  Options} from '../../common/query/options.interface';
+import { RealtimeService } from '../realtime/realtime.service';
 
-import { CreateAdminDto } from './dto/create-admin.dto';
+import type { UserInfo } from '../../common/decorators/user.decorator';
 
 import { UpdateAdminDto } from './dto/update-admin.dto';
 
 import { GetAdminsPaginationDto } from './dto/get-admin.dto';
 
-import { Admin } from './entities/admin.entity';
-
 @Injectable()
-export class AdminsService
-  extends PrismaBaseService<'admin'>
-  implements Options<Admin>
-{
+export class AdminsService extends PrismaBaseService<'admin'> {
   constructor(
     prismaService: PrismaService,
 
     private readonly paginationUtilService: PaginationUtilService,
 
     private readonly queryUtil: QueryUtilService,
+
+    @Optional() private readonly realtime?: RealtimeService,
   ) {
     super(prismaService, 'admin');
   }
 
-  async getAdmins({ status, role, ...query }: GetAdminsPaginationDto) {
+  async getAdmins({ status, ...query }: GetAdminsPaginationDto) {
     return this.findAdmins(query, {
       ...(status ? { status } : {}),
-      ...(role ? { role } : {})});
+    });
   }
 
   private async findAdmins(
@@ -53,81 +53,42 @@ export class AdminsService
       'fullName',
       'email',
       'phone',
-      'address',
+      'department',
     ]) as Prisma.AdminWhereInput;
 
     const where: Prisma.AdminWhereInput = {
-      deletedAt: null,
       ...scope,
-      ...searchCondition};
+      ...searchCondition,
+    };
 
     const totalItems = await this.extended.count({
-      where});
+      where,
+    });
 
     const paging = this.paginationUtilService.paging({
       page,
       itemPerPage,
-      totalItems});
+      totalItems,
+    });
 
     const list = await this.extended.findMany({
       omit: { password: true },
       where,
       skip: paging.skip,
-      take: Number(itemPerPage),
+      take: paging.itemPerPage,
       orderBy: {
-        createdAt: 'desc'}});
+        createdAt: 'desc',
+      },
+    });
 
     return paging.format(list);
-  }
-
-  /**
-   * Lấy danh sách rút gọn.
-   * Thường dùng cho dropdown/select.
-   */
-  async getOptions(params: GetOptionsParams<Admin>) {
-    const { limit = 10, select = 'id,fullName', ...searchFields } = params;
-
-    const requestedFields =
-      this.queryUtil.convertFieldsSelectOption(select) ?? {};
-    const publicFields = [
-      'id',
-      'fullName',
-      'email',
-      'phone',
-      'address',
-      'role',
-      'status',
-      'createdAt',
-      'updatedAt',
-      'deletedAt',
-      'createdBy',
-    ];
-    const fieldsSelect = Object.fromEntries(
-      Object.entries(requestedFields).filter(([field]) =>
-        publicFields.includes(field),
-      ),
-    );
-    if (!Object.values(fieldsSelect).some(Boolean)) {
-      fieldsSelect.id = true;
-    }
-
-    return this.extended.findMany({
-      select: fieldsSelect,
-
-      where: {
-        deletedAt: null,
-        ...searchFields},
-
-      take: Number(limit),
-
-      orderBy: {
-        fullName: 'asc'}});
   }
 
   async getAdmin(where: Prisma.AdminWhereUniqueInput) {
     const admin = await this.extended.findUnique({
       where,
-      omit: { password: true }});
+      omit: { password: true },
+    });
 
     if (!admin) {
       throw new NotFoundException('Admin not found');
@@ -136,46 +97,52 @@ export class AdminsService
     return admin;
   }
 
-  async createAdmin(createAdminDto: CreateAdminDto) {
-    const adminData = { ...createAdminDto } as any;
-    if (typeof adminData.email === 'string') {
-      adminData.email = adminData.email.trim().toLowerCase();
-      await assertEmailAvailable(this.prismaService, adminData.email);
+  private async assertCanLockAdmin(
+    targetId: string | undefined,
+    currentUser?: UserInfo,
+  ) {
+    if (!targetId) return;
+    if (currentUser?.userID && targetId === currentUser.userID) {
+      throw new BadRequestException(
+        'Không thể tự khóa tài khoản của chính mình',
+      );
     }
-    return this.extended.create({
-      data: adminData});
-  }
-
-  async getAdminByEmail(email: string) {
-    return this.extended.findUnique({
-      where: {
-        email}});
-  }
-
-  async getstring(adminID: string) {
-    return this.prismaService.admin.findUnique({
-      where: {
-        id: adminID},
-
-      select: {
-        id: true,
-        
-        status: true,
-        deletedAt: true}});
+    const activeAdmins = await this.prismaService.admin.findMany({
+      where: { status: 'active' },
+      select: { id: true },
+    });
+    const remaining = activeAdmins.filter((a) => a.id !== targetId).length;
+    if (remaining === 0) {
+      throw new BadRequestException(
+        'Không thể khóa tài khoản quản trị viên đang hoạt động cuối cùng',
+      );
+    }
   }
 
   async updateAdmin(params: {
     where: Prisma.AdminWhereUniqueInput;
     data: UpdateAdminDto;
+    currentUser?: UserInfo;
   }) {
-    const { where } = params;
+    const { where, currentUser } = params;
     const dataUpdate = { ...params.data } as any;
+
+    if (dataUpdate.status) {
+      dataUpdate.deletedAt = null;
+    }
+
+    if (dataUpdate.status === 'inactive') {
+      await this.assertCanLockAdmin(where.id, currentUser);
+    }
 
     if (typeof dataUpdate.email === 'string') {
       dataUpdate.email = dataUpdate.email.trim().toLowerCase();
       const current = where.id
         ? { id: where.id }
-        : await this.prismaService.admin.findUnique({ where, select: { id: true } });
+        : await this.prismaService.admin.findUnique({
+            where,
+            select: { id: true },
+          });
       await assertEmailAvailable(
         this.prismaService,
         dataUpdate.email,
@@ -186,24 +153,44 @@ export class AdminsService
     const data = await this.extended.update({
       data: dataUpdate,
       where,
-      omit: { password: true }});
+      omit: { password: true },
+    });
+
+    if (dataUpdate.status === 'inactive') {
+      this.realtime?.disconnectUser(data.id);
+    }
 
     return data;
   }
 
-  async deleteAdmin(where: Prisma.AdminWhereUniqueInput) {
+  /**
+   * Tài khoản admin chỉ khóa (status = inactive), không xóa.
+   */
+  async deleteAdmin(
+    where: Prisma.AdminWhereUniqueInput,
+    currentUser?: UserInfo,
+  ) {
     const admin = await this.extended.findUnique({
-      where});
+      where,
+    });
 
     if (!admin) {
       throw new NotFoundException('Admin không tồn tại');
     }
 
-    return this.extended.update({
+    await this.assertCanLockAdmin(admin.id, currentUser);
+
+    const updated = await this.extended.update({
       where,
       omit: { password: true },
 
       data: {
-        status: 'inactive'}});
+        status: 'inactive',
+        deletedAt: null,
+      },
+    });
+
+    this.realtime?.disconnectUser(admin.id);
+    return updated;
   }
 }

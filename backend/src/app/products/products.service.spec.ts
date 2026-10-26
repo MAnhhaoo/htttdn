@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma, ProductStatus } from '@prisma/client';
 
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -6,6 +6,7 @@ import { PaginationUtilService } from 'src/common/utils/paginaton-util/pagintion
 import { QueryUtilService } from 'src/common/utils/query-util/query-util.service';
 import { StringUtilService } from 'src/common/utils/string-util/string-util.service';
 
+import { RealtimeService } from '../realtime/realtime.service';
 import { ProductService } from './products.service';
 
 describe('ProductService', () => {
@@ -19,6 +20,7 @@ describe('ProductService', () => {
     new PaginationUtilService(),
     new QueryUtilService(),
     new StringUtilService(),
+    { emitProductUpdated: jest.fn() } as unknown as RealtimeService,
   );
 
   const product = {
@@ -135,5 +137,153 @@ describe('ProductService', () => {
     await expect(service.getProductById(product.id)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+});
+
+describe('ProductService â€“ ownership and shared rules', () => {
+  const vendorId = '11111111-1111-4111-8111-111111111111';
+  const productId = '33333333-3333-4333-8333-333333333333';
+  const otherColorId = '99999999-9999-4999-8999-999999999999';
+  const otherVariantId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+
+  function setup() {
+    const tx = {
+      product: { update: jest.fn().mockResolvedValue({ id: productId, vendorId }) },
+      productColor: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+        create: jest.fn().mockResolvedValue({ id: 'new-color' }),
+      },
+      productVariant: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+        create: jest.fn(),
+      },
+    };
+    const productDelegate = { findFirst: jest.fn().mockResolvedValue({ id: productId }) };
+    const prisma = {
+      extended: { product: productDelegate },
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const realtime = { emitProductUpdated: jest.fn() };
+    const service = new ProductService(
+      prisma as unknown as PrismaService,
+      new PaginationUtilService(),
+      new QueryUtilService(),
+      new StringUtilService(),
+      realtime as unknown as RealtimeService,
+    );
+    return { service, tx, productDelegate, realtime };
+  }
+
+  it('rejects a color id that does not belong to the product being updated', async () => {
+    const { service, tx } = setup();
+
+    await expect(
+      service.updateProduct(
+        productId,
+        { colors: [{ id: otherColorId, color: 'Red', imageUrls: [], variants: [] }] },
+        vendorId,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(tx.productColor.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: otherColorId, productId, deletedAt: null } }),
+    );
+    expect(tx.productColor.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a variant id that does not belong to the color being updated', async () => {
+    const { service, tx } = setup();
+    tx.productColor.findFirst.mockResolvedValue({ id: 'own-color' });
+
+    await expect(
+      service.updateProduct(
+        productId,
+        {
+          colors: [
+            {
+              id: 'own-color',
+              color: 'Red',
+              imageUrls: [],
+              variants: [{ id: otherVariantId, size: 'M', price: 1, stock: 1 }],
+            },
+          ],
+        },
+        vendorId,
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(tx.productVariant.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: otherVariantId, productColorId: 'own-color', deletedAt: null },
+      }),
+    );
+    expect(tx.productVariant.update).not.toHaveBeenCalled();
+  });
+
+  it('restores a soft-deleted size instead of violating the unique constraint', async () => {
+    const { service, tx } = setup();
+    tx.productColor.findFirst.mockResolvedValue({ id: 'own-color' });
+    tx.productVariant.findUnique.mockResolvedValue({ id: 'old-variant', deletedAt: new Date() });
+
+    await service.updateProduct(
+      productId,
+      {
+        colors: [
+          { id: 'own-color', color: 'Red', imageUrls: [], variants: [{ size: 'S', price: 10, stock: 2 }] },
+        ],
+      },
+      vendorId,
+    );
+
+    expect(tx.productVariant.create).not.toHaveBeenCalled();
+    expect(tx.productVariant.update).toHaveBeenCalledWith({
+      where: { id: 'old-variant' },
+      data: { deletedAt: null, price: 10, stock: 2 },
+    });
+  });
+
+  it('runs the whole update in one transaction and rejects too many images', async () => {
+    const { service, tx } = setup();
+    const images = Array.from({ length: 21 }, (_, index) => `/uploads/products/${index}.png`);
+
+    await expect(
+      service.updateProduct(
+        productId,
+        { colors: [{ color: 'Red', imageUrls: images, variants: [] }] },
+        vendorId,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(tx.productColor.create).not.toHaveBeenCalled();
+  });
+
+  it('lets the admin and the public list filter categories by UUID', async () => {
+    const { service, productDelegate } = setup();
+    const categoryId = '88888888-8888-4888-8888-888888888888';
+    const delegate = { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) };
+    const prisma = { extended: { product: delegate } };
+    const listService = new ProductService(
+      prisma as unknown as PrismaService,
+      new PaginationUtilService(),
+      new QueryUtilService(),
+      new StringUtilService(),
+      { emitProductUpdated: jest.fn() } as unknown as RealtimeService,
+    );
+
+    await listService.getAdminProducts({ page: 1, itemPerPage: 10, category: categoryId });
+    await listService.getProducts({ page: 1, itemPerPage: 10, category: categoryId });
+
+    for (const call of delegate.findMany.mock.calls) {
+      expect(call[0].where.category).toEqual({
+        OR: [{ slug: categoryId }, { id: categoryId }],
+        deletedAt: null,
+      });
+    }
+    expect(productDelegate.findFirst).not.toHaveBeenCalled();
+    expect(service).toBeDefined();
   });
 });

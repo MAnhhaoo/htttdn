@@ -10,7 +10,7 @@ export const CreateProductVariantItemSchema = z
   .object({
     id: z.string().optional(),
     size: z.string().trim().min(1, 'Kích cỡ không được để trống').max(50),
-    price: z.coerce.number().min(0, 'Giá không được nhỏ hơn 0'),
+    price: z.coerce.number().positive('Giá phải lớn hơn 0'),
     stock: z.coerce.number().int().min(0, 'Số lượng tồn không được nhỏ hơn 0').default(0),
   })
   .strict();
@@ -19,10 +19,14 @@ export const CreateProductColorItemSchema = z
   .object({
     id: z.string().optional(),
     color: z.string().trim().min(1, 'Tên màu không được để trống').max(100),
-    imageUrls: z.array(z.string()).optional().default([]),
+    imageUrls: z.array(z.string()).max(20, 'Mỗi màu chỉ được có tối đa 20 ảnh').optional().default([]),
     variants: z.array(CreateProductVariantItemSchema).optional().default([]),
   })
-  .strict();
+  .strict()
+  .refine(
+    (color) => new Set(color.variants.map((variant) => variant.size)).size === color.variants.length,
+    { message: 'Các size trong cùng một màu không được trùng nhau', path: ['variants'] },
+  );
 
 export const CreateProductObjectSchema = z
   .object({
@@ -31,7 +35,13 @@ export const CreateProductObjectSchema = z
     status: z.enum(ProductStatus).optional(),
     category: CategoryConnectSchema.optional(),
     categoryId: z.string().uuid().optional(),
-    colors: z.array(CreateProductColorItemSchema).optional(),
+    colors: z
+      .array(CreateProductColorItemSchema)
+      .refine(
+        (colors) => new Set(colors.map((color) => color.color)).size === colors.length,
+        { message: 'Tên màu không được trùng nhau trong cùng một sản phẩm' },
+      )
+      .optional(),
   })
   .strict();
 

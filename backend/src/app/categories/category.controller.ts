@@ -4,12 +4,11 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
 } from '@nestjs/common';
-
-
 
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 
@@ -51,7 +50,7 @@ export class CategoryController {
   @Patch(':id')
   @Roles('admin')
   updateCategory(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() updateCategoryDto: UpdateCategoryDto,
   ) {
     return this.categoryService.updateCategory({
@@ -63,7 +62,7 @@ export class CategoryController {
   }
   @Delete(':id')
   @Roles('admin')
-  deleteCategory(@Param('id') id: string) {
+  deleteCategory(@Param('id', ParseUUIDPipe) id: string) {
     return this.categoryService.deleteCategory({ id });
   }
 }

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 
 import { Prisma } from '@prisma/client';
 
@@ -12,9 +17,7 @@ import { QueryUtilService } from '../../common/utils/query-util/query-util.servi
 
 import { assertEmailAvailable } from '../../common/utils/account-email/account-email.util';
 
-import {
-  GetOptionsParams,
-  Options} from '../../common/query/options.interface';
+import { RealtimeService } from '../realtime/realtime.service';
 
 import { CreateClientDto } from './dto/create-client.dto';
 
@@ -22,106 +25,84 @@ import { UpdateClientDto } from './dto/update-client.dto';
 
 import { GetClientsPaginationDto } from './dto/get-client.dto';
 
-import { Client } from './entities/client.entity';
-
 @Injectable()
-export class ClientsService
-  extends PrismaBaseService<'client'>
-  implements Options<Client>
-{
+export class ClientsService extends PrismaBaseService<'client'> {
+  private readonly logger = new Logger(ClientsService.name);
+
   constructor(
     prismaService: PrismaService,
 
     private readonly paginationUtilService: PaginationUtilService,
 
     private readonly queryUtil: QueryUtilService,
+
+    @Optional() private readonly realtime?: RealtimeService,
   ) {
     super(prismaService, 'client');
   }
 
-  async getClients({ status, role, ...query }: GetClientsPaginationDto) {
+  async getClients({ status, ...query }: GetClientsPaginationDto) {
     return this.findClients(query, {
       ...(status ? { status } : {}),
-      ...(role ? { role } : {})});
+    });
   }
 
   private async findClients(
     { page = 1, itemPerPage = 10, search }: GetClientsPaginationDto,
     scope: Prisma.ClientWhereInput,
   ) {
-    const searchCondition = this.queryUtil.createStringSearchCondition(search, [
-      'fullName',
-      'email',
-      'phone',
-      'address',
-    ]) as Prisma.ClientWhereInput;
+    const trimmedSearch = search?.trim();
+    const baseSearch = this.queryUtil.createStringSearchCondition(
+      trimmedSearch,
+      ['fullName', 'email', 'phone'],
+    ) as Prisma.ClientWhereInput;
+
+    const searchCondition: Prisma.ClientWhereInput =
+      trimmedSearch && baseSearch.OR
+        ? {
+            OR: [
+              ...baseSearch.OR,
+              {
+                addresses: {
+                  some: {
+                    deletedAt: null,
+                    addressLine: {
+                      contains: trimmedSearch,
+                      mode: 'insensitive',
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : baseSearch;
 
     const where: Prisma.ClientWhereInput = {
-      deletedAt: null,
       ...scope,
-      ...searchCondition};
-
+      ...searchCondition,
+    };
+    // đếm tổng người dùng
     const totalItems = await this.extended.count({
-      where});
+      where,
+    });
 
     const paging = this.paginationUtilService.paging({
       page,
       itemPerPage,
-      totalItems});
+      totalItems,
+    });
 
     const list = await this.extended.findMany({
       omit: { password: true },
       where,
       skip: paging.skip,
-      take: Number(itemPerPage),
+      take: paging.itemPerPage,
       orderBy: {
-        createdAt: 'desc'}});
+        createdAt: 'desc',
+      },
+    });
 
     return paging.format(list);
-  }
-
-  /**
-   * Lấy danh sách rút gọn.
-   * Thường dùng cho dropdown/select.
-   */
-  async getOptions(params: GetOptionsParams<Client>) {
-    const { limit = 10, select = 'id,fullName', ...searchFields } = params;
-
-    const requestedFields =
-      this.queryUtil.convertFieldsSelectOption(select) ?? {};
-    const publicFields = [
-      'id',
-      'fullName',
-      'email',
-      'phone',
-      'address',
-      'role',
-      'status',
-      'createdAt',
-      'updatedAt',
-      'deletedAt',
-      'createdBy',
-    ];
-    const fieldsSelect = Object.fromEntries(
-      Object.entries(requestedFields).filter(([field]) =>
-        publicFields.includes(field),
-      ),
-    );
-    if (!Object.values(fieldsSelect).some(Boolean)) {
-      fieldsSelect.id = true;
-    }
-
-    return this.extended.findMany({
-      select: fieldsSelect,
-
-      where: {
-        deletedAt: null,
-        ...searchFields},
-
-      take: Number(limit),
-
-      orderBy: {
-        fullName: 'asc'}});
   }
 
   async getClient(where: Prisma.ClientWhereUniqueInput) {
@@ -158,59 +139,28 @@ export class ClientsService
       data: clientData,
     });
 
-    if (address && String(address).trim()) {
-      await this.prismaService.clientAddress.create({
-        data: {
-          clientId: client.id,
-          receiverName: client.fullName,
-          phone: client.phone || '',
-          addressLine: String(address).trim(),
-          isDefault: true,
-        },
-      }).catch((err) => {
-        console.error('Failed to create initial client address:', err);
-      });
+    if (address && String(address).trim() && this.prismaService.clientAddress) {
+      await this.prismaService.clientAddress
+        .create({
+          data: {
+            clientId: client.id,
+            receiverName: client.fullName,
+            phone: client.phone || '',
+            addressLine: String(address).trim(),
+            isDefault: true,
+          },
+        })
+        .catch((err) => {
+          this.logger.warn(
+            `Không thể tạo địa chỉ mặc định ban đầu cho client ${client.id}: ${(err as Error).message}`,
+          );
+        });
     }
 
     return {
       ...client,
       address: address ? String(address).trim() : null,
     };
-  }
-
-  async getClientByEmail(email: string) {
-    const client = await this.extended.findUnique({
-      where: {
-        email,
-      },
-      include: {
-        addresses: {
-          where: { deletedAt: null },
-          orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
-          take: 1,
-        },
-      },
-    });
-
-    if (!client) return null;
-
-    const { addresses, ...rest } = client as any;
-    return {
-      ...rest,
-      address: addresses?.[0]?.addressLine || null,
-    };
-  }
-
-  async getstring(clientID: string) {
-    return this.prismaService.client.findUnique({
-      where: {
-        id: clientID},
-
-      select: {
-        id: true,
-        
-        status: true,
-        deletedAt: true}});
   }
 
   async updateClient(params: {
@@ -220,11 +170,18 @@ export class ClientsService
     const { where, data: dataUpdate } = params;
     const { address, ...clientData } = dataUpdate as any;
 
+    if (clientData.status) {
+      clientData.deletedAt = null;
+    }
+
     if (typeof clientData.email === 'string') {
       clientData.email = clientData.email.trim().toLowerCase();
       const current = where.id
         ? { id: where.id }
-        : await this.prismaService.client.findUnique({ where, select: { id: true } });
+        : await this.prismaService.client.findUnique({
+            where,
+            select: { id: true },
+          });
       await assertEmailAvailable(
         this.prismaService,
         clientData.email,
@@ -235,9 +192,14 @@ export class ClientsService
     const data = await this.extended.update({
       data: clientData,
       where,
-      omit: { password: true }});
+      omit: { password: true },
+    });
 
-    if (address !== undefined && where.id) {
+    if (clientData.status === 'inactive') {
+      this.realtime?.disconnectUser(data.id);
+    }
+
+    if (address !== undefined && where.id && this.prismaService.clientAddress) {
       if (address) {
         const defaultAddr = await this.prismaService.clientAddress.findFirst({
           where: { clientId: where.id, isDefault: true, deletedAt: null },
@@ -264,19 +226,29 @@ export class ClientsService
     return { ...data, address: address ?? null };
   }
 
+  /**
+   * Tài khoản client chỉ khóa (status = inactive), không xóa.
+   */
   async deleteClient(where: Prisma.ClientWhereUniqueInput) {
     const client = await this.extended.findUnique({
-      where});
+      where,
+    });
 
     if (!client) {
       throw new NotFoundException('Client không tồn tại');
     }
 
-    return this.extended.update({
+    const updated = await this.extended.update({
       where,
       omit: { password: true },
 
       data: {
-        status: 'inactive'}});
+        status: 'inactive',
+        deletedAt: null,
+      },
+    });
+
+    this.realtime?.disconnectUser(client.id);
+    return updated;
   }
 }

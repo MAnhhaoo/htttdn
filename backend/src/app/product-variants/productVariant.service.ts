@@ -22,7 +22,23 @@ export class ProductVariantService extends PrismaBaseService<'productVariant'> {
 
     await this.getActiveProductColor(productColorId, vendorId);
 
-    await this.checkDuplicateSize(productColorId, size);
+    const existing = await this.prismaDb.productVariant.findUnique({
+      where: { productColorId_size: { productColorId, size } },
+    });
+
+    if (existing && !existing.deletedAt) {
+      throw new ConflictException(`Size "${size}" đã tồn tại trong màu này`);
+    }
+
+    // Size đã xóa mềm vẫn chịu ràng buộc unique nên được khôi phục thay vì tạo mới.
+    if (existing) {
+      const restored = await this.extended.update({
+        where: { id: existing.id },
+        data: { deletedAt: null, price, stock },
+      });
+      await this.emitForColor(productColorId, vendorId);
+      return restored;
+    }
 
     const created = await this.extended.create({
       data: {
@@ -58,7 +74,7 @@ export class ProductVariantService extends PrismaBaseService<'productVariant'> {
     const variant = await this.getActiveVariant(id, vendorId);
 
     if (data.size !== undefined && data.size !== variant.size) {
-      await this.checkDuplicateSize(variant.productColorId, data.size, id);
+      await this.checkDuplicateSize(variant.productColorId, data.size, id, true);
     }
 
     const updated = await this.extended.update({
@@ -129,19 +145,25 @@ export class ProductVariantService extends PrismaBaseService<'productVariant'> {
     productColorId: string,
     size: string,
     excludingId?: string,
+    includeDeleted = false,
   ) {
-    const duplicate = await this.extended.findFirst({
+    // Bản ghi đã xóa mềm vẫn nằm trong ràng buộc unique, nên khi đổi size phải tính cả chúng.
+    const duplicate = await this.prismaDb.productVariant.findFirst({
       where: {
         productColorId,
         size,
-        deletedAt: null,
+        ...(includeDeleted ? {} : { deletedAt: null }),
         ...(excludingId ? { id: { not: excludingId } } : {}),
       },
-      select: { id: true },
+      select: { id: true, deletedAt: true },
     });
 
     if (duplicate) {
-      throw new ConflictException(`Size "${size}" đã tồn tại trong màu này`);
+      throw new ConflictException(
+        duplicate.deletedAt
+          ? `Size "${size}" từng tồn tại trong màu này, hãy tạo lại size đó để khôi phục`
+          : `Size "${size}" đã tồn tại trong màu này`,
+      );
     }
   }
 }

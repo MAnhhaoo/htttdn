@@ -131,15 +131,17 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
       orderBy: {
         createdAt: 'asc'},
       include: {
-        variants: true}});
+        variants: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'asc' }}}});
   }
 
   /**
    * Lấy chi tiết một màu chưa bị xóa.
    */
   async getProductColorById(where: Prisma.ProductColorWhereUniqueInput) {
-    const productColor = await this.extended.findUnique({
-      where});
+    const productColor = await this.prismaDb.productColor.findFirst({
+      where: { ...where, product: { deletedAt: null } }});
 
     if (!productColor || productColor.deletedAt) {
       throw new NotFoundException('Màu sản phẩm không tồn tại');

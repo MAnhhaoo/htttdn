@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   Star, 
@@ -39,6 +39,7 @@ export default function SurveyPage() {
   // State for list if no responseId provided
   const [inboxList, setInboxList] = useState([]);
   const [inboxTab, setInboxTab] = useState('all');
+  const openedRef = useRef(null);
 
   useEffect(() => {
     if (responseId) {
@@ -76,10 +77,13 @@ export default function SurveyPage() {
     try {
       setLoading(true);
       setError(null);
-      try {
-        await surveyService.openResponse(responseId);
-      } catch {
-        // ignore open error
+      if (openedRef.current !== responseId) {
+        openedRef.current = responseId;
+        try {
+          await surveyService.openResponse(responseId);
+        } catch {
+          // ignore open error
+        }
       }
       const raw = await surveyService.getInboxDetail(responseId);
       const data = raw?.data !== undefined ? raw.data : raw;
@@ -118,7 +122,7 @@ export default function SurveyPage() {
     try {
       setLoading(true);
       const raw = await surveyService.getSurveyInbox();
-      const items = raw?.data?.items || raw?.items || (Array.isArray(raw) ? raw : []);
+      const items = raw?.data?.list || raw?.list || raw?.data?.items || raw?.items || (Array.isArray(raw) ? raw : []);
       setInboxList(items);
     } catch (err) {
       console.error('Failed to load surveys inbox:', err);

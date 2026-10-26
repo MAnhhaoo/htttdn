@@ -81,7 +81,7 @@ export default function VendorManagement() {
 
   const handleStatusChange = async (vendorId, newStatus) => {
     try {
-      await usersApi.updateUser(vendorId, { status: newStatus });
+      await usersApi.updateUserStatus(vendorId, newStatus);
       fetchVendors();
       if (selectedVendor && selectedVendor.id === vendorId) {
         setSelectedVendor((prev) => ({ ...prev, status: newStatus }));

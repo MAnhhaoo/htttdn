@@ -1,4 +1,10 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 
 import { Prisma } from '@prisma/client';
 
@@ -6,15 +12,17 @@ import { PrismaBaseService } from '../../common/service/prisma-base.service';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 
-import { PaginationUtilService } from '../../common/utils/paginaton-util/pagintion-util.service';
+import {
+  PaginationUtilService,
+  formatPaginatedList,
+  normalizePagination,
+} from '../../common/utils/paginaton-util/pagintion-util.service';
 
 import { QueryUtilService } from '../../common/utils/query-util/query-util.service';
 
 import { assertEmailAvailable } from '../../common/utils/account-email/account-email.util';
 
-import {
-  GetOptionsParams,
-  Options} from '../../common/query/options.interface';
+import { RealtimeService } from '../realtime/realtime.service';
 
 import { CreateVendorDto } from './dto/create-vendor.dto';
 
@@ -22,27 +30,24 @@ import { UpdateVendorDto } from './dto/update-vendor.dto';
 
 import { GetVendorsPaginationDto } from './dto/get-vendor.dto';
 
-import { Vendor } from './entities/vendor.entity';
-
 @Injectable()
-export class VendorsService
-  extends PrismaBaseService<'vendor'>
-  implements Options<Vendor>
-{
+export class VendorsService extends PrismaBaseService<'vendor'> {
   constructor(
     prismaService: PrismaService,
 
     private readonly paginationUtilService: PaginationUtilService,
 
     private readonly queryUtil: QueryUtilService,
+
+    @Optional() private readonly realtime?: RealtimeService,
   ) {
     super(prismaService, 'vendor');
   }
 
-  async getVendors({ status, role, ...query }: GetVendorsPaginationDto) {
+  async getVendors({ status, ...query }: GetVendorsPaginationDto) {
     return this.findVendors(query, {
       ...(status ? { status } : {}),
-      ...(role ? { role } : {})});
+    });
   }
 
   private async findVendors(
@@ -53,75 +58,36 @@ export class VendorsService
       'fullName',
       'email',
       'phone',
-      'address',
+      'storeName',
+      'taxId',
     ]) as Prisma.VendorWhereInput;
 
     const where: Prisma.VendorWhereInput = {
-      deletedAt: null,
       ...scope,
-      ...searchCondition};
+      ...searchCondition,
+    };
 
     const totalItems = await this.extended.count({
-      where});
+      where,
+    });
 
     const paging = this.paginationUtilService.paging({
       page,
       itemPerPage,
-      totalItems});
+      totalItems,
+    });
 
     const list = await this.extended.findMany({
       omit: { password: true },
       where,
       skip: paging.skip,
-      take: Number(itemPerPage),
+      take: paging.itemPerPage,
       orderBy: {
-        createdAt: 'desc'}});
+        createdAt: 'desc',
+      },
+    });
 
     return paging.format(list);
-  }
-
-  /**
-   * Lấy danh sách rút gọn.
-   * Thường dùng cho dropdown/select.
-   */
-  async getOptions(params: GetOptionsParams<Vendor>) {
-    const { limit = 10, select = 'id,fullName', ...searchFields } = params;
-
-    const requestedFields =
-      this.queryUtil.convertFieldsSelectOption(select) ?? {};
-    const publicFields = [
-      'id',
-      'fullName',
-      'email',
-      'phone',
-      'address',
-      'role',
-      'status',
-      'createdAt',
-      'updatedAt',
-      'deletedAt',
-      'createdBy',
-    ];
-    const fieldsSelect = Object.fromEntries(
-      Object.entries(requestedFields).filter(([field]) =>
-        publicFields.includes(field),
-      ),
-    );
-    if (!Object.values(fieldsSelect).some(Boolean)) {
-      fieldsSelect.id = true;
-    }
-
-    return this.extended.findMany({
-      select: fieldsSelect,
-
-      where: {
-        deletedAt: null,
-        ...searchFields},
-
-      take: Number(limit),
-
-      orderBy: {
-        fullName: 'asc'}});
   }
 
   async getVendor(where: Prisma.VendorWhereUniqueInput) {
@@ -152,9 +118,14 @@ export class VendorsService
     });
 
     const now = new Date();
-    const isExpired = vendor.subscriptionExpiresAt ? new Date(vendor.subscriptionExpiresAt) < now : false;
+    const isExpired = vendor.subscriptionExpiresAt
+      ? new Date(vendor.subscriptionExpiresAt) < now
+      : false;
     const daysRemaining = vendor.subscriptionExpiresAt
-      ? Math.ceil((new Date(vendor.subscriptionExpiresAt).getTime() - now.getTime()) / (1000 * 3600 * 24))
+      ? Math.ceil(
+          (new Date(vendor.subscriptionExpiresAt).getTime() - now.getTime()) /
+            (1000 * 3600 * 24),
+        )
       : null;
 
     return {
@@ -171,31 +142,14 @@ export class VendorsService
   }
 
   async createVendor(createVendorDto: CreateVendorDto) {
-    const { address, ...vendorData } = createVendorDto as any;
+    const { address: _address, ...vendorData } = createVendorDto as any;
     if (typeof vendorData.email === 'string') {
       vendorData.email = vendorData.email.trim().toLowerCase();
       await assertEmailAvailable(this.prismaService, vendorData.email);
     }
     return this.extended.create({
-      data: vendorData});
-  }
-
-  async getVendorByEmail(email: string) {
-    return this.extended.findUnique({
-      where: {
-        email}});
-  }
-
-  async getstring(vendorID: string) {
-    return this.prismaService.vendor.findUnique({
-      where: {
-        id: vendorID},
-
-      select: {
-        id: true,
-        
-        status: true,
-        deletedAt: true}});
+      data: vendorData,
+    });
   }
 
   async updateVendor(params: {
@@ -203,13 +157,20 @@ export class VendorsService
     data: UpdateVendorDto;
   }) {
     const { where, data: dataUpdate } = params;
-    const { address, ...vendorData } = dataUpdate as any;
+    const { address: _address, ...vendorData } = dataUpdate as any;
+
+    if (vendorData.status) {
+      vendorData.deletedAt = null;
+    }
 
     if (typeof vendorData.email === 'string') {
       vendorData.email = vendorData.email.trim().toLowerCase();
       const current = where.id
         ? { id: where.id }
-        : await this.prismaService.vendor.findUnique({ where, select: { id: true } });
+        : await this.prismaService.vendor.findUnique({
+            where,
+            select: { id: true },
+          });
       await assertEmailAvailable(
         this.prismaService,
         vendorData.email,
@@ -220,25 +181,40 @@ export class VendorsService
     const data = await this.extended.update({
       data: vendorData,
       where,
-      omit: { password: true }});
+      omit: { password: true },
+    });
+
+    if (vendorData.status === 'inactive') {
+      this.realtime?.disconnectUser(data.id);
+    }
 
     return data;
   }
 
+  /**
+   * Tài khoản vendor chỉ khóa (status = inactive), không xóa.
+   */
   async deleteVendor(where: Prisma.VendorWhereUniqueInput) {
     const vendor = await this.extended.findUnique({
-      where});
+      where,
+    });
 
     if (!vendor) {
       throw new NotFoundException('Vendor không tồn tại');
     }
 
-    return this.extended.update({
+    const updated = await this.extended.update({
       where,
       omit: { password: true },
 
       data: {
-        status: 'inactive'}});
+        status: 'inactive',
+        deletedAt: null,
+      },
+    });
+
+    this.realtime?.disconnectUser(vendor.id);
+    return updated;
   }
 
   async getSubscriptionMe(vendorId: string) {
@@ -251,16 +227,22 @@ export class VendorsService
     }
 
     const now = new Date();
-    const isExpired = vendor.subscriptionExpiresAt ? new Date(vendor.subscriptionExpiresAt) < now : false;
+    const isExpired = vendor.subscriptionExpiresAt
+      ? new Date(vendor.subscriptionExpiresAt) < now
+      : false;
     const daysRemaining = vendor.subscriptionExpiresAt
-      ? Math.ceil((new Date(vendor.subscriptionExpiresAt).getTime() - now.getTime()) / (1000 * 3600 * 24))
+      ? Math.ceil(
+          (new Date(vendor.subscriptionExpiresAt).getTime() - now.getTime()) /
+            (1000 * 3600 * 24),
+        )
       : null;
 
     return {
       ...vendor,
       isExpired,
       daysRemaining,
-      isExpiringSoon: daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 30,
+      isExpiringSoon:
+        daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 30,
     };
   }
 
@@ -268,7 +250,7 @@ export class VendorsService
     const validPlan = plan === '2_years' ? '2_years' : '1_year';
     const fee = validPlan === '2_years' ? 2000000 : 1200000;
 
-    const updated = await this.extended.update({
+    await this.extended.update({
       where: { id: vendorId },
       data: {
         renewalRequested: true,
@@ -288,8 +270,7 @@ export class VendorsService
     tab?: string;
     search?: string;
   }) {
-    const page = Number(query.page) || 1;
-    const itemPerPage = Number(query.itemPerPage) || 10;
+    const { page, itemPerPage, skip } = normalizePagination(query);
     const tab = query.tab || 'pending';
     const search = query.search?.trim();
     const now = new Date();
@@ -332,7 +313,6 @@ export class VendorsService
     }
 
     const where: Prisma.VendorWhereInput = {
-      deletedAt: null,
       ...tabCondition,
       ...searchCondition,
     };
@@ -350,15 +330,18 @@ export class VendorsService
       this.extended.findMany({
         where,
         omit: { password: true },
-        skip: (page - 1) * itemPerPage,
+        skip,
         take: itemPerPage,
         orderBy: { createdAt: 'desc' },
       }),
-      this.extended.count({ where: { deletedAt: null, approvalStatus: 'pending_approval' } }),
-      this.extended.count({ where: { deletedAt: null, renewalRequested: true } }),
+      this.extended.count({
+        where: { approvalStatus: 'pending_approval' },
+      }),
+      this.extended.count({
+        where: { renewalRequested: true },
+      }),
       this.extended.count({
         where: {
-          deletedAt: null,
           approvalStatus: 'approved',
           status: 'active',
           OR: [
@@ -369,20 +352,26 @@ export class VendorsService
       }),
       this.extended.count({
         where: {
-          deletedAt: null,
           OR: [
             { subscriptionExpiresAt: { lt: now } },
             { status: 'inactive' },
           ],
         },
       }),
-      this.extended.count({ where: { deletedAt: null, approvalStatus: 'rejected' } }),
+      this.extended.count({
+        where: { approvalStatus: 'rejected' },
+      }),
     ]);
 
     const formattedList = list.map((v) => {
-      const isExp = v.subscriptionExpiresAt ? new Date(v.subscriptionExpiresAt) < now : false;
+      const isExp = v.subscriptionExpiresAt
+        ? new Date(v.subscriptionExpiresAt) < now
+        : false;
       const daysRem = v.subscriptionExpiresAt
-        ? Math.ceil((new Date(v.subscriptionExpiresAt).getTime() - now.getTime()) / (1000 * 3600 * 24))
+        ? Math.ceil(
+            (new Date(v.subscriptionExpiresAt).getTime() - now.getTime()) /
+              (1000 * 3600 * 24),
+          )
         : null;
       return {
         ...v,
@@ -392,11 +381,7 @@ export class VendorsService
     });
 
     return {
-      list: formattedList,
-      page,
-      itemPerPage,
-      totalItems,
-      totalPages: Math.ceil(totalItems / itemPerPage) || 1,
+      ...formatPaginatedList(formattedList, totalItems, { page, itemPerPage }),
       counts: {
         pending: pendingCount,
         renewals: renewalsCount,
@@ -409,46 +394,66 @@ export class VendorsService
 
   async approveRegistration(
     id: string,
-    user: any,
+    user: { role: string; userID: string; fullName?: string; userEmail?: string },
     data?: { plan?: string; commissionRate?: number; note?: string },
   ) {
     await this.assertCanReviewRegistration(user);
 
     const vendor = await this.extended.findUnique({ where: { id } });
-    if (!vendor || vendor.deletedAt) {
+    if (!vendor) {
       throw new NotFoundException('Không tìm thấy đối tác');
     }
     const isNewRegistration = vendor.approvalStatus === 'pending_approval';
-    const isRenewal = vendor.approvalStatus === 'approved' && vendor.renewalRequested;
+    const isRenewal =
+      vendor.approvalStatus === 'approved' && vendor.renewalRequested;
     if (!isNewRegistration && !isRenewal) {
       throw new ConflictException('Hồ sơ không còn chờ phê duyệt');
     }
 
     const now = new Date();
-    const plan = data?.plan || vendor.renewalPlan || vendor.subscriptionPlan || '1_year';
+    const plan =
+      data?.plan ||
+      vendor.renewalPlan ||
+      vendor.subscriptionPlan ||
+      '1_year';
     const years = plan === '2_years' ? 2 : 1;
     const fee = plan === '2_years' ? 2000000 : 1200000;
-    const commissionRate = data?.commissionRate !== undefined ? data.commissionRate : (vendor.commissionRate ?? 8.00);
+    const commissionRate =
+      data?.commissionRate !== undefined
+        ? data.commissionRate
+        : (vendor.commissionRate ?? 8.0);
 
     let newExpiresAt: Date;
-    if (vendor.renewalRequested && vendor.subscriptionExpiresAt && vendor.subscriptionExpiresAt > now) {
-      newExpiresAt = new Date(vendor.subscriptionExpiresAt.getTime() + years * 365 * 24 * 3600 * 1000);
+    if (
+      vendor.renewalRequested &&
+      vendor.subscriptionExpiresAt &&
+      vendor.subscriptionExpiresAt > now
+    ) {
+      newExpiresAt = new Date(
+        vendor.subscriptionExpiresAt.getTime() +
+          years * 365 * 24 * 3600 * 1000,
+      );
     } else {
-      newExpiresAt = new Date(now.getTime() + years * 365 * 24 * 3600 * 1000);
+      newExpiresAt = new Date(
+        now.getTime() + years * 365 * 24 * 3600 * 1000,
+      );
     }
 
-    const approverName = user.fullName || user.userEmail || (user.role === 'admin' ? 'Quản trị viên' : 'Nhân viên kiểm duyệt');
+    const approverName =
+      user.fullName ||
+      user.userEmail ||
+      (user.role === 'admin' ? 'Quản trị viên' : 'Nhân viên kiểm duyệt');
 
     const changed = await this.prismaService.vendor.updateMany({
       where: {
         id,
-        deletedAt: null,
         approvalStatus: isNewRegistration ? 'pending_approval' : 'approved',
         ...(isRenewal ? { renewalRequested: true } : {}),
       },
       data: {
         approvalStatus: 'approved',
         status: 'active',
+        deletedAt: null,
         subscriptionPlan: plan,
         subscriptionFee: fee,
         subscriptionExpiresAt: newExpiresAt,
@@ -465,15 +470,20 @@ export class VendorsService
     return this.extended.findUnique({ where: { id }, omit: { password: true } });
   }
 
-  async rejectRegistration(id: string, user: any, reason: string) {
+  async rejectRegistration(
+    id: string,
+    user: { role: string; userID: string },
+    reason: string,
+  ) {
     await this.assertCanReviewRegistration(user);
 
     const vendor = await this.extended.findUnique({ where: { id } });
-    if (!vendor || vendor.deletedAt) {
+    if (!vendor) {
       throw new NotFoundException('Không tìm thấy đối tác');
     }
     const isNewRegistration = vendor.approvalStatus === 'pending_approval';
-    const isRenewal = vendor.approvalStatus === 'approved' && vendor.renewalRequested;
+    const isRenewal =
+      vendor.approvalStatus === 'approved' && vendor.renewalRequested;
     if (!isNewRegistration && !isRenewal) {
       throw new ConflictException('Hồ sơ không còn chờ phê duyệt');
     }
@@ -481,15 +491,18 @@ export class VendorsService
     const changed = await this.prismaService.vendor.updateMany({
       where: {
         id,
-        deletedAt: null,
         approvalStatus: isNewRegistration ? 'pending_approval' : 'approved',
         ...(isRenewal ? { renewalRequested: true } : {}),
       },
       data: {
         ...(isNewRegistration
           ? { approvalStatus: 'rejected', status: 'inactive' }
-          : { subscriptionFee: vendor.subscriptionPlan === '2_years' ? 2000000 : 1200000 }),
-        rejectedReason: reason || 'Hồ sơ đăng ký hoặc yêu cầu gia hạn chưa đạt yêu cầu.',
+          : {
+              subscriptionFee:
+                vendor.subscriptionPlan === '2_years' ? 2000000 : 1200000,
+            }),
+        rejectedReason:
+          reason || 'Hồ sơ đăng ký hoặc yêu cầu gia hạn chưa đạt yêu cầu.',
         renewalRequested: false,
         renewalPlan: null,
         renewalRequestedAt: null,
@@ -499,7 +512,10 @@ export class VendorsService
     return this.extended.findUnique({ where: { id }, omit: { password: true } });
   }
 
-  private async assertCanReviewRegistration(user: { role: string; userID: string }) {
+  private async assertCanReviewRegistration(user: {
+    role: string;
+    userID: string;
+  }) {
     if (user.role !== 'employee') return;
     const employee = await this.prismaService.employee.findUnique({
       where: { id: user.userID },
@@ -510,10 +526,13 @@ export class VendorsService
       vendors?: { canApproveVendor?: boolean };
     };
     const explicitlyAllowed = permissions.vendors?.canApproveVendor === true;
-    const departmentAllowed = employee?.department.includes('Liên kết Vendor') &&
+    const departmentAllowed =
+      employee?.department.includes('Liên kết Vendor') &&
       permissions.restrictions?.canManageVendors !== true;
     if (!explicitlyAllowed && !departmentAllowed) {
-      throw new ForbiddenException('Nhân viên không có quyền phê duyệt hồ sơ đối tác');
+      throw new ForbiddenException(
+        'Nhân viên không có quyền phê duyệt hồ sơ đối tác',
+      );
     }
   }
 
@@ -521,7 +540,6 @@ export class VendorsService
     const vendor = await this.extended.findFirst({
       where: {
         id,
-        deletedAt: null,
       },
       select: {
         id: true,

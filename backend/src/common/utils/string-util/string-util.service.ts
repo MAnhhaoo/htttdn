@@ -21,10 +21,6 @@ export class StringUtilService {
       .slice(0, length);
   }
 
-  removeSpace(value: string) {
-    return value.replace(/\s+/g, '_');
-  }
-
   toSlug(text: string): string {
     return kebabCase(
       text

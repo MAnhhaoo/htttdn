@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Eye, Edit, Trash2, Plus, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Eye, Edit, Lock, Unlock, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usersApi } from '../../api';
 import { formatDate } from '../../utils/formatHelpers';
-import { Button, Input, Select, Badge } from '../../components/ui';
+import { Button, Input, Select } from '../../components/ui';
 import UserFormModal from './UserFormModal';
 import UserDetailModal from './UserDetailModal';
 
@@ -55,6 +55,7 @@ export default function UserManagement() {
     const styles = {
       admin: 'bg-red-100 text-red-700',
       vendor: 'bg-purple-100 text-purple-700',
+      employee: 'bg-amber-100 text-amber-700',
       customer: 'bg-blue-100 text-blue-700',
     };
     return styles[role] || 'bg-slate-100 text-slate-700 dark:text-slate-300';
@@ -64,11 +65,6 @@ export default function UserManagement() {
     return status === 'active'
       ? 'bg-green-100 text-green-700'
       : 'bg-slate-100 text-slate-500 dark:text-slate-400';
-  };
-
-  const handleAddClick = () => {
-    setUserToEdit(null);
-    setIsModalOpen(true);
   };
 
   const handleEditClick = (user) => {
@@ -81,13 +77,15 @@ export default function UserManagement() {
     setIsDetailModalOpen(true);
   };
 
-  const handleDeleteClick = async (userId) => {
-    if (window.confirm('Bạn có chắc chắn muốn vô hiệu hóa user này?')) {
+  const handleToggleStatus = async (user) => {
+    const nextStatus = user.status === 'active' ? 'inactive' : 'active';
+    const actionLabel = nextStatus === 'inactive' ? 'khóa' : 'mở khóa';
+    if (window.confirm(`Bạn có chắc chắn muốn ${actionLabel} tài khoản ${user.fullName || user.email}?`)) {
       try {
-        await usersApi.deleteUser(userId);
+        await usersApi.updateUserStatus(user.id, nextStatus);
         fetchUsers();
       } catch (err) {
-        alert(err.response?.data?.message || 'Xóa user thất bại');
+        alert(err.response?.data?.message || `Không thể ${actionLabel} tài khoản`);
       }
     }
   };
@@ -97,8 +95,6 @@ export default function UserManagement() {
       if (userToEdit) {
         await usersApi.updateUser(userToEdit.id, savedData);
       }
-      // Hiện tại backend không có POST /users (tạo user qua sign-up), 
-      // nên "Add User" chỉ update
       setIsModalOpen(false);
       fetchUsers();
     } catch (err) {
@@ -131,6 +127,7 @@ export default function UserManagement() {
               { value: '', label: 'Tất cả vai trò' },
               { value: 'customer', label: 'Customer (Khách hàng)' },
               { value: 'vendor', label: 'Vendor (Người bán)' },
+              { value: 'employee', label: 'Employee (Nhân viên)' },
               { value: 'admin', label: 'Admin (Quản trị)' }
             ]}
             value={roleFilter}
@@ -175,6 +172,7 @@ export default function UserManagement() {
               <tbody>
                 {users.map(user => {
                   const code = user.userCode || (user.role === 'vendor' ? `VND-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'admin' ? `ADM-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'employee' ? (user.employeeCode || `EMP-${user.id.slice(0, 8).toUpperCase()}`) : `CUS-${user.id.slice(0, 8).toUpperCase()}`);
+                  const isLocked = user.status === 'inactive';
                   return (
                   <tr key={user.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-4 py-3">
@@ -198,15 +196,22 @@ export default function UserManagement() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(user.status)}`}>
-                        {user.status}
+                        {isLocked ? 'inactive (Đã khóa)' : 'active'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{formatDate(user.createdAt)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-blue-600" onClick={() => handleViewClick(user)} />
-                        <Button variant="ghost" size="sm" icon={Edit} className="text-slate-400 hover:text-amber-600" onClick={() => handleEditClick(user)} />
-                        <Button variant="ghost" size="sm" icon={Trash2} className="text-slate-400 hover:text-red-600" onClick={() => handleDeleteClick(user.id)} />
+                        <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-blue-600" onClick={() => handleViewClick(user)} title="Xem chi tiết" />
+                        <Button variant="ghost" size="sm" icon={Edit} className="text-slate-400 hover:text-amber-600" onClick={() => handleEditClick(user)} title="Chỉnh sửa" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={isLocked ? Unlock : Lock}
+                          className={isLocked ? 'text-slate-400 hover:text-emerald-600' : 'text-slate-400 hover:text-rose-600'}
+                          onClick={() => handleToggleStatus(user)}
+                          title={isLocked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
+                        />
                       </div>
                     </td>
                   </tr>

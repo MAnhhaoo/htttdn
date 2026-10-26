@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import {
+  formatPaginatedList,
+  normalizePagination,
+} from 'src/common/utils/paginaton-util/pagintion-util.service';
 import { OrderStatus, Prisma} from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,6 +22,7 @@ export interface FinanceConfigTier {
 
 @Injectable()
 export class ReportsService {
+  private readonly logger = new Logger(ReportsService.name);
   constructor(private readonly prisma: PrismaService) {}
 
   private getFinanceConfigFile(): string {
@@ -38,7 +43,7 @@ export class ReportsService {
         }
       }
     } catch (e) {
-      console.error('Error reading finance config history:', e);
+      this.logger.warn(`Error reading finance config history: ${(e as Error).message}`);
     }
     return [
       {
@@ -772,8 +777,8 @@ export class ReportsService {
     search?: string;
     ageGroup?: string;
   }) {
-    const page = Number(query.page) || 1;
-    const itemPerPage = Number(query.itemPerPage) || 10;
+    const { page, itemPerPage, skip } = normalizePagination(query);
+
     const search = query.search?.trim().toLowerCase();
     const filterAgeGroup = query.ageGroup;
     const now = new Date();
@@ -1131,7 +1136,7 @@ export class ReportsService {
     }
 
     const totalClientsCount = enrichedClients.length;
-    const paginatedClients = enrichedClients.slice((page - 1) * itemPerPage, page * itemPerPage);
+    const paginatedClients = enrichedClients.slice(skip, skip + itemPerPage);
 
     return {
       overview: {

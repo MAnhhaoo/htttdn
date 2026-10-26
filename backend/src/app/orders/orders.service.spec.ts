@@ -149,6 +149,7 @@ describe('OrdersService', () => {
         findUniqueOrThrow: jest.fn().mockResolvedValue({
           ...current,
           status: OrderStatus.cancelled})},
+      employee: { findMany: jest.fn().mockResolvedValue([]) },
       orderStatusHistory: { create: jest.fn() }};
     const prisma = {
       order: { findUnique: jest.fn().mockResolvedValue(current) },

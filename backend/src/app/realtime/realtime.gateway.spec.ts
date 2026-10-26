@@ -61,7 +61,7 @@ describe('RealtimeGateway', () => {
 
   it('allows guests to receive only public catalog updates', async () => {
     const { gateway, auth, client } = setup('client');
-    client.handshake.auth = { role: 'guest' } as typeof client.handshake.auth;
+    client.handshake.auth = { role: 'guest' } as unknown as typeof client.handshake.auth;
     await gateway.handleConnection(client as unknown as Socket);
     expect(auth.verifyToken).not.toHaveBeenCalled();
     expect(client.join).toHaveBeenCalledTimes(1);

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Check, Clock, ShieldCheck, ClipboardList, CheckCircle2 } from 'lucide-react';
 import { notificationService } from '../../services/notificationService';
 
 export default function NotificationDropdown({ onSelectSurvey }) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -97,8 +99,12 @@ export default function NotificationDropdown({ onSelectSurvey }) {
       } catch (err) {}
     }
 
-    if (onSelectSurvey && notif.surveyId) {
-      onSelectSurvey(notif.surveyId);
+    if (notif.surveyId || notif.type === 'survey_invitation') {
+      if (onSelectSurvey) {
+        onSelectSurvey(notif.surveyId, notif.id);
+      } else {
+        navigate(`/surveys?tab=from_admin&responseId=${notif.id}`);
+      }
       setIsOpen(false);
     }
   };
@@ -155,7 +161,7 @@ export default function NotificationDropdown({ onSelectSurvey }) {
             ) : (
               notifications.map((notif) => {
                 const isSurvey = notif.type === 'survey_invitation' || notif.surveyId;
-                const isSubmitted = notif.response?.status === 'submitted';
+                const isSubmitted = notif.response?.status === 'submitted' || notif.data?.status === 'submitted';
 
                 return (
                   <div

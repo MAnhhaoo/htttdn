@@ -4,13 +4,19 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Query,
 } from '@nestjs/common';
 import { Roles } from '../../common/guards/access-control/roles.decorator';
 import { User, type UserInfo } from '../../common/decorators/user.decorator';
 import { UsersService } from './users.service';
-import { UpdateProfileDto } from '../clients/dto/update-client.dto';
+import {
+  GetUsersPaginationDto,
+  UpdateUserDto,
+  UpdateUserProfileDto,
+  UpdateUserStatusDto,
+} from './dto/user.dto';
 
 @Controller('users')
 export class UsersController {
@@ -18,20 +24,8 @@ export class UsersController {
 
   @Get()
   @Roles('admin')
-  getUsers(
-    @Query('page') page?: number,
-    @Query('itemPerPage') itemPerPage?: number,
-    @Query('role') role?: string,
-    @Query('search') search?: string,
-    @Query('status') status?: string,
-  ) {
-    return this.usersService.getUsers({
-      page,
-      itemPerPage,
-      role,
-      search,
-      status,
-    });
+  getUsers(@Query() query: GetUsersPaginationDto) {
+    return this.usersService.getUsers(query);
   }
 
   @Get('profile')
@@ -42,25 +36,42 @@ export class UsersController {
 
   @Patch('profile')
   @Roles('admin', 'client', 'vendor', 'employee')
-  updateProfile(@User() user: UserInfo, @Body() data: UpdateProfileDto) {
-    return this.usersService.updateUser(user.userID, data);
+  updateProfile(@User() user: UserInfo, @Body() data: UpdateUserProfileDto) {
+    return this.usersService.updateUser(user.userID, data, user);
   }
 
   @Get(':id')
   @Roles('admin')
-  getUser(@Param('id') id: string) {
+  getUser(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.getUser(id);
   }
 
   @Patch(':id')
   @Roles('admin')
-  updateUser(@Param('id') id: string, @Body() data: any) {
-    return this.usersService.updateUser(id, data);
+  updateUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() data: UpdateUserDto,
+    @User() user: UserInfo,
+  ) {
+    return this.usersService.updateUser(id, data, user);
+  }
+
+  @Patch(':id/status')
+  @Roles('admin')
+  updateUserStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateUserStatusDto,
+    @User() user: UserInfo,
+  ) {
+    return this.usersService.updateUserStatus(id, body.status, user);
   }
 
   @Delete(':id')
   @Roles('admin')
-  deleteUser(@Param('id') id: string) {
-    return this.usersService.deleteUser(id);
+  deleteUser(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: UserInfo,
+  ) {
+    return this.usersService.deleteUser(id, user);
   }
 }

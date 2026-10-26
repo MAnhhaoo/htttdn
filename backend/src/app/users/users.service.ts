@@ -1,11 +1,70 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { Prisma, UserStatus } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { assertEmailAvailable } from '../../common/utils/account-email/account-email.util';
+import {
+  formatPaginatedList,
+  normalizePagination,
+} from '../../common/utils/paginaton-util/pagintion-util.service';
+import type { UserInfo } from '../../common/decorators/user.decorator';
+import { RealtimeService } from '../realtime/realtime.service';
+
+type AccountRole = 'client' | 'vendor' | 'employee' | 'admin';
+
+const COMMON_ALLOWED_FIELDS = [
+  'fullName',
+  'email',
+  'phone',
+  'avatarUrl',
+  'status',
+] as const;
+
+const ROLE_ALLOWED_FIELDS: Record<AccountRole, readonly string[]> = {
+  client: [...COMMON_ALLOWED_FIELDS, 'dateOfBirth', 'gender'],
+  vendor: [...COMMON_ALLOWED_FIELDS, 'storeName', 'taxId'],
+  employee: [...COMMON_ALLOWED_FIELDS, 'dateOfBirth', 'gender', 'address'],
+  admin: [...COMMON_ALLOWED_FIELDS, 'department'],
+};
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly realtime?: RealtimeService,
+  ) {}
+
+  private formatClientAddress(
+    addresses?: Array<{
+      addressLine: string;
+      ward?: string | null;
+      district?: string | null;
+      province?: string | null;
+      isDefault?: boolean;
+    }>,
+  ): string {
+    if (!addresses?.length) return '';
+    const defaultAddr = addresses.find((a) => a.isDefault) || addresses[0];
+    return [
+      defaultAddr.addressLine,
+      defaultAddr.ward,
+      defaultAddr.district,
+      defaultAddr.province,
+    ]
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  private formatAccountCode(prefix: string, id: string): string {
+    return `${prefix}-${id.slice(0, 8).toUpperCase()}`;
+  }
 
   async getUsers(query: {
     page?: number;
@@ -14,34 +73,36 @@ export class UsersService {
     search?: string;
     status?: string;
   }) {
-    const page = Number(query.page) || 1;
-    const itemPerPage = Number(query.itemPerPage) || 10;
-    const skip = (page - 1) * itemPerPage;
+    const { page, itemPerPage, skip } = normalizePagination(query);
     const search = query.search?.trim();
     const role = query.role?.toLowerCase();
-    const status = query.status as any;
+    const status =
+      query.status === 'active' || query.status === 'inactive'
+        ? (query.status as UserStatus)
+        : undefined;
 
     if (role === 'vendor') {
       let matchedVendorIds: string[] = [];
-      const cleanSearch = search?.trim();
-      if (cleanSearch) {
-        const hex = cleanSearch.replace(/^VND-?/i, '');
-        if (/^[0-9a-fA-F-]{1,36}$/.test(hex)) {
+      if (search) {
+        const hex = search.replace(/^VND-?/i, '');
+        if (/^[0-9a-fA-F-]{1,36}$/.test(hex) && this.prisma.$queryRawUnsafe) {
           try {
-            const rawMatches: { id: string }[] = await this.prisma.$queryRawUnsafe(
-              `SELECT id FROM "Vendor" WHERE (id::text ILIKE $1 OR ('VND-' || UPPER(SUBSTRING(id::text, 1, 8))) ILIKE $2) AND "deletedAt" IS NULL`,
-              `%${hex}%`,
-              `%${cleanSearch}%`
-            );
+            const rawMatches: { id: string }[] =
+              await this.prisma.$queryRawUnsafe(
+                `SELECT id FROM "Vendor" WHERE (id::text ILIKE $1 OR ('VND-' || UPPER(SUBSTRING(id::text, 1, 8))) ILIKE $2)`,
+                `%${hex}%`,
+                `%${search}%`,
+              );
             matchedVendorIds = rawMatches.map((r) => r.id);
-          } catch (e) {
-            // fallback
+          } catch (error) {
+            this.logger.warn(
+              `Không thể tìm mã vendor bằng truy vấn mở rộng: ${(error as Error).message}`,
+            );
           }
         }
       }
 
       const where: Prisma.VendorWhereInput = {
-        deletedAt: null,
         ...(status ? { status } : {}),
         ...(search
           ? {
@@ -50,7 +111,9 @@ export class UsersService {
                 { email: { contains: search, mode: 'insensitive' } },
                 { phone: { contains: search, mode: 'insensitive' } },
                 { storeName: { contains: search, mode: 'insensitive' } },
-                ...(matchedVendorIds.length > 0 ? [{ id: { in: matchedVendorIds } }] : []),
+                ...(matchedVendorIds.length > 0
+                  ? [{ id: { in: matchedVendorIds } }]
+                  : []),
               ],
             }
           : {}),
@@ -78,25 +141,25 @@ export class UsersService {
         }),
       ]);
 
-      return {
-        list: list.map((v) => ({
-          ...v,
-          userCode: `VND-${v.id.slice(0, 8).toUpperCase()}`,
-          vendorCode: `VND-${v.id.slice(0, 8).toUpperCase()}`,
-          storeCode: `VND-${v.id.slice(0, 8).toUpperCase()}`,
-          role: 'vendor',
-          address: v.storeName || '',
-        })),
-        page,
-        itemPerPage,
+      return formatPaginatedList(
+        list.map((v) => {
+          const code = this.formatAccountCode('VND', v.id);
+          return {
+            ...v,
+            userCode: code,
+            vendorCode: code,
+            storeCode: code,
+            role: 'vendor',
+            address: v.storeName || '',
+          };
+        }),
         totalItems,
-        totalPages: Math.ceil(totalItems / itemPerPage) || 1,
-      };
+        { page, itemPerPage },
+      );
     }
 
     if (role === 'admin') {
       const where: Prisma.AdminWhereInput = {
-        deletedAt: null,
         ...(status ? { status } : {}),
         ...(search
           ? {
@@ -128,23 +191,20 @@ export class UsersService {
         }),
       ]);
 
-      return {
-        list: list.map((a) => ({
+      return formatPaginatedList(
+        list.map((a) => ({
           ...a,
-          userCode: `ADM-${a.id.slice(0, 8).toUpperCase()}`,
+          userCode: this.formatAccountCode('ADM', a.id),
           role: 'admin',
           address: '',
         })),
-        page,
-        itemPerPage,
         totalItems,
-        totalPages: Math.ceil(totalItems / itemPerPage) || 1,
-      };
+        { page, itemPerPage },
+      );
     }
 
     if (role === 'employee') {
       const where: Prisma.EmployeeWhereInput = {
-        deletedAt: null,
         ...(status ? { status } : {}),
         ...(search
           ? {
@@ -181,22 +241,19 @@ export class UsersService {
         }),
       ]);
 
-      return {
-        list: list.map((e) => ({
+      return formatPaginatedList(
+        list.map((e) => ({
           ...e,
-          userCode: e.employeeCode || `EMP-${e.id.slice(0, 8).toUpperCase()}`,
+          userCode: e.employeeCode || this.formatAccountCode('EMP', e.id),
           role: 'employee',
         })),
-        page,
-        itemPerPage,
         totalItems,
-        totalPages: Math.ceil(totalItems / itemPerPage) || 1,
-      };
+        { page, itemPerPage },
+      );
     }
 
     // Default: role is 'customer' / 'client' or general query
     const where: Prisma.ClientWhereInput = {
-      deletedAt: null,
       ...(status ? { status } : {}),
       ...(search
         ? {
@@ -242,25 +299,13 @@ export class UsersService {
       }),
     ]);
 
-    return {
-      list: list.map((c) => {
-        const defaultAddr =
-          c.addresses.find((a) => a.isDefault) || c.addresses[0];
-        const formattedAddress = defaultAddr
-          ? [
-              defaultAddr.addressLine,
-              defaultAddr.ward,
-              defaultAddr.district,
-              defaultAddr.province,
-            ]
-              .filter(Boolean)
-              .join(', ')
-          : '';
-
+    return formatPaginatedList(
+      list.map((c) => {
+        const code = this.formatAccountCode('CUS', c.id);
         return {
           id: c.id,
-          userCode: `CUS-${c.id.slice(0, 8).toUpperCase()}`,
-          clientCode: `CUS-${c.id.slice(0, 8).toUpperCase()}`,
+          userCode: code,
+          clientCode: code,
           fullName: c.fullName,
           email: c.email,
           phone: c.phone,
@@ -271,15 +316,13 @@ export class UsersService {
           status: c.status,
           createdAt: c.createdAt,
           updatedAt: c.updatedAt,
-          address: formattedAddress,
+          address: this.formatClientAddress(c.addresses),
           role: 'customer',
         };
       }),
-      page,
-      itemPerPage,
       totalItems,
-      totalPages: Math.ceil(totalItems / itemPerPage) || 1,
-    };
+      { page, itemPerPage },
+    );
   }
 
   async getUser(id: string) {
@@ -309,22 +352,11 @@ export class UsersService {
       },
     });
     if (client) {
-      const defaultAddr =
-        client.addresses.find((a) => a.isDefault) || client.addresses[0];
-      const formattedAddress = defaultAddr
-        ? [
-            defaultAddr.addressLine,
-            defaultAddr.ward,
-            defaultAddr.district,
-            defaultAddr.province,
-          ]
-            .filter(Boolean)
-            .join(', ')
-        : '';
+      const code = this.formatAccountCode('CUS', client.id);
       return {
         id: client.id,
-        userCode: `CUS-${client.id.slice(0, 8).toUpperCase()}`,
-        clientCode: `CUS-${client.id.slice(0, 8).toUpperCase()}`,
+        userCode: code,
+        clientCode: code,
         fullName: client.fullName,
         email: client.email,
         phone: client.phone,
@@ -334,7 +366,7 @@ export class UsersService {
         loyaltyPoints: client.loyaltyPoints,
         status: client.status,
         createdAt: client.createdAt,
-        address: formattedAddress,
+        address: this.formatClientAddress(client.addresses),
         role: 'customer',
       };
     }
@@ -354,10 +386,11 @@ export class UsersService {
       },
     });
     if (vendor) {
+      const code = this.formatAccountCode('VND', vendor.id);
       return {
         ...vendor,
-        userCode: `VND-${vendor.id.slice(0, 8).toUpperCase()}`,
-        vendorCode: `VND-${vendor.id.slice(0, 8).toUpperCase()}`,
+        userCode: code,
+        vendorCode: code,
         address: vendor.storeName || '',
         role: 'vendor',
       };
@@ -375,13 +408,14 @@ export class UsersService {
         createdAt: true,
       },
     });
-    if (admin)
+    if (admin) {
       return {
         ...admin,
-        userCode: `ADM-${admin.id.slice(0, 8).toUpperCase()}`,
+        userCode: this.formatAccountCode('ADM', admin.id),
         address: '',
         role: 'admin',
       };
+    }
 
     const employee = await this.prisma.employee.findUnique({
       where: { id },
@@ -400,88 +434,159 @@ export class UsersService {
         createdAt: true,
       },
     });
-    if (employee)
+    if (employee) {
       return {
         ...employee,
-        userCode: employee.employeeCode || `EMP-${employee.id.slice(0, 8).toUpperCase()}`,
+        userCode:
+          employee.employeeCode || this.formatAccountCode('EMP', employee.id),
         role: 'employee',
       };
+    }
 
     throw new NotFoundException('Người dùng không tồn tại');
   }
 
-  async updateUser(id: string, data: any) {
-    const { role: _r, password: _p, id: _i, address: _a, ...updateData } = data ?? {};
+  private async assertCanChangeStatus(
+    id: string,
+    targetRole: AccountRole,
+    nextStatus: string | undefined,
+    currentUser?: UserInfo,
+  ) {
+    if (nextStatus !== 'inactive') return;
+
+    if (currentUser?.userID && id === currentUser.userID) {
+      throw new BadRequestException(
+        'Không thể tự khóa tài khoản của chính mình',
+      );
+    }
+
+    if (targetRole === 'admin') {
+      const allActiveAdmins = await this.prisma.admin.findMany({
+        where: { status: 'active' },
+        select: { id: true },
+      });
+      const remainingActiveAdmins = allActiveAdmins.filter(
+        (a) => a.id !== id,
+      ).length;
+      if (remainingActiveAdmins === 0) {
+        throw new BadRequestException(
+          'Không thể khóa tài khoản quản trị viên đang hoạt động cuối cùng',
+        );
+      }
+    }
+  }
+
+  private async syncClientDefaultAddress(
+    clientId: string,
+    fullName: string,
+    phone: string | null,
+    address: string | null,
+  ) {
+    if (!this.prisma.clientAddress) return;
+    const trimmed = address ? String(address).trim() : '';
+    if (!trimmed) return;
+
+    const existingDefault = await this.prisma.clientAddress.findFirst({
+      where: { clientId, isDefault: true, deletedAt: null },
+    });
+
+    if (existingDefault) {
+      await this.prisma.clientAddress.update({
+        where: { id: existingDefault.id },
+        data: { addressLine: trimmed },
+      });
+    } else {
+      await this.prisma.clientAddress.create({
+        data: {
+          clientId,
+          receiverName: fullName,
+          phone: phone || '',
+          addressLine: trimmed,
+          isDefault: true,
+        },
+      });
+    }
+  }
+
+  async updateUser(
+    id: string,
+    data: Record<string, any>,
+    currentUser?: UserInfo,
+  ) {
+    const {
+      role: _r,
+      password: _p,
+      id: _i,
+      deletedAt: _d,
+      address,
+      ...rawUpdateData
+    } = data ?? {};
+
+    const updateData: Record<string, any> = { ...rawUpdateData };
     if (typeof updateData.dateOfBirth === 'string') {
-      updateData.dateOfBirth = new Date(`${updateData.dateOfBirth}T00:00:00.000Z`);
+      updateData.dateOfBirth = new Date(
+        `${updateData.dateOfBirth}T00:00:00.000Z`,
+      );
     }
     if (typeof updateData.email === 'string') {
       updateData.email = updateData.email.trim().toLowerCase();
     }
 
-    // Chỉ giữ các cột thực sự tồn tại ở từng bảng để tránh lỗi 500 khi body có field lạ
-    const pick = (allowed: string[]) => {
-      const keys = Object.keys(updateData);
+    const pickAllowed = (role: AccountRole, source: Record<string, any>) => {
+      const allowed = ROLE_ALLOWED_FIELDS[role];
+      const keys = Object.keys(source);
       const invalid = keys.filter((k) => !allowed.includes(k));
       if (invalid.length > 0) {
-        throw new BadRequestException(`Dữ liệu cập nhật chứa trường không hợp lệ: ${invalid.join(', ')}`);
+        throw new BadRequestException(
+          `Dữ liệu cập nhật chứa trường không hợp lệ: ${invalid.join(', ')}`,
+        );
       }
       return Object.fromEntries(
-        Object.entries(updateData).filter(
+        Object.entries(source).filter(
           ([key, value]) => allowed.includes(key) && value !== undefined,
         ),
-      ) as any;
+      );
     };
-    const common = ['fullName', 'email', 'phone', 'avatarUrl', 'status', 'deletedAt'];
 
-    // Check client
-    const isClient = await this.prisma.client.findUnique({ where: { id } });
-    if (isClient) {
-      const clientData = pick([...common, 'dateOfBirth', 'gender']);
-      await assertEmailAvailable(this.prisma, clientData.email, { role: 'client', id });
-      const updated = await this.prisma.client.update({
-        where: { id },
-        data: clientData,
-      });
-      const { password: _, ...rest } = updated;
-      return rest;
-    }
+    const roles: AccountRole[] = ['client', 'vendor', 'employee', 'admin'];
+    for (const role of roles) {
+      const delegate = (this.prisma as any)[role];
+      const existing = await delegate.findUnique({ where: { id } });
+      if (!existing) continue;
 
-    // Check vendor
-    const isVendor = await this.prisma.vendor.findUnique({ where: { id } });
-    if (isVendor) {
-      const vendorData = pick([...common, 'storeName', 'taxId']);
-      await assertEmailAvailable(this.prisma, vendorData.email, { role: 'vendor', id });
-      const updated = await this.prisma.vendor.update({
-        where: { id },
-        data: vendorData,
-      });
-      const { password: _, ...rest } = updated;
-      return rest;
-    }
+      const sourceWithAddress =
+        role === 'employee' && address !== undefined
+          ? { ...updateData, address }
+          : updateData;
 
-    // Check employee
-    const isEmployee = await this.prisma.employee.findUnique({ where: { id } });
-    if (isEmployee) {
-      const employeeData = pick([...common, 'dateOfBirth', 'gender']);
-      await assertEmailAvailable(this.prisma, employeeData.email, { role: 'employee', id });
-      const updated = await this.prisma.employee.update({
-        where: { id },
-        data: employeeData,
-      });
-      const { password: _, ...rest } = updated;
-      return rest;
-    }
+      const roleData = pickAllowed(role, sourceWithAddress);
+      await this.assertCanChangeStatus(id, role, roleData.status, currentUser);
 
-    // Check admin
-    const isAdmin = await this.prisma.admin.findUnique({ where: { id } });
-    if (isAdmin) {
-      const adminData = pick([...common, 'department']);
-      await assertEmailAvailable(this.prisma, adminData.email, { role: 'admin', id });
-      const updated = await this.prisma.admin.update({
+      if (roleData.email) {
+        await assertEmailAvailable(this.prisma, roleData.email, { role, id });
+      }
+      if (roleData.status && existing.deletedAt) {
+        roleData.deletedAt = null;
+      }
+
+      const updated = await delegate.update({
         where: { id },
-        data: adminData,
+        data: roleData,
       });
+
+      if (role === 'client' && address !== undefined) {
+        await this.syncClientDefaultAddress(
+          id,
+          updated.fullName,
+          updated.phone,
+          address,
+        );
+      }
+
+      if (roleData.status === 'inactive') {
+        this.realtime?.disconnectUser(id);
+      }
+
       const { password: _, ...rest } = updated;
       return rest;
     }
@@ -489,10 +594,23 @@ export class UsersService {
     throw new NotFoundException('Người dùng không tồn tại');
   }
 
-  async deleteUser(id: string) {
-    return this.updateUser(id, {
-      status: 'inactive',
-      deletedAt: new Date(),
-    });
+  async updateUserStatus(
+    id: string,
+    status: 'active' | 'inactive',
+    currentUser?: UserInfo,
+  ) {
+    if (status !== 'active' && status !== 'inactive') {
+      throw new BadRequestException(
+        'Trạng thái tài khoản chỉ được là active hoặc inactive',
+      );
+    }
+    return this.updateUser(id, { status }, currentUser);
+  }
+
+  /**
+   * Tài khoản chỉ khóa (status = inactive), không xóa.
+   */
+  async deleteUser(id: string, currentUser?: UserInfo) {
+    return this.updateUserStatus(id, 'inactive', currentUser);
   }
 }

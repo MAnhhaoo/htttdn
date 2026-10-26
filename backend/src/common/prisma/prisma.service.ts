@@ -8,7 +8,6 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { omit } from 'es-toolkit';
 
 import { StringUtilService } from '../utils/string-util/string-util.service';
-import { DateUtilService } from '../utils/date-util/date-util.service';
 
 @Injectable()
 export class PrismaService
@@ -17,10 +16,7 @@ export class PrismaService
 {
   private _extended: ReturnType<typeof this.initExtended>;
 
-  constructor(
-    private _dateUtilService: DateUtilService,
-    private stringUtilService: StringUtilService,
-  ) {
+  constructor(private stringUtilService: StringUtilService) {
     super({
       transactionOptions: {
         // This feature is not available on MongoDB, because MongoDB does not support isolation levels.
@@ -49,7 +45,6 @@ export class PrismaService
   }
 
   private generateData<T>(data: T, model: string) {
-    // const modelsGenSlug = [Vendor.name];
     const modelsGenSlug = ['Product', 'Category'];
     if (modelsGenSlug.includes(model)) {
       if (Array.isArray(data)) {
@@ -66,19 +61,23 @@ export class PrismaService
     return data;
   }
 
-  // private readonly JUNCTION_TABLES = [RolePermission.name, UserVendorRole.name];
   private readonly JUNCTION_TABLES = ['RolePermission', 'UserVendorRole'];
+  private readonly ACCOUNT_MODELS = ['Admin', 'Client', 'Vendor', 'Employee'];
   initExtended() {
     const extended = this.$extends({
       query: {
         $allModels: {
-          findFirst: ({ args, query }) => {
-            args.where = { ...args.where, deletedAt: null };
+          findFirst: ({ args, query, model }) => {
+            if (!this.ACCOUNT_MODELS.includes(model)) {
+              args.where = { ...args.where, deletedAt: null };
+            }
             return query(args);
           },
           findMany: ({ args, query, model }) => {
             if (!this.JUNCTION_TABLES.includes(model)) {
-              args.where = { ...args.where, deletedAt: null };
+              if (!this.ACCOUNT_MODELS.includes(model)) {
+                args.where = { ...args.where, deletedAt: null };
+              }
               args.orderBy ??= [{ updatedAt: 'desc' }, { createdAt: 'desc' }];
             }
             return query(args);
@@ -107,8 +106,10 @@ export class PrismaService
           updateMany: ({ args, query }) => {
             return query(args);
           },
-          count: ({ args, query }) => {
-            args.where = { ...args.where, deletedAt: null };
+          count: ({ args, query, model }) => {
+            if (!this.ACCOUNT_MODELS.includes(model)) {
+              args.where = { ...args.where, deletedAt: null };
+            }
             return query(args);
           },
           upsert: ({ args, query, model }) => {
@@ -158,8 +159,13 @@ export class PrismaService
             where: Prisma.Args<T, 'deleteMany'>['where'],
           ) {
             const context: any = Prisma.getExtensionContext(this);
+            const isAccount = ['Admin', 'Client', 'Vendor', 'Employee'].includes(
+              context.$name,
+            );
             const result = await context.updateMany({
-              data: { deletedAt: new Date() },
+              data: isAccount
+                ? { status: 'inactive', deletedAt: null }
+                : { deletedAt: new Date() },
               where,
             });
             return result;
@@ -169,26 +175,19 @@ export class PrismaService
             where: Prisma.Args<T, 'updateMany'>['where'],
           ) {
             const context: any = Prisma.getExtensionContext(this);
+            const isAccount = ['Admin', 'Client', 'Vendor', 'Employee'].includes(
+              context.$name,
+            );
             const result = await context.updateMany({
-              data: { deletedAt: null },
+              data: isAccount
+                ? { status: 'active', deletedAt: null }
+                : { deletedAt: null },
               where,
             });
             return result;
           },
         },
       },
-      // result: {
-      //   $allModels: {
-      //     createdAt: {
-      //       compute: ({ createdAt }) =>
-      //         this.dateUtilService.formatDate(createdAt),
-      //     },
-      //     updatedAt: {
-      //       compute: ({ updatedAt }) =>
-      //         this.dateUtilService.formatDate(updatedAt),
-      //     },
-      //   },
-      // },
     });
     this._extended = extended;
     return extended;
