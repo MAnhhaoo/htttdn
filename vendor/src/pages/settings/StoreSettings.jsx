@@ -14,6 +14,8 @@ import {
   Building2,
   Sparkles,
   Check,
+  Upload,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { userService } from '../../services/userService';
@@ -21,6 +23,7 @@ import { userService } from '../../services/userService';
 export default function StoreSettings() {
   const { user, checkAuth } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [subLoading, setSubLoading] = useState(true);
   const [subscription, setSubscription] = useState(null);
 
@@ -30,6 +33,7 @@ export default function StoreSettings() {
     phone: '',
     taxId: '',
     address: '',
+    avatarUrl: '',
   });
 
   // Renewal Modal State
@@ -57,6 +61,7 @@ export default function StoreSettings() {
         phone: user.phone || '',
         taxId: user.taxId || '',
         address: user.address || '',
+        avatarUrl: user.avatarUrl || '',
       });
     }
     loadSubscription();
@@ -64,6 +69,24 @@ export default function StoreSettings() {
 
   const handleChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleAvatarFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingAvatar(true);
+      const uploadedUrl = await userService.uploadAvatar(file);
+      if (uploadedUrl) {
+        setForm((prev) => ({ ...prev, avatarUrl: uploadedUrl }));
+      }
+    } catch (error) {
+      console.error('Failed to upload avatar', error);
+      alert('Không thể tải ảnh đại diện lên: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setIsUploadingAvatar(false);
+      e.target.value = '';
+    }
   };
 
   const handleSave = async () => {
@@ -75,6 +98,7 @@ export default function StoreSettings() {
         phone: form.phone || null,
         taxId: form.taxId || null,
         address: form.address || null,
+        avatarUrl: form.avatarUrl?.trim() || null,
       });
       await checkAuth();
       await loadSubscription();
@@ -232,8 +256,19 @@ export default function StoreSettings() {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white dark:bg-slate-900 transition-colors rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 sm:p-8 space-y-6">
             <div className="flex items-center gap-4 pb-6 border-b border-slate-200 dark:border-slate-800">
-              <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center shrink-0">
-                <Store className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center shrink-0 overflow-hidden">
+                {(form.avatarUrl?.trim() || user?.avatarUrl) ? (
+                  <img
+                    src={form.avatarUrl?.trim() || user?.avatarUrl}
+                    alt={form.storeName || user?.fullName || 'Store'}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <Store className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+                )}
               </div>
               <div>
                 <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
@@ -293,6 +328,34 @@ export default function StoreSettings() {
                   placeholder="03xxxxxxxx"
                   className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-800 dark:text-slate-100"
                 />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                  Ảnh đại diện / Logo cửa hàng
+                </label>
+                <div className="flex items-center gap-3">
+                  <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 hover:border-indigo-500 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 cursor-pointer transition-colors">
+                    {isUploadingAvatar ? <Loader2 className="w-4 h-4 animate-spin text-indigo-600" /> : <Upload className="w-4 h-4 text-indigo-600" />}
+                    {isUploadingAvatar ? 'Đang tải ảnh...' : 'Chọn ảnh từ máy'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarFileChange}
+                      disabled={isUploadingAvatar}
+                      className="hidden"
+                    />
+                  </label>
+                  {form.avatarUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('avatarUrl', '')}
+                      className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-medium transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" /> Xóa ảnh
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

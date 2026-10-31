@@ -130,17 +130,26 @@ export class ClientsService extends PrismaBaseService<'client'> {
   }
 
   async createClient(createClientDto: CreateClientDto) {
-    const { address, ...clientData } = createClientDto as any;
+    const { address, id: _id, createdBy: _createdBy, user: _user, ...clientData } =
+      createClientDto as any;
     if (typeof clientData.email === 'string') {
       clientData.email = clientData.email.trim().toLowerCase();
-      await assertEmailAvailable(this.prismaService, clientData.email);
+      await assertEmailAvailable(this.prismaService.extended, clientData.email);
+    }
+    if (typeof clientData.dateOfBirth === 'string') {
+      clientData.dateOfBirth = clientData.dateOfBirth.trim()
+        ? new Date(`${clientData.dateOfBirth.slice(0, 10)}T00:00:00.000Z`)
+        : null;
+    }
+    if (clientData.gender === '') {
+      clientData.gender = null;
     }
     const client = await this.extended.create({
       data: clientData,
     });
 
-    if (address && String(address).trim() && this.prismaService.clientAddress) {
-      await this.prismaService.clientAddress
+    if (address && String(address).trim() && this.prismaService.extended.clientAddress) {
+      await this.prismaService.extended.clientAddress
         .create({
           data: {
             clientId: client.id,
@@ -174,16 +183,25 @@ export class ClientsService extends PrismaBaseService<'client'> {
       clientData.deletedAt = null;
     }
 
+    if (typeof clientData.dateOfBirth === 'string') {
+      clientData.dateOfBirth = clientData.dateOfBirth.trim()
+        ? new Date(`${clientData.dateOfBirth.slice(0, 10)}T00:00:00.000Z`)
+        : null;
+    }
+    if (clientData.gender === '') {
+      clientData.gender = null;
+    }
+
     if (typeof clientData.email === 'string') {
       clientData.email = clientData.email.trim().toLowerCase();
       const current = where.id
         ? { id: where.id }
-        : await this.prismaService.client.findUnique({
+        : await this.prismaService.extended.client.findUnique({
             where,
             select: { id: true },
           });
       await assertEmailAvailable(
-        this.prismaService,
+        this.prismaService.extended,
         clientData.email,
         current ? { role: 'client', id: current.id } : undefined,
       );
@@ -199,18 +217,18 @@ export class ClientsService extends PrismaBaseService<'client'> {
       this.realtime?.disconnectUser(data.id);
     }
 
-    if (address !== undefined && where.id && this.prismaService.clientAddress) {
+    if (address !== undefined && where.id && this.prismaService.extended.clientAddress) {
       if (address) {
-        const defaultAddr = await this.prismaService.clientAddress.findFirst({
+        const defaultAddr = await this.prismaService.extended.clientAddress.findFirst({
           where: { clientId: where.id, isDefault: true, deletedAt: null },
         });
         if (defaultAddr) {
-          await this.prismaService.clientAddress.update({
+          await this.prismaService.extended.clientAddress.update({
             where: { id: defaultAddr.id },
             data: { addressLine: address },
           });
         } else {
-          await this.prismaService.clientAddress.create({
+          await this.prismaService.extended.clientAddress.create({
             data: {
               clientId: where.id,
               receiverName: data.fullName,

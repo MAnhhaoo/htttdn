@@ -73,10 +73,10 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       const payload = await this.authService.verifyToken(token);
       if (role && role !== payload.role) throw new Error('Role mismatch');
       let user: any;
-      if (payload.role === 'admin') user = await this.prismaService.admin.findUnique({where: {id: payload.userID}});
-      if (payload.role === 'client') user = await this.prismaService.client.findUnique({where: {id: payload.userID}});
-      if (payload.role === 'vendor') user = await this.prismaService.vendor.findUnique({where: {id: payload.userID}});
-      if (payload.role === 'employee') user = await this.prismaService.employee.findUnique({where: {id: payload.userID}});
+      if (payload.role === 'admin') user = await this.prismaService.extended.admin.findUnique({where: {id: payload.userID}});
+      if (payload.role === 'client') user = await this.prismaService.extended.client.findUnique({where: {id: payload.userID}});
+      if (payload.role === 'vendor') user = await this.prismaService.extended.vendor.findUnique({where: {id: payload.userID}});
+      if (payload.role === 'employee') user = await this.prismaService.extended.employee.findUnique({where: {id: payload.userID}});
       if (!user || user.status !== UserStatus.active || user.deletedAt) {
         throw new Error('Inactive user');
       }

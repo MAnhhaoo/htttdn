@@ -256,6 +256,9 @@ describe('Product detail and variants (HTTP integration)', () => {
         $transaction: jest.fn((callback) =>
           callback({ product: productDelegate, productColor: rawColorDelegate, productVariant: variantDelegate }),
         ),
+        extendedTransaction: jest.fn((callback) =>
+          callback({ product: productDelegate, productColor: colorDelegate, productVariant: variantDelegate }),
+        ),
         extended: {
           ...accountDelegates,
           product: productDelegate,

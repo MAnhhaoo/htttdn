@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { 
@@ -33,6 +33,7 @@ export default function Checkout() {
   const [selectedAddressId, setSelectedAddressId] = useState('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const checkoutCompletedRef = useRef(false);
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [addressMsg, setAddressMsg] = useState({ type: '', text: '' });
@@ -104,12 +105,12 @@ export default function Checkout() {
       0,
     );
   }, [checkoutItems]);
-  const pricing = useCheckoutPricing(checkoutItems, location.state?.voucherSelections || []);
+  const pricing = useCheckoutPricing(checkoutItems, location.state?.voucherSelections || [], !isSubmitting && !checkoutCompletedRef.current);
 
   if (isLoadingCart) {
     return <Loading text="Đang tải giỏ hàng..." />;
   }
-  if (items.length === 0) {
+  if (items.length === 0 && !isSubmitting && !checkoutCompletedRef.current) {
     return <Navigate to="/cart" replace />;
   }
 
@@ -245,6 +246,7 @@ export default function Checkout() {
         cartItemIds: checkoutItems.map((i) => i.id),
       };
 
+      checkoutCompletedRef.current = true;
       const response = await orderService.checkout(payload);
       const resData = response?.data || response;
       const createdOrders = resData?.orders || (resData?.id ? [resData] : []);
@@ -266,6 +268,7 @@ export default function Checkout() {
         navigate('/orders');
       }
     } catch (error) {
+      checkoutCompletedRef.current = false;
       console.error('Checkout error:', error);
       const errMessage = 
         error.response?.data?.errors?.[0]?.message || 

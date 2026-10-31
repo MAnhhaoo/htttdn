@@ -36,7 +36,7 @@ export class EmployeesService {
     const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
     const prefix = `EMP-${yearMonth}-`;
 
-    const lastEmployee = await this.prisma.employee.findFirst({
+    const lastEmployee = await this.prisma.extended.employee.findFirst({
       where: {
         employeeCode: {
           startsWith: prefix,
@@ -86,8 +86,8 @@ export class EmployeesService {
     };
 
     const [totalItems, list] = await Promise.all([
-      this.prisma.employee.count({ where }),
-      this.prisma.employee.findMany({
+      this.prisma.extended.employee.count({ where }),
+      this.prisma.extended.employee.findMany({
         where,
         skip,
         take: itemPerPage,
@@ -121,7 +121,7 @@ export class EmployeesService {
   }
 
   async getDepartments(): Promise<string[]> {
-    const emps = await this.prisma.employee.findMany({
+    const emps = await this.prisma.extended.employee.findMany({
       select: { department: true },
       distinct: ['department'],
       orderBy: { department: 'asc' },
@@ -130,7 +130,7 @@ export class EmployeesService {
   }
 
   async getEmployeeById(id: string) {
-    const employee = await this.prisma.employee.findUnique({
+    const employee = await this.prisma.extended.employee.findUnique({
       where: { id },
       include: {
         salaryHistories: {
@@ -160,12 +160,12 @@ export class EmployeesService {
     const email = dto.email.trim().toLowerCase();
     // Email phải duy nhất trên toàn hệ thống (khách hàng, vendor, admin, nhân viên,
     // kể cả tài khoản đã khóa vì cột email vẫn unique).
-    await assertEmailAvailable(this.prisma, email);
+    await assertEmailAvailable(this.prisma.extended, email);
 
     const hashedPassword = await this.stringUtilService.hash(dto.password);
     const employeeCode = await this.generateEmployeeCode();
 
-    const employee = await this.prisma.employee.create({
+    const employee = await this.prisma.extended.employee.create({
       data: {
         employeeCode,
         fullName: dto.fullName,
@@ -191,7 +191,7 @@ export class EmployeesService {
 
     // Record initial salary history entry
     if (dto.salary > 0 || (dto.hourlyRate && dto.hourlyRate > 0)) {
-      await this.prisma.employeeSalaryHistory.create({
+      await this.prisma.extended.employeeSalaryHistory.create({
         data: {
           employeeId: employee.id,
           newSalary: dto.salary,
@@ -209,7 +209,7 @@ export class EmployeesService {
   }
 
   async updateEmployee(adminId: string, id: string, dto: UpdateEmployeeDto) {
-    const existing = await this.prisma.employee.findUnique({
+    const existing = await this.prisma.extended.employee.findUnique({
       where: { id },
     });
     if (!existing) {
@@ -223,7 +223,7 @@ export class EmployeesService {
       (dto.employmentType !== undefined && dto.employmentType !== existing.employmentType);
 
     if (isSalaryChanged) {
-      await this.prisma.employeeSalaryHistory.create({
+      await this.prisma.extended.employeeSalaryHistory.create({
         data: {
           employeeId: existing.id,
           oldSalary: existing.salary,
@@ -244,7 +244,7 @@ export class EmployeesService {
       hashedPassword = await this.stringUtilService.hash(dto.password);
     }
 
-    const updated = await this.prisma.employee.update({
+    const updated = await this.prisma.extended.employee.update({
       where: { id },
       data: {
         ...(dto.fullName ? { fullName: dto.fullName } : {}),
@@ -286,12 +286,12 @@ export class EmployeesService {
     if (status !== 'active' && status !== 'inactive') {
       throw new BadRequestException('Trạng thái chỉ được là active hoặc inactive');
     }
-    const existing = await this.prisma.employee.findUnique({ where: { id } });
+    const existing = await this.prisma.extended.employee.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Không tìm thấy thông tin nhân viên');
     }
 
-    const updated = await this.prisma.employee.update({
+    const updated = await this.prisma.extended.employee.update({
       where: { id },
       data: { status, deletedAt: null },
       select: {
@@ -319,7 +319,7 @@ export class EmployeesService {
   }
 
   async getSalaryHistory(employeeId: string) {
-    const existing = await this.prisma.employee.findUnique({
+    const existing = await this.prisma.extended.employee.findUnique({
       where: { id: employeeId },
       select: { id: true },
     });
@@ -327,7 +327,7 @@ export class EmployeesService {
       throw new NotFoundException('Không tìm thấy thông tin nhân viên');
     }
 
-    return this.prisma.employeeSalaryHistory.findMany({
+    return this.prisma.extended.employeeSalaryHistory.findMany({
       where: { employeeId },
       orderBy: { effectiveDate: 'desc' },
       include: {
@@ -350,7 +350,7 @@ export class EmployeesService {
     employeeId: string,
     data: UpdateEmployeeProfileDto,
   ) {
-    const updated = await this.prisma.employee.update({
+    const updated = await this.prisma.extended.employee.update({
       where: { id: employeeId },
       data: {
         ...(data.phone !== undefined ? { phone: data.phone } : {}),
@@ -363,7 +363,7 @@ export class EmployeesService {
   }
 
   async updateSchedule(id: string, scheduleData: UpdateEmployeeScheduleDto) {
-    const employee = await this.prisma.employee.findUnique({ where: { id } });
+    const employee = await this.prisma.extended.employee.findUnique({ where: { id } });
     if (!employee) {
       throw new NotFoundException('Không tìm thấy thông tin nhân viên');
     }
@@ -379,7 +379,7 @@ export class EmployeesService {
       updatedAt: new Date().toISOString(),
     };
 
-    const updated = await this.prisma.employee.update({
+    const updated = await this.prisma.extended.employee.update({
       where: { id },
       data: {
         permissions: {
@@ -403,7 +403,7 @@ export class EmployeesService {
   async sendNotification(adminId: string, dto: { employeeId?: string; type?: string; title: string; content: string }) {
     let senderName = 'Ban Quản Trị MIVA';
     try {
-      const admin = await this.prisma.admin.findUnique({ where: { id: adminId }, select: { fullName: true } });
+      const admin = await this.prisma.extended.admin.findUnique({ where: { id: adminId }, select: { fullName: true } });
       if (admin?.fullName) senderName = admin.fullName;
     } catch (error) {
       this.logger.warn(
@@ -422,7 +422,7 @@ export class EmployeesService {
     };
 
     if (!dto.employeeId || dto.employeeId === 'all') {
-      const employees = await this.prisma.employee.findMany({
+      const employees = await this.prisma.extended.employee.findMany({
         where: { status: 'active' },
       });
 
@@ -431,7 +431,7 @@ export class EmployeesService {
         const notifications = Array.isArray(perms.notifications) ? perms.notifications : [];
         const updatedNotifs = [newNotif, ...notifications].slice(0, 50);
 
-        await this.prisma.employee.update({
+        await this.prisma.extended.employee.update({
           where: { id: emp.id },
           data: {
             permissions: {
@@ -449,7 +449,7 @@ export class EmployeesService {
         notification: newNotif,
       };
     } else {
-      const emp = await this.prisma.employee.findUnique({
+      const emp = await this.prisma.extended.employee.findUnique({
         where: { id: dto.employeeId },
       });
 
@@ -461,7 +461,7 @@ export class EmployeesService {
       const notifications = Array.isArray(perms.notifications) ? perms.notifications : [];
       const updatedNotifs = [newNotif, ...notifications].slice(0, 50);
 
-      await this.prisma.employee.update({
+      await this.prisma.extended.employee.update({
         where: { id: emp.id },
         data: {
           permissions: {
@@ -480,7 +480,7 @@ export class EmployeesService {
   }
 
   async getMyNotifications(employeeId: string) {
-    const emp = await this.prisma.employee.findUnique({
+    const emp = await this.prisma.extended.employee.findUnique({
       where: { id: employeeId },
       select: { permissions: true },
     });
@@ -500,7 +500,7 @@ export class EmployeesService {
   }
 
   async markNotificationRead(employeeId: string, notifId: string) {
-    const emp = await this.prisma.employee.findUnique({
+    const emp = await this.prisma.extended.employee.findUnique({
       where: { id: employeeId },
       select: { permissions: true },
     });
@@ -511,7 +511,7 @@ export class EmployeesService {
     const notifications: any[] = Array.isArray(perms.notifications) ? perms.notifications : [];
     const updatedNotifs = notifications.map((n) => (n.id === notifId ? { ...n, isRead: true, readAt: new Date().toISOString() } : n));
 
-    await this.prisma.employee.update({
+    await this.prisma.extended.employee.update({
       where: { id: employeeId },
       data: {
         permissions: {
@@ -527,7 +527,7 @@ export class EmployeesService {
   }
 
   async markAllNotificationsRead(employeeId: string) {
-    const emp = await this.prisma.employee.findUnique({
+    const emp = await this.prisma.extended.employee.findUnique({
       where: { id: employeeId },
       select: { permissions: true },
     });
@@ -539,7 +539,7 @@ export class EmployeesService {
     const now = new Date().toISOString();
     const updatedNotifs = notifications.map((n) => ({ ...n, isRead: true, readAt: now }));
 
-    await this.prisma.employee.update({
+    await this.prisma.extended.employee.update({
       where: { id: employeeId },
       data: {
         permissions: {

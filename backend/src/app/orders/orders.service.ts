@@ -3,7 +3,8 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  NotFoundException} from '@nestjs/common';
+  NotFoundException,
+} from '@nestjs/common';
 import {
   OrderStatus,
   PaymentMethod,
@@ -13,7 +14,8 @@ import {
   SurveyResponseStatus,
   SurveyTriggerType,
   VendorOrderStatus,
-  VoucherScope} from '@prisma/client';
+  VoucherScope,
+} from '@prisma/client';
 
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -25,7 +27,10 @@ import { RealtimeService } from 'src/app/realtime/realtime.service';
 import { SurveysService } from 'src/app/surveys/surveys.service';
 import { VouchersService } from 'src/app/vouchers/vouchers.service';
 import { CheckoutDto, PreviewCheckoutDto } from './dto/checkout.dto';
-import { UpdateOrderStatusDto, UpdateVendorOrderStatusDto } from './dto/update-order-status.dto';
+import {
+  UpdateOrderStatusDto,
+  UpdateVendorOrderStatusDto,
+} from './dto/update-order-status.dto';
 import { AssignOrderDto } from './dto/assign-order.dto';
 import { GetOrdersPaginationDto } from './dto/get-order.dto';
 import { randomBytes } from 'crypto';
@@ -46,6 +51,17 @@ const uniqueCodeSuffix = () => randomBytes(4).toString('hex').toUpperCase();
 const getYearMonth = (date = new Date()) =>
   `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
 
+/**
+ * [ĐỌC DATABASE - CẤU HÌNH JOIN HÓA ĐƠN & CHI TIẾT HÓA ĐƠN]
+ * Chỉ định các bảng liên kết cần đọc cùng bảng Order (Hóa đơn):
+ * - client: Thông tin khách hàng mua
+ * - details: Chi tiết hóa đơn (OrderDetail: số lượng, đơn giá, tên SP, biến thể, màu, size)
+ * - payment: Thông tin thanh toán (Payment)
+ * - voucherDetails: Chi tiết các mã khuyến mãi đã áp dụng cho hóa đơn (VoucherDetail -> Voucher)
+ * - vendorOrders: Kiện hàng theo từng shop
+ * - shipments: Vận đơn & nhân viên bưu tá phụ trách (carrier -> Employee)
+ * - statusHistory: Lịch sử xử lý hóa đơn của Admin / Nhân viên (employee -> Employee)
+ */
 const orderInclude = {
   client: {
     select: {
@@ -64,7 +80,14 @@ const orderInclude = {
             include: {
               product: {
                 include: {
-                  vendor: { select: { id: true, fullName: true, storeName: true, avatarUrl: true } },
+                  vendor: {
+                    select: {
+                      id: true,
+                      fullName: true,
+                      storeName: true,
+                      avatarUrl: true,
+                    },
+                  },
                 },
               },
             },
@@ -96,13 +119,28 @@ const orderInclude = {
   shipments: {
     include: {
       events: { orderBy: { createdAt: 'asc' as const } },
-      carrier: { select: { id: true, fullName: true, employeeCode: true, phone: true, department: true } },
+      carrier: {
+        select: {
+          id: true,
+          fullName: true,
+          employeeCode: true,
+          phone: true,
+          department: true,
+        },
+      },
     },
   },
   statusHistory: {
     include: {
       admin: { select: { id: true, fullName: true, email: true } },
-      employee: { select: { id: true, fullName: true, employeeCode: true, department: true } },
+      employee: {
+        select: {
+          id: true,
+          fullName: true,
+          employeeCode: true,
+          department: true,
+        },
+      },
       vendor: { select: { id: true, storeName: true, fullName: true } },
       client: { select: { id: true, fullName: true } },
     },
@@ -135,7 +173,13 @@ const surveyPromptSelect = {
           position: true,
           options: {
             orderBy: { position: 'asc' as const },
-            select: { id: true, content: true, position: true }}}}}}} satisfies Prisma.SurveyResponseSelect;
+            select: { id: true, content: true, position: true },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.SurveyResponseSelect;
 
 const transitions: Record<OrderStatus, OrderStatus[]> = {
   pending: [OrderStatus.confirmed, OrderStatus.cancelled],
@@ -156,7 +200,7 @@ export class OrdersService {
   ) {}
 
   private async createShipmentWithInitialEvent(
-    db: Prisma.TransactionClient | PrismaService,
+    db: Prisma.TransactionClient,
     params: {
       orderId: string;
       vendorOrderId?: string;
@@ -205,319 +249,452 @@ export class OrdersService {
     return shipment;
   }
 
-  private async prepareCheckout(tx: Prisma.TransactionClient, clientId: string, dto: PreviewCheckoutDto) {
-    const cart = await tx.cart.findUnique({ where: { clientId }, include: { items: { include: {
-      productVariant: { include: { productColor: { include: { product: true } } } },
-    } } } });
-    if (!cart?.items.length) throw new BadRequestException('Giỏ hàng đang trống');
+  private async prepareCheckout(
+    tx: Prisma.TransactionClient,
+    clientId: string,
+    dto: PreviewCheckoutDto,
+  ) {
+    const cart = await tx.cart.findUnique({
+      where: { clientId },
+      include: {
+        items: {
+          include: {
+            productVariant: {
+              include: { productColor: { include: { product: true } } },
+            },
+          },
+        },
+      },
+    });
+    if (!cart?.items.length)
+      throw new BadRequestException('Giỏ hàng đang trống');
     let targetItems = cart.items;
     if (dto.cartItemIds?.length) {
-      targetItems = cart.items.filter(item => dto.cartItemIds!.includes(item.id));
-      if (new Set(dto.cartItemIds).size !== targetItems.length) throw new BadRequestException('Sản phẩm trong giỏ đã thay đổi, vui lòng chọn lại');
+      targetItems = cart.items.filter((item) =>
+        dto.cartItemIds!.includes(item.id),
+      );
+      if (new Set(dto.cartItemIds).size !== targetItems.length)
+        throw new BadRequestException(
+          'Sản phẩm trong giỏ đã thay đổi, vui lòng chọn lại',
+        );
     } else if (dto.vendorId) {
-      targetItems = cart.items.filter(item => item.productVariant.productColor.product.vendorId === dto.vendorId);
+      targetItems = cart.items.filter(
+        (item) =>
+          item.productVariant.productColor.product.vendorId === dto.vendorId,
+      );
     }
-    if (!targetItems.length) throw new BadRequestException('Không tìm thấy sản phẩm hợp lệ để đặt hàng');
+    if (!targetItems.length)
+      throw new BadRequestException(
+        'Không tìm thấy sản phẩm hợp lệ để đặt hàng',
+      );
     const vendorGroups = new Map<string, typeof targetItems>();
     for (const item of targetItems) {
-      const vendorId = item.productVariant.productColor.product.vendorId || 'platform';
+      const vendorId =
+        item.productVariant.productColor.product.vendorId || 'platform';
       vendorGroups.set(vendorId, [...(vendorGroups.get(vendorId) || []), item]);
     }
-    if (dto.voucherSelections && dto.voucherCodes?.length) throw new BadRequestException('Vui lòng chọn mã theo từng cửa hàng');
+    if (dto.voucherSelections && dto.voucherCodes?.length)
+      throw new BadRequestException('Vui lòng chọn mã theo từng cửa hàng');
     const codesByVendor = new Map<string, string[]>();
     for (const selection of dto.voucherSelections || []) {
-      if (!vendorGroups.has(selection.vendorId) || codesByVendor.has(selection.vendorId)) throw new BadRequestException('Lựa chọn voucher không khớp cửa hàng trong giỏ');
-      codesByVendor.set(selection.vendorId, selection.codes.map(code => code.trim().toUpperCase()));
+      if (
+        !vendorGroups.has(selection.vendorId) ||
+        codesByVendor.has(selection.vendorId)
+      )
+        throw new BadRequestException(
+          'Lựa chọn voucher không khớp cửa hàng trong giỏ',
+        );
+      codesByVendor.set(
+        selection.vendorId,
+        selection.codes.map((code) => code.trim().toUpperCase()),
+      );
     }
     const requestedCodes = dto.voucherSelections
       ? [...new Set([...codesByVendor.values()].flat())]
-      : (dto.voucherCodes || []).map(code => code.trim().toUpperCase());
-    if (!dto.voucherSelections && new Set(requestedCodes).size !== requestedCodes.length) throw new BadRequestException('Voucher bị trùng lặp');
+      : (dto.voucherCodes || []).map((code) => code.trim().toUpperCase());
+    if (
+      !dto.voucherSelections &&
+      new Set(requestedCodes).size !== requestedCodes.length
+    )
+      throw new BadRequestException('Voucher bị trùng lặp');
     if (requestedCodes.length) {
-      const vouchers = await tx.voucher.findMany({ where: { code: { in: requestedCodes }, deletedAt: null },
-        select: { code: true, scope: true, vendorId: true } });
-      if (vouchers.length !== requestedCodes.length) throw new BadRequestException('Voucher không tồn tại');
+      const vouchers = await tx.voucher.findMany({
+        where: { code: { in: requestedCodes }, deletedAt: null },
+        select: { code: true, scope: true, vendorId: true },
+      });
+      if (vouchers.length !== requestedCodes.length)
+        throw new BadRequestException('Voucher không tồn tại');
       for (const [vendorId] of vendorGroups) {
-        const codes = dto.voucherSelections ? codesByVendor.get(vendorId) || [] : vouchers
-          .filter(voucher => voucher.scope === VoucherScope.platform || voucher.vendorId === vendorId).map(voucher => voucher.code);
-        if (codes.some(code => !vouchers.some(voucher => voucher.code === code &&
-          (voucher.scope === VoucherScope.platform || voucher.vendorId === vendorId)))) throw new BadRequestException('Voucher không áp dụng cho cửa hàng được chọn');
+        const codes = dto.voucherSelections
+          ? codesByVendor.get(vendorId) || []
+          : vouchers
+              .filter(
+                (voucher) =>
+                  voucher.scope === VoucherScope.platform ||
+                  voucher.vendorId === vendorId,
+              )
+              .map((voucher) => voucher.code);
+        if (
+          codes.some(
+            (code) =>
+              !vouchers.some(
+                (voucher) =>
+                  voucher.code === code &&
+                  (voucher.scope === VoucherScope.platform ||
+                    voucher.vendorId === vendorId),
+              ),
+          )
+        )
+          throw new BadRequestException(
+            'Voucher không áp dụng cho cửa hàng được chọn',
+          );
         codesByVendor.set(vendorId, codes);
       }
-      if (requestedCodes.some(code => ![...codesByVendor.values()].some(codes => codes.includes(code)))) throw new BadRequestException('Voucher không áp dụng cho các sản phẩm đã chọn');
+      if (
+        requestedCodes.some(
+          (code) =>
+            ![...codesByVendor.values()].some((codes) => codes.includes(code)),
+        )
+      )
+        throw new BadRequestException(
+          'Voucher không áp dụng cho các sản phẩm đã chọn',
+        );
     }
     return { targetItems, vendorGroups, codesByVendor };
   }
 
   async previewCheckout(clientId: string, dto: PreviewCheckoutDto) {
-    return this.prisma.$transaction(async tx => {
-      const { vendorGroups, codesByVendor } = await this.prepareCheckout(tx, clientId, dto);
-      const plannedUses = new Map<string, number>();
-      const packages: Array<{ vendorId: string; subtotalAmount: Prisma.Decimal; discountAmount: Prisma.Decimal;
-        totalAmount: Prisma.Decimal; applications: unknown[] }> = [];
-      for (const [vendorId, items] of vendorGroups) {
-        const calculated = await this.vouchersService.calculate(codesByVendor.get(vendorId) || [], clientId,
-          items.map(item => ({ productVariantId: item.productVariantId, quantity: item.quantity })), tx, plannedUses);
-        packages.push({ vendorId, subtotalAmount: calculated.subtotalAmount, discountAmount: calculated.discountAmount,
-          totalAmount: calculated.totalAmount, applications: calculated.applications });
-      }
-      return { packages, subtotalAmount: packages.reduce((sum, pack) => sum.plus(pack.subtotalAmount), new Prisma.Decimal(0)),
-        discountAmount: packages.reduce((sum, pack) => sum.plus(pack.discountAmount), new Prisma.Decimal(0)),
-        totalAmount: packages.reduce((sum, pack) => sum.plus(pack.totalAmount), new Prisma.Decimal(0)) };
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    return this.prisma.extendedTransaction(
+      async (tx) => {
+        const { vendorGroups, codesByVendor } = await this.prepareCheckout(
+          tx,
+          clientId,
+          dto,
+        );
+        const plannedUses = new Map<string, number>();
+        const packages: Array<{
+          vendorId: string;
+          subtotalAmount: Prisma.Decimal;
+          discountAmount: Prisma.Decimal;
+          totalAmount: Prisma.Decimal;
+          applications: unknown[];
+        }> = [];
+        for (const [vendorId, items] of vendorGroups) {
+          const calculated = await this.vouchersService.calculate(
+            codesByVendor.get(vendorId) || [],
+            clientId,
+            items.map((item) => ({
+              productVariantId: item.productVariantId,
+              quantity: item.quantity,
+            })),
+            tx,
+            plannedUses,
+          );
+          packages.push({
+            vendorId,
+            subtotalAmount: calculated.subtotalAmount,
+            discountAmount: calculated.discountAmount,
+            totalAmount: calculated.totalAmount,
+            applications: calculated.applications,
+          });
+        }
+        return {
+          packages,
+          subtotalAmount: packages.reduce(
+            (sum, pack) => sum.plus(pack.subtotalAmount),
+            new Prisma.Decimal(0),
+          ),
+          discountAmount: packages.reduce(
+            (sum, pack) => sum.plus(pack.discountAmount),
+            new Prisma.Decimal(0),
+          ),
+          totalAmount: packages.reduce(
+            (sum, pack) => sum.plus(pack.totalAmount),
+            new Prisma.Decimal(0),
+          ),
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
   }
 
   async checkout(clientId: string, dto: CheckoutDto) {
-    let result: { orders: any[]; order: any; surveyNotifications: any[] } | undefined;
+    let result:
+      { orders: any[]; order: any; surveyNotifications: any[] } | undefined;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        result = await this.prisma.$transaction(
+        result = await this.prisma.extendedTransaction(
           async (tx) => {
-          const { targetItems, vendorGroups, codesByVendor } = await this.prepareCheckout(tx, clientId, dto);
+            const { targetItems, vendorGroups, codesByVendor } =
+              await this.prepareCheckout(tx, clientId, dto);
 
-          const createdOrders: any[] = [];
-          const allSurveyNotifications: any[] = [];
-          const yearMonth = getYearMonth();
+            const createdOrders: any[] = [];
+            const allSurveyNotifications: any[] = [];
+            const yearMonth = getYearMonth();
 
-          for (const [vId, vendorItems] of vendorGroups.entries()) {
-            const calculated = await this.vouchersService.calculate(
-              codesByVendor.get(vId) || [],
-              clientId,
-              vendorItems.map((item) => ({
-                productVariantId: item.productVariantId,
-                quantity: item.quantity,
-              })),
-              tx,
-            );
-
-            // Create dedicated Order for this vendor
-            const order = await tx.order.create({
-              data: {
+            for (const [vId, vendorItems] of vendorGroups.entries()) {
+              const calculated = await this.vouchersService.calculate(
+                codesByVendor.get(vId) || [],
                 clientId,
-                subtotalAmount: calculated.subtotalAmount,
-                discountAmount: calculated.discountAmount,
-                shippingFee: 0,
-                totalAmount: calculated.totalAmount,
-                receiverName: dto.receiverName,
-                receiverPhone: dto.receiverPhone,
-                shippingAddress: dto.shippingAddress,
-                notes: dto.notes,
-              },
-            });
-
-            // Decrement variant stock & create OrderDetail records
-            for (const item of calculated.items) {
-              const changed = await tx.productVariant.updateMany({
-                where: {
-                  id: item.productVariantId,
-                  deletedAt: null,
-                  stock: { gte: item.quantity },
-                },
-                data: { stock: { decrement: item.quantity } },
-              });
-              if (!changed.count) {
-                throw new ConflictException(
-                  `Sản phẩm "${item.variant.productColor.product.name}" vừa thay đổi tồn kho, vui lòng thử lại`,
-                );
-              }
-
-              await tx.orderDetail.create({
-                data: {
-                  orderId: order.id,
+                vendorItems.map((item) => ({
                   productVariantId: item.productVariantId,
                   quantity: item.quantity,
-                  price: item.variant.price,
-                  productName: item.variant.productColor.product.name,
-                  colorName: item.variant.productColor.color,
-                  sizeName: item.variant.size,
-                  imageUrl: item.variant.productColor.imageUrls[0],
-                },
-              });
-            }
+                })),
+                tx,
+              );
 
-            // Immediately create VendorOrder for this vendor
-            let vOrder: any = null;
-            if (vId !== 'platform') {
-              const randomCode = uniqueCodeSuffix();
-              vOrder = await tx.vendorOrder.create({
+              // Create dedicated Order for this vendor
+              const order = await tx.order.create({
                 data: {
-                  orderId: order.id,
-                  vendorId: vId,
-                  vendorOrderCode: `VO-${yearMonth}-${randomCode}`,
+                  clientId,
                   subtotalAmount: calculated.subtotalAmount,
+                  discountAmount: calculated.discountAmount,
                   shippingFee: 0,
                   totalAmount: calculated.totalAmount,
-                  status: VendorOrderStatus.pending,
-                  notes: 'Kiện hàng đóng gói riêng cho gian hàng đối tác',
+                  receiverName: dto.receiverName,
+                  receiverPhone: dto.receiverPhone,
+                  shippingAddress: dto.shippingAddress,
+                  notes: dto.notes,
                 },
               });
 
-              await tx.orderDetail.updateMany({
-                where: { orderId: order.id },
-                data: { vendorOrderId: vOrder.id },
-              });
-            }
+              // Decrement variant stock & create OrderDetail records
+              for (const item of calculated.items) {
+                const changed = await tx.productVariant.updateMany({
+                  where: {
+                    id: item.productVariantId,
+                    deletedAt: null,
+                    stock: { gte: item.quantity },
+                  },
+                  data: { stock: { decrement: item.quantity } },
+                });
+                if (!changed.count) {
+                  throw new ConflictException(
+                    `Sản phẩm "${item.variant.productColor.product.name}" vừa thay đổi tồn kho, vui lòng thử lại`,
+                  );
+                }
 
-            // Apply vouchers if any
-            for (const application of calculated.applications) {
-              const reserved = await tx.voucher.updateMany({
-                where: {
-                  id: application.voucherId,
-                  usedQuantity: application.expectedUsedQuantity,
-                  quantity: { gt: application.expectedUsedQuantity },
-                  status: 'active',
-                },
-                data: { usedQuantity: { increment: 1 } },
-              });
-              if (!reserved.count) {
-                throw new ConflictException('Voucher vừa hết lượt sử dụng');
+                await tx.orderDetail.create({
+                  data: {
+                    orderId: order.id,
+                    productVariantId: item.productVariantId,
+                    quantity: item.quantity,
+                    price: item.variant.price,
+                    productName: item.variant.productColor.product.name,
+                    colorName: item.variant.productColor.color,
+                    sizeName: item.variant.size,
+                    imageUrl: item.variant.productColor.imageUrls[0],
+                  },
+                });
               }
-              await tx.voucherDetail.create({
+
+              // Immediately create VendorOrder for this vendor
+              let vOrder: any = null;
+              if (vId !== 'platform') {
+                const randomCode = uniqueCodeSuffix();
+                vOrder = await tx.vendorOrder.create({
+                  data: {
+                    orderId: order.id,
+                    vendorId: vId,
+                    vendorOrderCode: `VO-${yearMonth}-${randomCode}`,
+                    subtotalAmount: calculated.subtotalAmount,
+                    shippingFee: 0,
+                    totalAmount: calculated.totalAmount,
+                    status: VendorOrderStatus.pending,
+                    notes: 'Kiện hàng đóng gói riêng cho gian hàng đối tác',
+                  },
+                });
+
+                await tx.orderDetail.updateMany({
+                  where: { orderId: order.id },
+                  data: { vendorOrderId: vOrder.id },
+                });
+              }
+
+              // [GHI DATABASE - ÁP DỤNG KHUYẾN MÃI CHO HÓA ĐƠN (YÊU CẦU 1 & 3)]:
+              // Cập nhật nguyên tử số lượt đã dùng (usedQuantity + 1) trên bảng Voucher
+              // và lưu lịch sử áp dụng mã giảm giá vào bảng VoucherDetail gắn với orderId.
+              for (const application of calculated.applications) {
+                const reserved = await tx.voucher.updateMany({
+                  where: {
+                    id: application.voucherId,
+                    usedQuantity: application.expectedUsedQuantity,
+                    quantity: { gt: application.expectedUsedQuantity },
+                    status: 'active',
+                  },
+                  data: { usedQuantity: { increment: 1 } },
+                });
+                if (!reserved.count) {
+                  throw new ConflictException('Voucher vừa hết lượt sử dụng');
+                }
+                await tx.voucherDetail.create({
+                  data: {
+                    voucherId: application.voucherId,
+                    orderId: order.id,
+                    eligibleAmount: application.eligibleAmount,
+                    discountAmount: application.discountAmount,
+                    sequence: application.sequence,
+                  },
+                });
+              }
+
+              // Create Payment for this order
+              await tx.payment.create({
                 data: {
-                  voucherId: application.voucherId,
                   orderId: order.id,
-                  eligibleAmount: application.eligibleAmount,
-                  discountAmount: application.discountAmount,
-                  sequence: application.sequence,
+                  method: dto.paymentMethod,
+                  amount: calculated.totalAmount,
                 },
               });
-            }
 
-            // Create Payment for this order
-            await tx.payment.create({
-              data: {
+              // Create OrderStatusHistory record
+              await tx.orderStatusHistory.create({
+                data: {
+                  orderId: order.id,
+                  clientId: clientId,
+                  toStatus: OrderStatus.pending,
+                },
+              });
+
+              // 1. Phân công cho Chuyên viên thuộc Bộ phận Điều phối & Liên kết Vendor tiếp nhận và kiểm duyệt
+              const handlingEmp = await this.findBestHandlingEmployee(tx);
+              // 2. Tự động phân công bưu tá thuộc Phòng Vận chuyển & Giao nhận
+              const shipperEmp = await this.findBestShipperEmployee(tx);
+
+              // Kiện hàng khởi tạo và tự động phân công bưu tá Phòng Vận chuyển & Giao nhận
+              await this.createShipmentWithInitialEvent(tx, {
+                yearMonth,
                 orderId: order.id,
-                method: dto.paymentMethod,
-                amount: calculated.totalAmount,
-              },
-            });
-
-            // Create OrderStatusHistory record
-            await tx.orderStatusHistory.create({
-              data: {
-                orderId: order.id,
-                clientId: clientId,
-                toStatus: OrderStatus.pending,
-              },
-            });
-
-            // 1. Phân công cho Chuyên viên thuộc Bộ phận Điều phối & Liên kết Vendor tiếp nhận và kiểm duyệt
-            const handlingEmp = await this.findBestHandlingEmployee(tx);
-            // 2. Tự động phân công bưu tá thuộc Phòng Vận chuyển & Giao nhận
-            const shipperEmp = await this.findBestShipperEmployee(tx);
-
-            // Kiện hàng khởi tạo và tự động phân công bưu tá Phòng Vận chuyển & Giao nhận
-            await this.createShipmentWithInitialEvent(tx, {
-              yearMonth,
-              orderId: order.id,
-              vendorOrderId: vOrder ? vOrder.id : undefined,
-              carrierId: shipperEmp ? shipperEmp.id : null,
-              status: shipperEmp ? ShipmentStatus.assigned : ShipmentStatus.pending,
-              shippingAddress: order.shippingAddress,
-              receiverName: order.receiverName,
-              receiverPhone: order.receiverPhone,
-              notes: shipperEmp
-                ? `Bưu tá tiếp nhận: ${shipperEmp.fullName} (${shipperEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`
-                : (handlingEmp
+                vendorOrderId: vOrder ? vOrder.id : undefined,
+                carrierId: shipperEmp ? shipperEmp.id : null,
+                status: shipperEmp
+                  ? ShipmentStatus.assigned
+                  : ShipmentStatus.pending,
+                shippingAddress: order.shippingAddress,
+                receiverName: order.receiverName,
+                receiverPhone: order.receiverPhone,
+                notes: shipperEmp
+                  ? `Bưu tá tiếp nhận: ${shipperEmp.fullName} (${shipperEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`
+                  : handlingEmp
                     ? `Chuyên viên điều phối phụ trách: ${handlingEmp.fullName} (${handlingEmp.employeeCode}) - ${handlingEmp.department}.`
-                    : 'Kiện hàng đang chờ tiếp nhận'),
-              eventLocation: 'Trung tâm điều phối MIVA Hub',
-              eventDescription: shipperEmp
-                ? `Đơn hàng mới tạo. Hệ thống tự động phân công bưu tá [${shipperEmp.fullName} / ${shipperEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận kiện hàng`
-                : (handlingEmp
+                    : 'Kiện hàng đang chờ tiếp nhận',
+                eventLocation: 'Trung tâm điều phối MIVA Hub',
+                eventDescription: shipperEmp
+                  ? `Đơn hàng mới tạo. Hệ thống tự động phân công bưu tá [${shipperEmp.fullName} / ${shipperEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận kiện hàng`
+                  : handlingEmp
                     ? `Đơn hàng mới tạo. Hệ thống chuyển tới chuyên viên [${handlingEmp.fullName} / ${handlingEmp.employeeCode}] (Bộ phận Điều phối & Liên kết Vendor) tiếp nhận và kiểm duyệt`
-                    : 'Đơn hàng mới tạo, chờ Bộ phận Điều phối & Liên kết Vendor tiếp nhận'),
-              actorRole: 'system',
-            });
-
-            if (handlingEmp) {
-              await tx.orderStatusHistory.create({
-                data: {
-                  orderId: order.id,
-                  employeeId: handlingEmp.id,
-                  fromStatus: OrderStatus.pending,
-                  toStatus: OrderStatus.pending,
-                  note: `[Phân công tiếp nhận] Chuyên viên [${handlingEmp.fullName} / ${handlingEmp.employeeCode}] (${handlingEmp.department}) tiếp nhận đơn hàng để đối soát, xác nhận và chuyển giao cho Vendor`,
-                },
+                    : 'Đơn hàng mới tạo, chờ Bộ phận Điều phối & Liên kết Vendor tiếp nhận',
+                actorRole: 'system',
               });
+
+              if (handlingEmp) {
+                await tx.orderStatusHistory.create({
+                  data: {
+                    orderId: order.id,
+                    employeeId: handlingEmp.id,
+                    fromStatus: OrderStatus.pending,
+                    toStatus: OrderStatus.pending,
+                    note: `[Phân công tiếp nhận] Chuyên viên [${handlingEmp.fullName} / ${handlingEmp.employeeCode}] (${handlingEmp.department}) tiếp nhận đơn hàng để đối soát, xác nhận và chuyển giao cho Vendor`,
+                  },
+                });
+              }
+
+              if (shipperEmp) {
+                await tx.orderStatusHistory.create({
+                  data: {
+                    orderId: order.id,
+                    employeeId: shipperEmp.id,
+                    fromStatus: OrderStatus.pending,
+                    toStatus: OrderStatus.pending,
+                    note: `[Tự động phân công] Bưu tá [${shipperEmp.fullName} / ${shipperEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận đơn hàng`,
+                  },
+                });
+              }
+
+              // Deliver survey notifications if applicable
+              const surveyNotifications =
+                await this.surveysService.deliverForOrder(
+                  tx,
+                  order.id,
+                  SurveyTriggerType.after_checkout,
+                );
+              allSurveyNotifications.push(...surveyNotifications);
+
+              const createdOrder = await tx.order.findUniqueOrThrow({
+                where: { id: order.id },
+                include: orderInclude,
+              });
+
+              const surveyPrompts = await tx.surveyResponse.findMany({
+                where: {
+                  orderId: order.id,
+                  clientId,
+                  status: SurveyResponseStatus.pending,
+                },
+                select: surveyPromptSelect,
+                orderBy: { createdAt: 'asc' },
+              });
+
+              createdOrders.push({ ...createdOrder, surveyPrompts });
             }
 
-            if (shipperEmp) {
-              await tx.orderStatusHistory.create({
-                data: {
-                  orderId: order.id,
-                  employeeId: shipperEmp.id,
-                  fromStatus: OrderStatus.pending,
-                  toStatus: OrderStatus.pending,
-                  note: `[Tự động phân công] Bưu tá [${shipperEmp.fullName} / ${shipperEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận đơn hàng`,
-                },
-              });
+            // Delete only the checked out cart items
+            if (dto.expectedTotalAmount !== undefined) {
+              const actualTotal = createdOrders.reduce(
+                (sum, order) => sum.plus(order.totalAmount),
+                new Prisma.Decimal(0),
+              );
+              if (!actualTotal.equals(dto.expectedTotalAmount))
+                throw new ConflictException(
+                  'Giá hoặc voucher vừa thay đổi. Vui lòng kiểm tra tổng tiền và xác nhận lại.',
+                );
             }
-
-            // Deliver survey notifications if applicable
-            const surveyNotifications = await this.surveysService.deliverForOrder(
-              tx,
-              order.id,
-              SurveyTriggerType.after_checkout,
-            );
-            allSurveyNotifications.push(...surveyNotifications);
-
-            const createdOrder = await tx.order.findUniqueOrThrow({
-              where: { id: order.id },
-              include: orderInclude,
-            });
-
-            const surveyPrompts = await tx.surveyResponse.findMany({
+            const checkedOutItemIds = targetItems.map((i) => i.id);
+            await tx.cartItem.deleteMany({
               where: {
-                orderId: order.id,
-                clientId,
-                status: SurveyResponseStatus.pending,
+                id: { in: checkedOutItemIds },
               },
-              select: surveyPromptSelect,
-              orderBy: { createdAt: 'asc' },
             });
 
-            createdOrders.push({ ...createdOrder, surveyPrompts });
-          }
-
-          // Delete only the checked out cart items
-          if (dto.expectedTotalAmount !== undefined) {
-            const actualTotal = createdOrders.reduce((sum, order) => sum.plus(order.totalAmount), new Prisma.Decimal(0));
-            if (!actualTotal.equals(dto.expectedTotalAmount)) throw new ConflictException('Giá hoặc voucher vừa thay đổi. Vui lòng kiểm tra tổng tiền và xác nhận lại.');
-          }
-          const checkedOutItemIds = targetItems.map((i) => i.id);
-          await tx.cartItem.deleteMany({
-            where: {
-              id: { in: checkedOutItemIds },
-            },
-          });
-
-          return {
-            orders: createdOrders,
-            order: createdOrders[0],
-            surveyNotifications: allSurveyNotifications,
-          };
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
+            return {
+              orders: createdOrders,
+              order: createdOrders[0],
+              surveyNotifications: allSurveyNotifications,
+            };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
         break;
       } catch (error: unknown) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
           if (attempt < 2) {
-            await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
+            await new Promise((resolve) =>
+              setTimeout(resolve, 10 * (attempt + 1)),
+            );
             continue;
           }
-          throw new ConflictException('Dữ liệu vừa thay đổi, vui lòng thực hiện checkout lại');
+          throw new ConflictException(
+            'Dữ liệu vừa thay đổi, vui lòng thực hiện checkout lại',
+          );
         }
         throw error;
       }
     }
-    if (!result) throw new ConflictException('Dữ liệu vừa thay đổi, vui lòng thực hiện checkout lại');
+    if (!result)
+      throw new ConflictException(
+        'Dữ liệu vừa thay đổi, vui lòng thực hiện checkout lại',
+      );
 
     for (const o of result.orders) {
       this.emitOrder(o, 'order:created');
     }
-    if (dto.voucherCodes?.length || dto.voucherSelections?.some(selection => selection.codes.length)) {
+    if (
+      dto.voucherCodes?.length ||
+      dto.voucherSelections?.some((selection) => selection.codes.length)
+    ) {
       this.realtime.emitToCatalog('voucher:updated', {});
     }
     this.surveysService.emitNotifications(result.surveyNotifications);
@@ -531,14 +708,15 @@ export class OrdersService {
   }
 
   listMine(clientId: string) {
-    return this.prisma.order.findMany({
+    return this.prisma.extended.order.findMany({
       where: { clientId },
       include: orderInclude,
-      orderBy: { createdAt: 'desc' }});
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async listForVendor(vendorId: string) {
-    const orders = await this.prisma.order.findMany({
+    const orders = await this.prisma.extended.order.findMany({
       where: {
         details: {
           some: { productVariant: { productColor: { product: { vendorId } } } },
@@ -551,7 +729,7 @@ export class OrdersService {
   }
 
   async listVendorOrders(vendorId: string) {
-    const list = await this.prisma.vendorOrder.findMany({
+    const list = await this.prisma.extended.vendorOrder.findMany({
       where: { vendorId },
       include: {
         order: {
@@ -625,8 +803,11 @@ export class OrdersService {
     dto: UpdateVendorOrderStatusDto,
     user: UserInfo,
   ) {
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    const vendorOrder = await this.prisma.vendorOrder.findFirst({
+    const isUUID =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        id,
+      );
+    const vendorOrder = await this.prisma.extended.vendorOrder.findFirst({
       where: {
         OR: [
           ...(isUUID ? [{ id }, { orderId: id }] : []),
@@ -654,24 +835,60 @@ export class OrdersService {
 
     // Retried requests must not repeat shipment events or return stock twice.
     if (currentStatus === newStatus) {
-      const { order: _order, details: _details, shipment: _shipment, ...unchanged } = vendorOrder;
-      return { success: true, message: 'Trạng thái kiện hàng không thay đổi', vendorOrder: unchanged };
+      const {
+        order: _order,
+        details: _details,
+        shipment: _shipment,
+        ...unchanged
+      } = vendorOrder;
+      return {
+        success: true,
+        message: 'Trạng thái kiện hàng không thay đổi',
+        vendorOrder: unchanged,
+      };
     }
-    if (vendorOrder.order.status === OrderStatus.cancelled || vendorOrder.order.status === OrderStatus.completed) {
-      throw new BadRequestException('Đơn hàng đã kết thúc, không thể cập nhật kiện hàng');
+    if (
+      vendorOrder.order.status === OrderStatus.cancelled ||
+      vendorOrder.order.status === OrderStatus.completed
+    ) {
+      throw new BadRequestException(
+        'Đơn hàng đã kết thúc, không thể cập nhật kiện hàng',
+      );
     }
-    if (newStatus !== VendorOrderStatus.cancelled && vendorOrder.order.status === OrderStatus.pending) {
-      throw new BadRequestException('Chờ Admin hoặc nhân viên MIVA xác nhận đơn hàng trước khi đóng gói');
+    if (
+      newStatus !== VendorOrderStatus.cancelled &&
+      vendorOrder.order.status === OrderStatus.pending
+    ) {
+      throw new BadRequestException(
+        'Chờ Admin hoặc nhân viên MIVA xác nhận đơn hàng trước khi đóng gói',
+      );
     }
     if (newStatus === VendorOrderStatus.delivered) {
-      throw new BadRequestException('Bưu tá hoặc Admin xác nhận giao thành công qua vận đơn');
+      throw new BadRequestException(
+        'Bưu tá hoặc Admin xác nhận giao thành công qua vận đơn',
+      );
     }
     if (newStatus === VendorOrderStatus.cancelled) {
-      const order = await this.prisma.order.findUniqueOrThrow({ where: { id: vendorOrder.orderId }, include: orderInclude });
-      if (order.vendorOrders.length !== 1) throw new BadRequestException('Đơn nhiều shop cũ cần Admin xử lý hủy toàn đơn');
-      const cancelled = await this.updateStatus(order.id, { status: OrderStatus.cancelled, note: dto.note }, user);
-      return { success: true, message: 'Đã hủy kiện và đồng bộ đơn, thanh toán, voucher, tồn kho',
-        vendorOrder: cancelled.vendorOrders.find(parcel => parcel.id === vendorOrder.id) };
+      const order = await this.prisma.extended.order.findUniqueOrThrow({
+        where: { id: vendorOrder.orderId },
+        include: orderInclude,
+      });
+      if (order.vendorOrders.length !== 1)
+        throw new BadRequestException(
+          'Đơn nhiều shop cũ cần Admin xử lý hủy toàn đơn',
+        );
+      const cancelled = await this.updateStatus(
+        order.id,
+        { status: OrderStatus.cancelled, note: dto.note },
+        user,
+      );
+      return {
+        success: true,
+        message: 'Đã hủy kiện và đồng bộ đơn, thanh toán, voucher, tồn kho',
+        vendorOrder: cancelled.vendorOrders.find(
+          (parcel) => parcel.id === vendorOrder.id,
+        ),
+      };
     }
 
     const vendorTransitions: Record<VendorOrderStatus, VendorOrderStatus[]> = {
@@ -692,22 +909,30 @@ export class OrdersService {
     };
 
     // Orders confirmed before this fix may still have a pending vendor parcel.
-    const confirmedLegacyParcel = currentStatus === VendorOrderStatus.pending &&
+    const confirmedLegacyParcel =
+      currentStatus === VendorOrderStatus.pending &&
       newStatus === VendorOrderStatus.processing &&
       vendorOrder.order.status !== OrderStatus.pending;
-    if (!confirmedLegacyParcel && !vendorTransitions[currentStatus]?.includes(newStatus)) {
+    if (
+      !confirmedLegacyParcel &&
+      !vendorTransitions[currentStatus]?.includes(newStatus)
+    ) {
       throw new BadRequestException(
         `Không thể chuyển kiện hàng từ trạng thái "${currentStatus}" sang "${newStatus}"`,
       );
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.extendedTransaction(async (tx) => {
       // 1. Update VendorOrder status
       const vo = await tx.vendorOrder.update({
         where: { id: vendorOrder.id },
         data: {
           status: newStatus,
-          notes: dto.note ? (vendorOrder.notes ? `${vendorOrder.notes} | ${dto.note}` : dto.note) : vendorOrder.notes,
+          notes: dto.note
+            ? vendorOrder.notes
+              ? `${vendorOrder.notes} | ${dto.note}`
+              : dto.note
+            : vendorOrder.notes,
           updatedAt: new Date(),
         },
       });
@@ -734,7 +959,8 @@ export class OrdersService {
           });
         }
       } else if (
-        (newStatus === VendorOrderStatus.processing || newStatus === VendorOrderStatus.ready_for_pickup) &&
+        (newStatus === VendorOrderStatus.processing ||
+          newStatus === VendorOrderStatus.ready_for_pickup) &&
         vendorOrder.order.status === OrderStatus.confirmed
       ) {
         mappedOrderStatus = OrderStatus.processing;
@@ -744,9 +970,15 @@ export class OrdersService {
         });
       }
 
-      let assignedShipper: { id: string; fullName: string; employeeCode: string; department: string } | null = null;
+      let assignedShipper: {
+        id: string;
+        fullName: string;
+        employeeCode: string;
+        department: string;
+      } | null = null;
       if (
-        (newStatus === VendorOrderStatus.ready_for_pickup || newStatus === VendorOrderStatus.shipping) &&
+        (newStatus === VendorOrderStatus.ready_for_pickup ||
+          newStatus === VendorOrderStatus.shipping) &&
         vendorOrder.shipment
       ) {
         if (!vendorOrder.shipment.carrierId) {
@@ -754,7 +986,12 @@ export class OrdersService {
         } else {
           const existingCarrier = await tx.employee.findUnique({
             where: { id: vendorOrder.shipment.carrierId },
-            select: { id: true, fullName: true, employeeCode: true, department: true },
+            select: {
+              id: true,
+              fullName: true,
+              employeeCode: true,
+              department: true,
+            },
           });
           if (existingCarrier) assignedShipper = existingCarrier;
         }
@@ -764,7 +1001,9 @@ export class OrdersService {
             ? ShipmentStatus.picking_up
             : ShipmentStatus.in_transit;
 
-        const effectiveCarrierId = vendorOrder.shipment.carrierId || (assignedShipper ? assignedShipper.id : null);
+        const effectiveCarrierId =
+          vendorOrder.shipment.carrierId ||
+          (assignedShipper ? assignedShipper.id : null);
 
         await tx.shipment.update({
           where: { id: vendorOrder.shipment.id },
@@ -787,9 +1026,9 @@ export class OrdersService {
             description:
               dto.note ||
               (newStatus === VendorOrderStatus.ready_for_pickup
-                ? (assignedShipper
-                    ? `Shop đã đóng gói hoàn tất. Chuyển giao kiện hàng cho bưu tá [${assignedShipper.fullName} / ${assignedShipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) để tiếp nhận và đi giao.`
-                    : 'Shop đã đóng gói hoàn tất. Kiện hàng sẵn sàng bàn giao cho bưu tá MIVA.')
+                ? assignedShipper
+                  ? `Shop đã đóng gói hoàn tất. Chuyển giao kiện hàng cho bưu tá [${assignedShipper.fullName} / ${assignedShipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) để tiếp nhận và đi giao.`
+                  : 'Shop đã đóng gói hoàn tất. Kiện hàng sẵn sàng bàn giao cho bưu tá MIVA.'
                 : 'Kiện hàng đã xuất kho và đang trong quá trình vận chuyển.'),
             actorRole: 'vendor',
             actorId: user.userID,
@@ -822,8 +1061,9 @@ export class OrdersService {
       return { vo, assignedShipper };
     });
 
-    const parentOrder = await this.prisma.order.findUnique({
-      where: { id: vendorOrder.orderId }, include: orderInclude,
+    const parentOrder = await this.prisma.extended.order.findUnique({
+      where: { id: vendorOrder.orderId },
+      include: orderInclude,
     });
     if (parentOrder) this.emitOrder(parentOrder, 'order:updated');
 
@@ -832,9 +1072,16 @@ export class OrdersService {
         shipmentId: vendorOrder.shipment.id,
         orderId: vendorOrder.orderId,
         trackingNumber: vendorOrder.shipment.trackingNumber,
-        status: newStatus === VendorOrderStatus.ready_for_pickup ? ShipmentStatus.picking_up : ShipmentStatus.in_transit,
+        status:
+          newStatus === VendorOrderStatus.ready_for_pickup
+            ? ShipmentStatus.picking_up
+            : ShipmentStatus.in_transit,
       };
-      this.realtime.emitToUser(updated.assignedShipper.id, 'shipment:assigned', shipPayload);
+      this.realtime.emitToUser(
+        updated.assignedShipper.id,
+        'shipment:assigned',
+        shipPayload,
+      );
       this.realtime.emitToEmployees('shipment:updated', shipPayload);
     }
 
@@ -845,10 +1092,7 @@ export class OrdersService {
     };
   }
 
-  async listAll(
-    query: GetOrdersPaginationDto,
-    user?: UserInfo,
-  ) {
+  async listAll(query: GetOrdersPaginationDto, user?: UserInfo) {
     const { search, status } = query;
     const { page, itemPerPage, skip } = normalizePagination({
       page: query.page,
@@ -858,33 +1102,63 @@ export class OrdersService {
 
     // Nếu người dùng là nhân viên (employee), hiển thị đơn hàng theo đúng phân công và ban nghiệp vụ
     if (user?.role === 'employee') {
-      const emp = await this.prisma.employee.findUnique({
+      const emp = await this.prisma.extended.employee.findUnique({
         where: { id: user.userID },
         select: { id: true, department: true, assignedOrderScope: true },
       });
 
       if (emp) {
         const isManager = emp.assignedOrderScope === 'all_orders';
-        const isVendorLink = emp.department.includes(DEPARTMENT_KEYWORDS.VENDOR_COORDINATION);
-        const isShipping = emp.department.includes(DEPARTMENT_KEYWORDS.SHIPPING);
-        const isExceptions = emp.department.includes(DEPARTMENT_KEYWORDS.EXCEPTION);
+        const isVendorLink = emp.department.includes(
+          DEPARTMENT_KEYWORDS.VENDOR_COORDINATION,
+        );
+        const isShipping = emp.department.includes(
+          DEPARTMENT_KEYWORDS.SHIPPING,
+        );
+        const isExceptions = emp.department.includes(
+          DEPARTMENT_KEYWORDS.EXCEPTION,
+        );
 
         if (isManager) {
           if (isVendorLink) {
             baseWhere.OR = [
-              { status: { in: [OrderStatus.pending, OrderStatus.confirmed, OrderStatus.processing] } },
+              {
+                status: {
+                  in: [
+                    OrderStatus.pending,
+                    OrderStatus.confirmed,
+                    OrderStatus.processing,
+                  ],
+                },
+              },
               { statusHistory: { some: { employeeId: emp.id } } },
             ];
           } else if (isShipping) {
             baseWhere.OR = [
               { shipments: { some: {} } },
-              { status: { in: [OrderStatus.processing, OrderStatus.shipping, OrderStatus.completed] } },
+              {
+                status: {
+                  in: [
+                    OrderStatus.processing,
+                    OrderStatus.shipping,
+                    OrderStatus.completed,
+                  ],
+                },
+              },
               { statusHistory: { some: { employeeId: emp.id } } },
             ];
           } else if (isExceptions) {
             baseWhere.OR = [
               { status: OrderStatus.cancelled },
-              { shipments: { some: { status: { in: [ShipmentStatus.failed, ShipmentStatus.returned] } } } },
+              {
+                shipments: {
+                  some: {
+                    status: {
+                      in: [ShipmentStatus.failed, ShipmentStatus.returned],
+                    },
+                  },
+                },
+              },
               { statusHistory: { some: { employeeId: emp.id } } },
             ];
           }
@@ -902,7 +1176,15 @@ export class OrdersService {
           } else if (isExceptions) {
             baseWhere.OR = [
               { statusHistory: { some: { employeeId: emp.id } } },
-              { shipments: { some: { status: { in: [ShipmentStatus.failed, ShipmentStatus.returned] } } } },
+              {
+                shipments: {
+                  some: {
+                    status: {
+                      in: [ShipmentStatus.failed, ShipmentStatus.returned],
+                    },
+                  },
+                },
+              },
               { status: OrderStatus.cancelled },
             ];
           } else {
@@ -918,34 +1200,68 @@ export class OrdersService {
       }
     }
 
-    // Tính toán tổng số lượng theo từng trạng thái trên toàn bộ database (theo phân quyền của nhân viên)
-    const [
-      countAll,
-      countPending,
-      countConfirmed,
-      countProcessing,
-      countShipping,
-      countCompleted,
-      countCancelled,
-    ] = await Promise.all([
-      this.prisma.order.count({ where: baseWhere }),
-      this.prisma.order.count({ where: { AND: [baseWhere, { status: OrderStatus.pending }] } }),
-      this.prisma.order.count({ where: { AND: [baseWhere, { status: OrderStatus.confirmed }] } }),
-      this.prisma.order.count({ where: { AND: [baseWhere, { status: OrderStatus.processing }] } }),
-      this.prisma.order.count({ where: { AND: [baseWhere, { status: OrderStatus.shipping }] } }),
-      this.prisma.order.count({ where: { AND: [baseWhere, { status: OrderStatus.completed }] } }),
-      this.prisma.order.count({ where: { AND: [baseWhere, { status: OrderStatus.cancelled }] } }),
-    ]);
-
-    const countsByStatus = {
-      all: countAll,
-      pending: countPending,
-      confirmed: countConfirmed,
-      processing: countProcessing,
-      shipping: countShipping,
-      completed: countCompleted,
-      cancelled: countCancelled,
+    // [TỐI ƯU TRUY VẤN DATABASE - YÊU CẦU 3 & 5]:
+    // Thay vì chạy 7 câu lệnh COUNT() rời rạc, sử dụng 1 câu lệnh SQL GROUP BY status duy nhất
+    // để tổng hợp số lượng hóa đơn theo từng trạng thái trên toàn bộ CSDL.
+    const countsByStatus: Record<string, number> = {
+      all: 0,
+      pending: 0,
+      confirmed: 0,
+      processing: 0,
+      shipping: 0,
+      completed: 0,
+      cancelled: 0,
     };
+
+    if (typeof this.prisma.extended.order.groupBy === 'function') {
+      const groupedCounts = await this.prisma.extended.order.groupBy({
+        by: ['status'],
+        where: baseWhere,
+        _count: { _all: true },
+      });
+      for (const row of groupedCounts) {
+        const c = Number(row._count?._all ?? 0);
+        countsByStatus[row.status] = c;
+        countsByStatus.all += c;
+      }
+    } else {
+      const [
+        countAll,
+        countPending,
+        countConfirmed,
+        countProcessing,
+        countShipping,
+        countCompleted,
+        countCancelled,
+      ] = await Promise.all([
+        this.prisma.extended.order.count({ where: baseWhere }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.pending }] },
+        }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.confirmed }] },
+        }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.processing }] },
+        }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.shipping }] },
+        }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.completed }] },
+        }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.cancelled }] },
+        }),
+      ]);
+      countsByStatus.all = countAll;
+      countsByStatus.pending = countPending;
+      countsByStatus.confirmed = countConfirmed;
+      countsByStatus.processing = countProcessing;
+      countsByStatus.shipping = countShipping;
+      countsByStatus.completed = countCompleted;
+      countsByStatus.cancelled = countCancelled;
+    }
 
     const whereConditions: Prisma.OrderWhereInput[] = [baseWhere];
 
@@ -983,10 +1299,14 @@ export class OrdersService {
     }
 
     const where: Prisma.OrderWhereInput =
-      whereConditions.length === 1 ? whereConditions[0] : { AND: whereConditions };
+      whereConditions.length === 1
+        ? whereConditions[0]
+        : { AND: whereConditions };
 
-    const totalItems = await this.prisma.order.count({ where });
-    const list = await this.prisma.order.findMany({
+    // [ĐỌC DATABASE - DANH SÁCH HÓA ĐƠN & CHI TIẾT HÓA ĐƠN (YÊU CẦU 2 & 3)]:
+    // Đếm tổng số hóa đơn thỏa điều kiện lọc và đọc danh sách hóa đơn phân trang kèm chi tiết (orderInclude).
+    const totalItems = await this.prisma.extended.order.count({ where });
+    const list = await this.prisma.extended.order.findMany({
       where,
       include: orderInclude,
       orderBy: { createdAt: 'desc' },
@@ -1003,7 +1323,7 @@ export class OrdersService {
   }
 
   async getById(id: string, user: UserInfo) {
-    let order = await this.prisma.order.findUnique({
+    let order = await this.prisma.extended.order.findUnique({
       where: { id },
       include: orderInclude,
     });
@@ -1015,7 +1335,7 @@ export class OrdersService {
         const shipper = await this.findBestShipperEmployee();
         if (shipper) {
           if (order.shipments && order.shipments.length > 0) {
-            await this.prisma.shipment.updateMany({
+            await this.prisma.extended.shipment.updateMany({
               where: { orderId: order.id, carrierId: null },
               data: {
                 carrierId: shipper.id,
@@ -1026,18 +1346,21 @@ export class OrdersService {
               },
             });
           } else {
-            await this.createShipmentWithInitialEvent(this.prisma, {
-              orderId: order.id,
-              carrierId: shipper.id,
-              status: ShipmentStatus.assigned,
-              shippingAddress: order.shippingAddress,
-              receiverName: order.receiverName,
-              receiverPhone: order.receiverPhone,
-              notes: `[Tự động phân công] Bưu tá [${shipper.fullName} / ${shipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận`,
-            });
+            await this.createShipmentWithInitialEvent(
+              this.prisma.extended as unknown as Prisma.TransactionClient,
+              {
+                orderId: order.id,
+                carrierId: shipper.id,
+                status: ShipmentStatus.assigned,
+                shippingAddress: order.shippingAddress,
+                receiverName: order.receiverName,
+                receiverPhone: order.receiverPhone,
+                notes: `[Tự động phân công] Bưu tá [${shipper.fullName} / ${shipper.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận`,
+              },
+            );
           }
 
-          await this.prisma.orderStatusHistory.create({
+          await this.prisma.extended.orderStatusHistory.create({
             data: {
               orderId: order.id,
               employeeId: shipper.id,
@@ -1047,7 +1370,7 @@ export class OrdersService {
             },
           });
 
-          order = await this.prisma.order.findUniqueOrThrow({
+          order = await this.prisma.extended.order.findUniqueOrThrow({
             where: { id },
             include: orderInclude,
           });
@@ -1065,9 +1388,9 @@ export class OrdersService {
   }
 
   /** Ẩn thông tin người nhận trong vận đơn khi trả cho vendor (bảo mật sàn MIVA). */
-  private maskShipmentForVendor<T extends Record<string, any> | null | undefined>(
-    shipment: T,
-  ): T {
+  private maskShipmentForVendor<
+    T extends Record<string, any> | null | undefined,
+  >(shipment: T): T {
     if (!shipment) return shipment;
     return {
       ...shipment,
@@ -1093,7 +1416,9 @@ export class OrdersService {
       ? order.shipments
           .filter(
             (s: any) =>
-              !s.vendorOrderId || !myVendorOrder || s.vendorOrderId === myVendorOrder.id,
+              !s.vendorOrderId ||
+              !myVendorOrder ||
+              s.vendorOrderId === myVendorOrder.id,
           )
           .map((s: any) => this.maskShipmentForVendor(s))
       : order.shipments;
@@ -1124,8 +1449,12 @@ export class OrdersService {
 
     if (user.role === 'employee') {
       const isAssigned =
-        (current.shipments || []).some((s: any) => s.carrierId === user.userID) ||
-        (current.statusHistory || []).some((h: any) => h.employeeId === user.userID);
+        (current.shipments || []).some(
+          (s: any) => s.carrierId === user.userID,
+        ) ||
+        (current.statusHistory || []).some(
+          (h: any) => h.employeeId === user.userID,
+        );
       if (!isAssigned) {
         throw new ForbiddenException(
           'Bạn không có quyền thao tác trên đơn hàng được phân công cho nhân viên khác',
@@ -1134,8 +1463,15 @@ export class OrdersService {
     }
 
     if (user.role === 'vendor') {
-      const parcels = await this.prisma.vendorOrder.findMany({ where: { orderId: id }, select: { vendorId: true } });
-      if (dto.status !== OrderStatus.cancelled || parcels.length !== 1 || parcels[0].vendorId !== user.userID) {
+      const parcels = await this.prisma.extended.vendorOrder.findMany({
+        where: { orderId: id },
+        select: { vendorId: true },
+      });
+      if (
+        dto.status !== OrderStatus.cancelled ||
+        parcels.length !== 1 ||
+        parcels[0].vendorId !== user.userID
+      ) {
         throw new ForbiddenException(
           'Vendor xử lý đóng gói và bàn giao qua kiện hàng của shop',
         );
@@ -1153,7 +1489,7 @@ export class OrdersService {
     }
 
     if (user.role === 'employee') {
-      const emp = await this.prisma.employee.findUnique({
+      const emp = await this.prisma.extended.employee.findUnique({
         where: { id: user.userID },
         select: { department: true, permissions: true },
       });
@@ -1182,28 +1518,59 @@ export class OrdersService {
       }
     }
 
-    if (dto.status !== current.status && !transitions[current.status].includes(dto.status)) {
+    if (
+      dto.status !== current.status &&
+      !transitions[current.status].includes(dto.status)
+    ) {
       throw new BadRequestException(
         `Không thể chuyển từ ${current.status} sang ${dto.status}`,
       );
     }
-    if (dto.status === current.status && (current.status === OrderStatus.cancelled || current.status === OrderStatus.completed)) return current;
-    if (dto.status === OrderStatus.cancelled && current.shipments.some(shipment => shipment.status === ShipmentStatus.delivered)) {
-      throw new BadRequestException('Đơn có kiện đã giao thành công cần xử lý hoàn trả, không thể hủy trực tiếp');
+    if (
+      dto.status === current.status &&
+      (current.status === OrderStatus.cancelled ||
+        current.status === OrderStatus.completed)
+    )
+      return current;
+    if (
+      dto.status === OrderStatus.cancelled &&
+      current.shipments.some(
+        (shipment) => shipment.status === ShipmentStatus.delivered,
+      )
+    ) {
+      throw new BadRequestException(
+        'Đơn có kiện đã giao thành công cần xử lý hoàn trả, không thể hủy trực tiếp',
+      );
     }
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.extendedTransaction(async (tx) => {
       const claimed = await tx.order.updateMany({
         where: { id, status: current.status },
-        data: { status: dto.status, cancelledAt: dto.status === OrderStatus.cancelled ? new Date() : undefined },
+        data: {
+          status: dto.status,
+          cancelledAt:
+            dto.status === OrderStatus.cancelled ? new Date() : undefined,
+        },
       });
-      if (!claimed.count) throw new ConflictException('Đơn hàng vừa được cập nhật. Vui lòng tải lại và thử lại');
+      if (!claimed.count)
+        throw new ConflictException(
+          'Đơn hàng vừa được cập nhật. Vui lòng tải lại và thử lại',
+        );
       if (dto.status === OrderStatus.cancelled) {
-        const cancelledParcels = new Set(current.vendorOrders.filter(parcel => parcel.status === VendorOrderStatus.cancelled).map(parcel => parcel.id));
-        for (const detail of current.details.filter(detail => !detail.vendorOrderId || !cancelledParcels.has(detail.vendorOrderId))) {
+        const cancelledParcels = new Set(
+          current.vendorOrders
+            .filter((parcel) => parcel.status === VendorOrderStatus.cancelled)
+            .map((parcel) => parcel.id),
+        );
+        for (const detail of current.details.filter(
+          (detail) =>
+            !detail.vendorOrderId ||
+            !cancelledParcels.has(detail.vendorOrderId),
+        )) {
           await tx.productVariant.update({
             where: { id: detail.productVariantId },
-            data: { stock: { increment: detail.quantity } }});
+            data: { stock: { increment: detail.quantity } },
+          });
         }
         const usages = current.voucherDetails.filter(
           (detail) => !detail.reversedAt,
@@ -1211,10 +1578,12 @@ export class OrdersService {
         for (const usage of usages) {
           await tx.voucherDetail.update({
             where: { id: usage.id },
-            data: { reversedAt: new Date() }});
+            data: { reversedAt: new Date() },
+          });
           await tx.voucher.updateMany({
             where: { id: usage.voucherId, usedQuantity: { gt: 0 } },
-            data: { usedQuantity: { decrement: 1 } }});
+            data: { usedQuantity: { decrement: 1 } },
+          });
         }
         await tx.payment.update({
           where: { orderId: id },
@@ -1222,7 +1591,9 @@ export class OrdersService {
             status:
               current.payment?.status === PaymentStatus.paid
                 ? PaymentStatus.refunded
-                : PaymentStatus.cancelled}});
+                : PaymentStatus.cancelled,
+          },
+        });
 
         await tx.vendorOrder.updateMany({
           where: { orderId: id, status: { not: 'delivered' } },
@@ -1234,14 +1605,28 @@ export class OrdersService {
           data: {
             status: ShipmentStatus.returned,
             failedReason: dto.note || 'Đơn hàng bị hủy, hoàn hàng về kho',
-            notes: dto.note ? `Hủy đơn: ${dto.note}` : 'Đơn hàng bị hủy, hoàn hàng về kho',
+            notes: dto.note
+              ? `Hủy đơn: ${dto.note}`
+              : 'Đơn hàng bị hủy, hoàn hàng về kho',
           },
         });
-        if (current.shipments.length) await tx.shipmentEvent.createMany({ data: current.shipments.filter(shipment =>
-          ![ShipmentStatus.returned, ShipmentStatus.delivered].includes(shipment.status as any)).map(shipment => ({
-          shipmentId: shipment.id, status: ShipmentStatus.returned, actorRole: user.role, actorId: user.userID,
-          description: dto.note || 'Đơn hàng bị hủy, hoàn hàng về kho',
-        })) });
+        if (current.shipments.length)
+          await tx.shipmentEvent.createMany({
+            data: current.shipments
+              .filter(
+                (shipment) =>
+                  ![ShipmentStatus.returned, ShipmentStatus.delivered].includes(
+                    shipment.status as any,
+                  ),
+              )
+              .map((shipment) => ({
+                shipmentId: shipment.id,
+                status: ShipmentStatus.returned,
+                actorRole: user.role,
+                actorId: user.userID,
+                description: dto.note || 'Đơn hàng bị hủy, hoàn hàng về kho',
+              })),
+          });
       }
       if (
         dto.status === OrderStatus.completed &&
@@ -1250,22 +1635,65 @@ export class OrdersService {
       ) {
         await tx.payment.update({
           where: { orderId: id },
-          data: { status: PaymentStatus.paid, paidAt: new Date() }});
+          data: { status: PaymentStatus.paid, paidAt: new Date() },
+        });
       }
-      if (dto.status === OrderStatus.shipping || dto.status === OrderStatus.completed) {
-        await tx.vendorOrder.updateMany({ where: { orderId: id, status: { not: VendorOrderStatus.cancelled } },
-          data: { status: dto.status === OrderStatus.completed ? VendorOrderStatus.delivered : VendorOrderStatus.shipping } });
-        await tx.shipment.updateMany({ where: { orderId: id, status: { notIn: [ShipmentStatus.returned, ShipmentStatus.delivered] } },
-          data: { status: dto.status === OrderStatus.completed ? ShipmentStatus.delivered : ShipmentStatus.in_transit,
-            deliveredAt: dto.status === OrderStatus.completed ? new Date() : undefined } });
-        const shipmentStatus = dto.status === OrderStatus.completed ? ShipmentStatus.delivered : ShipmentStatus.in_transit;
-        if (current.shipments.length) await tx.shipmentEvent.createMany({ data: current.shipments.filter(shipment =>
-          shipment.status !== ShipmentStatus.returned && shipment.status !== ShipmentStatus.delivered && shipment.status !== shipmentStatus).map(shipment => ({
-          shipmentId: shipment.id, status: shipmentStatus, actorRole: user.role, actorId: user.userID,
-          description: dto.note || 'Cập nhật vận đơn theo trạng thái đơn hàng',
-        })) });
+      if (
+        dto.status === OrderStatus.shipping ||
+        dto.status === OrderStatus.completed
+      ) {
+        await tx.vendorOrder.updateMany({
+          where: { orderId: id, status: { not: VendorOrderStatus.cancelled } },
+          data: {
+            status:
+              dto.status === OrderStatus.completed
+                ? VendorOrderStatus.delivered
+                : VendorOrderStatus.shipping,
+          },
+        });
+        await tx.shipment.updateMany({
+          where: {
+            orderId: id,
+            status: {
+              notIn: [ShipmentStatus.returned, ShipmentStatus.delivered],
+            },
+          },
+          data: {
+            status:
+              dto.status === OrderStatus.completed
+                ? ShipmentStatus.delivered
+                : ShipmentStatus.in_transit,
+            deliveredAt:
+              dto.status === OrderStatus.completed ? new Date() : undefined,
+          },
+        });
+        const shipmentStatus =
+          dto.status === OrderStatus.completed
+            ? ShipmentStatus.delivered
+            : ShipmentStatus.in_transit;
+        if (current.shipments.length)
+          await tx.shipmentEvent.createMany({
+            data: current.shipments
+              .filter(
+                (shipment) =>
+                  shipment.status !== ShipmentStatus.returned &&
+                  shipment.status !== ShipmentStatus.delivered &&
+                  shipment.status !== shipmentStatus,
+              )
+              .map((shipment) => ({
+                shipmentId: shipment.id,
+                status: shipmentStatus,
+                actorRole: user.role,
+                actorId: user.userID,
+                description:
+                  dto.note || 'Cập nhật vận đơn theo trạng thái đơn hàng',
+              })),
+          });
       }
-      if (dto.status === OrderStatus.confirmed || dto.status === OrderStatus.processing) {
+      if (
+        dto.status === OrderStatus.confirmed ||
+        dto.status === OrderStatus.processing
+      ) {
         // Multi-Vendor Order Splitting into VendorOrder
         const vendorGroups = new Map<string, typeof current.details>();
         for (const detail of current.details) {
@@ -1301,7 +1729,8 @@ export class OrdersService {
                 shippingFee: 0,
                 totalAmount: subtotal,
                 status: 'pending',
-                notes: 'Kiện hàng điều phối từ nhân viên MIVA - Chờ Shop xác nhận',
+                notes:
+                  'Kiện hàng điều phối từ nhân viên MIVA - Chờ Shop xác nhận',
               },
             });
           } else if (vOrder.status === 'pending') {
@@ -1332,9 +1761,11 @@ export class OrdersService {
               shippingAddress: current.shippingAddress,
               receiverName: current.receiverName,
               receiverPhone: current.receiverPhone,
-              notes: 'Kiện hàng đã được điều phối chuyển cho Vendor. Chờ Shop đóng gói hoàn tất để điều phối bưu tá vận chuyển.',
+              notes:
+                'Kiện hàng đã được điều phối chuyển cho Vendor. Chờ Shop đóng gói hoàn tất để điều phối bưu tá vận chuyển.',
               eventLocation: 'Trung tâm phân phối MIVA Hub',
-              eventDescription: 'Đơn hàng được xác nhận và khởi tạo vận đơn. Chờ đối tác Vendor đóng gói hoàn tất để điều phối bưu tá.',
+              eventDescription:
+                'Đơn hàng được xác nhận và khởi tạo vận đơn. Chờ đối tác Vendor đóng gói hoàn tất để điều phối bưu tá.',
               actorRole: user.role,
               actorId: user.userID,
             });
@@ -1357,7 +1788,9 @@ export class OrdersService {
         actorData.clientId = user.userID;
       } else if (user.role === 'employee') {
         actorData.employeeId = user.userID;
-        auditNote = auditNote ? `[Nhân viên] ${auditNote}` : '[Nhân viên xử lý]';
+        auditNote = auditNote
+          ? `[Nhân viên] ${auditNote}`
+          : '[Nhân viên xử lý]';
 
         // Tạo thông báo thực tế cho Vendor và Admin khi nhân viên xử lý / báo cáo sự cố
         const employee = await tx.employee.findUnique({
@@ -1367,7 +1800,8 @@ export class OrdersService {
         const empName = employee
           ? `${employee.fullName} (${employee.employeeCode || 'NV'})`
           : 'Nhân viên điều phối';
-        const orderCodeStr = current.orderCode || current.id.slice(0, 8).toUpperCase();
+        const orderCodeStr =
+          current.orderCode || current.id.slice(0, 8).toUpperCase();
 
         const rawNote = dto.note || '';
         const noteLower = rawNote.toLowerCase();
@@ -1396,7 +1830,8 @@ export class OrdersService {
             where: { status: 'active', deletedAt: null },
             select: { id: true },
           });
-          const adminTitle = dto.title || `[Báo cáo sự cố] Đơn hàng #${orderCodeStr}`;
+          const adminTitle =
+            dto.title || `[Báo cáo sự cố] Đơn hàng #${orderCodeStr}`;
           for (const adm of admins) {
             await tx.notification.create({
               data: {
@@ -1420,11 +1855,14 @@ export class OrdersService {
           const vendorIds: string[] = Array.from(
             new Set(
               current.details
-                .map((d: any) => d.productVariant?.productColor?.product?.vendorId)
+                .map(
+                  (d: any) => d.productVariant?.productColor?.product?.vendorId,
+                )
                 .filter((id: any): id is string => Boolean(id)),
             ),
           );
-          const vendorTitle = dto.title || `[Thông báo sự cố đơn hàng] #${orderCodeStr}`;
+          const vendorTitle =
+            dto.title || `[Thông báo sự cố đơn hàng] #${orderCodeStr}`;
           for (const vId of vendorIds) {
             await tx.notification.create({
               data: {
@@ -1456,7 +1894,12 @@ export class OrdersService {
       });
 
       // Tự động chuyển tới Bộ phận Xử lý Sự cố & Ngoại lệ Đơn nếu đơn hàng phát sinh sự cố, hủy đơn hoặc khiếu nại
-      let assignedExceptionEmp: { id: string; fullName: string; employeeCode: string; department: string } | null = null;
+      let assignedExceptionEmp: {
+        id: string;
+        fullName: string;
+        employeeCode: string;
+        department: string;
+      } | null = null;
       const rawNote = dto.note || '';
       const noteLower = rawNote.toLowerCase();
       const isIncident =
@@ -1492,23 +1935,23 @@ export class OrdersService {
       });
       const surveyNotifications =
         dto.status === OrderStatus.completed
-          ? await this.surveysService.deliverForOrder(
-              tx,
-              id,
-              SurveyTriggerType.after_order_completed,
-            )
+          ? await this.deliverOrderCompletedSurveys(tx, id)
           : [];
       return { updated, surveyNotifications, assignedExceptionEmp, auditNote };
     });
 
     this.emitOrder(result.updated, 'order:updated');
-    this.surveysService.emitNotifications(result.surveyNotifications);
+    this.emitSurveyNotifications(result.surveyNotifications);
     if (result.assignedExceptionEmp) {
-      this.realtime.emitToUser(result.assignedExceptionEmp.id, 'order:exception', {
-        orderId: id,
-        orderCode: result.updated.orderCode,
-        note: result.auditNote,
-      });
+      this.realtime.emitToUser(
+        result.assignedExceptionEmp.id,
+        'order:exception',
+        {
+          orderId: id,
+          orderCode: result.updated.orderCode,
+          note: result.auditNote,
+        },
+      );
       this.realtime.emitToEmployees('order:exception', {
         orderId: id,
         orderCode: result.updated.orderCode,
@@ -1518,10 +1961,37 @@ export class OrdersService {
   }
 
   /**
+   * Kích hoạt khảo sát sau khi đơn hàng hoàn tất (dùng chung cho cả OrdersService và ShippingService).
+   */
+  async deliverOrderCompletedSurveys(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ) {
+    return this.surveysService.deliverForOrder(
+      tx,
+      orderId,
+      SurveyTriggerType.after_order_completed,
+    );
+  }
+
+  emitSurveyNotifications(
+    notifications: Awaited<ReturnType<SurveysService['deliverForOrder']>>,
+  ) {
+    this.surveysService.emitNotifications(notifications);
+  }
+
+  /**
    * Tìm nhân viên tiếp nhận & chuyển đơn thuộc Bộ phận Điều phối & Liên kết Vendor
    */
-  async findBestHandlingEmployee(tx?: Prisma.TransactionClient, excludeEmployeeId?: string) {
-    return this.pickRandomActiveEmployee(DEPARTMENT_KEYWORDS.VENDOR_COORDINATION, tx, excludeEmployeeId);
+  async findBestHandlingEmployee(
+    tx?: Prisma.TransactionClient,
+    excludeEmployeeId?: string,
+  ) {
+    return this.pickRandomActiveEmployee(
+      DEPARTMENT_KEYWORDS.VENDOR_COORDINATION,
+      tx,
+      excludeEmployeeId,
+    );
   }
 
   /**
@@ -1539,7 +2009,7 @@ export class OrdersService {
     tx?: Prisma.TransactionClient,
     excludeEmployeeId?: string,
   ) {
-    const client = tx || this.prisma;
+    const client = tx || (this.prisma.extended as unknown as Prisma.TransactionClient);
     const candidates = await client.employee.findMany({
       where: {
         status: 'active',
@@ -1564,15 +2034,28 @@ export class OrdersService {
    * Tìm nhân viên bưu tá giao hàng thuộc Phòng Vận chuyển & Giao nhận
    * Tuyệt đối không trùng với nhân viên tiếp nhận đơn
    */
-  async findBestShipperEmployee(tx?: Prisma.TransactionClient, excludeEmployeeId?: string) {
-    const client = tx || this.prisma;
+  async findBestShipperEmployee(
+    tx?: Prisma.TransactionClient,
+    excludeEmployeeId?: string,
+  ) {
+    const client = tx || (this.prisma.extended as unknown as Prisma.TransactionClient);
     const candidates = await client.employee.findMany({
       where: {
         status: 'active',
         deletedAt: null,
         OR: [
-          { department: { contains: DEPARTMENT_KEYWORDS.SHIPPING, mode: 'insensitive' } },
-          { department: { contains: DEPARTMENT_KEYWORDS.DELIVERY, mode: 'insensitive' } },
+          {
+            department: {
+              contains: DEPARTMENT_KEYWORDS.SHIPPING,
+              mode: 'insensitive',
+            },
+          },
+          {
+            department: {
+              contains: DEPARTMENT_KEYWORDS.DELIVERY,
+              mode: 'insensitive',
+            },
+          },
         ],
         ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
       },
@@ -1600,7 +2083,8 @@ export class OrdersService {
 
     if (!candidates.length) return null;
     const sorted = [...candidates].sort(
-      (a, b) => (a.assignedShipments?.length || 0) - (b.assignedShipments?.length || 0),
+      (a, b) =>
+        (a.assignedShipments?.length || 0) - (b.assignedShipments?.length || 0),
     );
     const minLoad = sorted[0].assignedShipments?.length || 0;
     const leastBusy = sorted.filter(
@@ -1610,18 +2094,21 @@ export class OrdersService {
   }
 
   async assignOrder(id: string, dto: AssignOrderDto, user: UserInfo) {
-    const order = await this.prisma.order.findUnique({
+    const order = await this.prisma.extended.order.findUnique({
       where: { id },
       include: { shipments: true, vendorOrders: true },
     });
     if (!order) {
       throw new NotFoundException('Không tìm thấy đơn hàng');
     }
-    if (order.status === OrderStatus.completed || order.status === OrderStatus.cancelled) {
+    if (
+      order.status === OrderStatus.completed ||
+      order.status === OrderStatus.cancelled
+    ) {
       throw new BadRequestException('Không thể phân công đơn hàng đã kết thúc');
     }
 
-    const employee = await this.prisma.employee.findUnique({
+    const employee = await this.prisma.extended.employee.findUnique({
       where: { id: dto.employeeId },
       select: {
         id: true,
@@ -1637,7 +2124,9 @@ export class OrdersService {
       throw new NotFoundException('Không tìm thấy nhân viên được chỉ định');
     }
     if (employee.status !== 'active' || employee.deletedAt) {
-      throw new BadRequestException('Nhân viên được chỉ định không còn hoạt động');
+      throw new BadRequestException(
+        'Nhân viên được chỉ định không còn hoạt động',
+      );
     }
 
     const dept = (employee.department || '').toLowerCase();
@@ -1645,11 +2134,13 @@ export class OrdersService {
     const isHandling = dept.includes('điều phối') || dept.includes('vendor');
     const isException = dept.includes('sự cố') || dept.includes('ngoại lệ');
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.extendedTransaction(async (tx) => {
       let historyNote = '';
 
       if (isShipper) {
-        const shipments = await tx.shipment.findMany({ where: { orderId: id } });
+        const shipments = await tx.shipment.findMany({
+          where: { orderId: id },
+        });
 
         if (!shipments.length) {
           await this.createShipmentWithInitialEvent(tx, {
@@ -1757,7 +2248,7 @@ export class OrdersService {
     user: UserInfo,
     departmentType?: 'handling' | 'shipping' | 'exception',
   ) {
-    const order = await this.prisma.order.findUnique({
+    const order = await this.prisma.extended.order.findUnique({
       where: { id },
       include: { shipments: true },
     });
@@ -1813,7 +2304,7 @@ export class OrdersService {
 
   async autoAssignAll(user: UserInfo) {
     // 1. Find all shipments without carrier assigned
-    const unassignedShipments = await this.prisma.shipment.findMany({
+    const unassignedShipments = await this.prisma.extended.shipment.findMany({
       where: {
         carrierId: null,
         order: {
@@ -1828,7 +2319,7 @@ export class OrdersService {
       const bestEmp = await this.findBestShipperEmployee();
       if (!bestEmp) break;
 
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.extendedTransaction(async (tx) => {
         await tx.shipment.update({
           where: { id: shipment.id },
           data: {
@@ -1860,7 +2351,11 @@ export class OrdersService {
           },
         });
       });
-      const payload = { shipmentId: shipment.id, orderId: shipment.orderId, status: ShipmentStatus.assigned };
+      const payload = {
+        shipmentId: shipment.id,
+        orderId: shipment.orderId,
+        status: ShipmentStatus.assigned,
+      };
       this.realtime.emitToAdmins('shipment:updated', payload);
       this.realtime.emitToEmployees('shipment:updated', payload);
       this.realtime.emitToUser(bestEmp.id, 'shipment:updated', payload);
@@ -1868,7 +2363,7 @@ export class OrdersService {
     }
 
     // 2. Also check active orders without any shipments
-    const ordersWithoutShipment = await this.prisma.order.findMany({
+    const ordersWithoutShipment = await this.prisma.extended.order.findMany({
       where: {
         shipments: { none: {} },
         status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
@@ -1879,7 +2374,7 @@ export class OrdersService {
       const bestEmp = await this.findBestShipperEmployee();
       if (!bestEmp) break;
 
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.extendedTransaction(async (tx) => {
         await this.createShipmentWithInitialEvent(tx, {
           orderId: order.id,
           carrierId: bestEmp.id,
@@ -1914,35 +2409,63 @@ export class OrdersService {
     };
   }
 
-  private async assertCanView(
-    order: any,
-    user: UserInfo,
-  ) {
+  private async assertCanView(order: any, user: UserInfo) {
     if (user.role === 'admin' || order.clientId === user.userID) return;
 
     if (user.role === 'employee') {
       const isAssigned =
         (order.shipments || []).some((s: any) => s.carrierId === user.userID) ||
-        (order.statusHistory || []).some((h: any) => h.employeeId === user.userID);
+        (order.statusHistory || []).some(
+          (h: any) => h.employeeId === user.userID,
+        );
       if (isAssigned) return;
 
-      const emp = await this.prisma.employee.findUnique({
+      const emp = await this.prisma.extended.employee.findUnique({
         where: { id: user.userID },
         select: { department: true, assignedOrderScope: true },
       });
 
       if (emp) {
         if (emp.assignedOrderScope === 'all_orders') return;
-        const isVendorLink = emp.department.includes(DEPARTMENT_KEYWORDS.VENDOR_COORDINATION);
-        const isShipping = emp.department.includes(DEPARTMENT_KEYWORDS.SHIPPING);
-        const isExceptions = emp.department.includes(DEPARTMENT_KEYWORDS.EXCEPTION);
+        const isVendorLink = emp.department.includes(
+          DEPARTMENT_KEYWORDS.VENDOR_COORDINATION,
+        );
+        const isShipping = emp.department.includes(
+          DEPARTMENT_KEYWORDS.SHIPPING,
+        );
+        const isExceptions = emp.department.includes(
+          DEPARTMENT_KEYWORDS.EXCEPTION,
+        );
 
-        if (isVendorLink && (order.status === OrderStatus.pending || order.status === OrderStatus.confirmed)) return;
-        if (isShipping && (order.status === OrderStatus.shipping || (order.shipments || []).some((s: any) => s.carrierId === user.userID))) return;
-        if (isExceptions && (order.status === OrderStatus.cancelled || (order.shipments || []).some((s: any) => s.status === ShipmentStatus.failed || s.status === ShipmentStatus.returned))) return;
+        if (
+          isVendorLink &&
+          (order.status === OrderStatus.pending ||
+            order.status === OrderStatus.confirmed)
+        )
+          return;
+        if (
+          isShipping &&
+          (order.status === OrderStatus.shipping ||
+            (order.shipments || []).some(
+              (s: any) => s.carrierId === user.userID,
+            ))
+        )
+          return;
+        if (
+          isExceptions &&
+          (order.status === OrderStatus.cancelled ||
+            (order.shipments || []).some(
+              (s: any) =>
+                s.status === ShipmentStatus.failed ||
+                s.status === ShipmentStatus.returned,
+            ))
+        )
+          return;
       }
 
-      throw new ForbiddenException('Bạn không được phân công phụ trách đơn hàng này');
+      throw new ForbiddenException(
+        'Bạn không được phân công phụ trách đơn hàng này',
+      );
     }
 
     const vendorIds = new Set(
@@ -1972,7 +2495,8 @@ export class OrdersService {
     const payload = {
       orderId: order.id,
       orderCode: order.orderCode,
-      status: order.status};
+      status: order.status,
+    };
     this.realtime.emitToUser(order.clientId, event, payload);
     this.realtime.emitToAdmins(event, payload);
     this.realtime.emitToEmployees(event, payload);
@@ -1989,7 +2513,8 @@ export class OrdersService {
         return [product.id, product] as const;
       }),
     ).values()) {
-      if (product.id) this.realtime.emitProductUpdated(product.id, product.vendorId);
+      if (product.id)
+        this.realtime.emitProductUpdated(product.id, product.vendorId);
     }
   }
 }

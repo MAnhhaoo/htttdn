@@ -58,6 +58,7 @@ describe('OrdersService', () => {
       $transaction: jest.fn(
         (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
       )};
+    Object.assign(prisma, { extended: prisma, extendedTransaction: prisma.$transaction });
     const vouchers = {
       calculate: jest.fn().mockResolvedValue({
         subtotalAmount: new Prisma.Decimal(100),
@@ -156,6 +157,7 @@ describe('OrdersService', () => {
       $transaction: jest.fn(
         (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
       )};
+    Object.assign(prisma, { extended: prisma, extendedTransaction: prisma.$transaction });
     const realtime = {
       emitToUser: jest.fn(),
       emitToAdmins: jest.fn(),
@@ -202,5 +204,67 @@ describe('OrdersService', () => {
       'order:updated',
       expect.objectContaining({ status: OrderStatus.cancelled }),
     );
+  });
+
+  it('aggregates status counts via groupBy and reads paginated invoices in listAll', async () => {
+    const mockOrders = [
+      {
+        id: 'order-1',
+        orderCode: 'INV-2026-001',
+        status: OrderStatus.completed,
+        subtotalAmount: new Prisma.Decimal(500000),
+        discountAmount: new Prisma.Decimal(50000),
+        totalAmount: new Prisma.Decimal(450000),
+        details: [{ id: 'd1', quantity: 2, price: new Prisma.Decimal(250000) }],
+        voucherDetails: [{ id: 'vd1', discountAmount: new Prisma.Decimal(50000), voucher: { code: 'SALE50K', scope: 'platform' } }],
+      },
+    ];
+
+    const prisma = {
+      order: {
+        findMany: jest.fn().mockResolvedValue(mockOrders),
+        count: jest.fn().mockResolvedValue(1),
+        groupBy: jest.fn().mockResolvedValue([
+          { status: OrderStatus.completed, _count: { _all: 5 } },
+          { status: OrderStatus.pending, _count: { _all: 2 } },
+          { status: OrderStatus.cancelled, _count: { _all: 1 } },
+        ]),
+      },
+    };
+    Object.assign(prisma, { extended: prisma });
+
+    const service = new OrdersService(
+      prisma as unknown as PrismaService,
+      {} as VouchersService,
+      {} as RealtimeService,
+      {} as SurveysService,
+    );
+
+    const result = await service.listAll(
+      { currentPage: 1, itemPerPage: 10 },
+      {
+        userID: 'admin-1',
+        userEmail: 'admin@example.com',
+        fullName: 'Admin',
+        phone: null,
+        avatar: null,
+        gender: null,
+        address: null,
+        role: 'admin',
+      },
+    );
+
+    expect(prisma.order.groupBy).toHaveBeenCalledTimes(1);
+    expect(prisma.order.findMany).toHaveBeenCalledTimes(1);
+    expect(result.list).toHaveLength(1);
+    expect(result.countsByStatus).toEqual({
+      all: 8,
+      pending: 2,
+      confirmed: 0,
+      processing: 0,
+      shipping: 0,
+      completed: 5,
+      cancelled: 1,
+    });
   });
 });

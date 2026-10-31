@@ -38,6 +38,7 @@ function setup(status: VendorOrderStatus = 'confirmed', parentStatus: OrderStatu
     order: { findUnique: jest.fn().mockResolvedValue(parent) },
     $transaction: jest.fn(callback => callback(tx)),
   };
+  Object.assign(prisma, { extended: prisma, extendedTransaction: prisma.$transaction });
   const realtime = {
     emitToUser: jest.fn(), emitToAdmins: jest.fn(), emitToEmployees: jest.fn(),
     emitToVendor: jest.fn(), emitProductUpdated: jest.fn(),

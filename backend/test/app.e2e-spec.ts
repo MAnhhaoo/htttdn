@@ -195,13 +195,13 @@ describe('Authentication and users (four-table HTTP integration)', () => {
     expect(unlocked.body.status).toBe('active');
     expect(unlocked.body.deletedAt).toBeNull();
 
-    // Legacy DELETE delegates to lock (status = inactive, deletedAt = null)
+    // DELETE soft-deletes the account and marks it inactive.
     const lockedViaDelete = await request(app.getHttpServer())
       .delete(`/api/users/${ids.client}`)
       .auth(tokens.accessToken, { type: 'bearer' })
       .expect(200);
     expect(lockedViaDelete.body.status).toBe('inactive');
-    expect(lockedViaDelete.body.deletedAt).toBeNull();
+    expect(lockedViaDelete.body.deletedAt).toEqual(expect.any(String));
 
     // Prevent admin self-lock
     await request(app.getHttpServer())

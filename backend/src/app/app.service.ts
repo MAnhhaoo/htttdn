@@ -11,7 +11,7 @@ export class AppService {
 
   async getHealth() {
     try {
-      await this.prismaService.$queryRaw`SELECT 1`;
+      await this.prismaService.extended.$queryRaw`SELECT 1`;
 
       return {
         status: 'ok',

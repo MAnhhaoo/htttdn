@@ -25,6 +25,8 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+Project database access conventions: [docs/prisma-access.md](docs/prisma-access.md).
+
 ## Project setup
 
 ```bash

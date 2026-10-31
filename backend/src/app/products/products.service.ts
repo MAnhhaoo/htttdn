@@ -12,12 +12,15 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { StringUtilService } from 'src/common/utils/string-util/string-util.service';
 import {
   GetProductsPaginationDto,
-  GetAdminProductsPaginationDto,
   GetVendorProductsPaginationDto,
 } from './dto/get-product.dto';
 import { Prisma, ProductStatus } from '@prisma/client';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { RealtimeService } from '../realtime/realtime.service';
+import {
+  MAX_IMAGES_PER_COLOR,
+  normalizeProductColorImages,
+} from 'src/common/utils/product-image/product-image.util';
 
 const productRelations = {
   category: {
@@ -38,7 +41,7 @@ const productRelations = {
     include: {
       variants: {
         where: { deletedAt: null },
-        orderBy: { createdAt: 'asc' },
+        orderBy: [{ price: 'asc' }, { createdAt: 'asc' }],
       },
     },
   },
@@ -46,9 +49,6 @@ const productRelations = {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Số ảnh tối đa mỗi màu, khớp với ProductColorService. */
-const MAX_IMAGES_PER_COLOR = 20;
 
 type ProductWithRelations = Prisma.ProductGetPayload<{
   include: typeof productRelations;
@@ -133,16 +133,6 @@ export class ProductService extends PrismaBaseService<'product'> {
     });
   }
 
-  async getAdminProducts(query: GetAdminProductsPaginationDto) {
-    const { category, status, vendorId, ...rest } = query;
-
-    return this.findProducts(rest, {
-      ...(status && status !== 'all' ? { status } : {}),
-      ...(vendorId ? { vendorId } : {}),
-      category: this.buildCategoryCondition(category),
-    });
-  }
-
   /**
    * Điều kiện lọc danh mục theo slug hoặc UUID, dùng chung cho trang public và admin.
    */
@@ -161,7 +151,7 @@ export class ProductService extends PrismaBaseService<'product'> {
   }
 
   async getBestSellingProducts(limit = 4) {
-    const topVariants = await this.prismaService.orderDetail.groupBy({
+    const topVariants = await this.prismaService.extended.orderDetail.groupBy({
       by: ['productVariantId'],
       where: {
         order: {
@@ -179,22 +169,22 @@ export class ProductService extends PrismaBaseService<'product'> {
     });
 
     const variantIds = topVariants.map((tv) => tv.productVariantId);
-    const variants = await this.prismaService.productVariant.findMany({
-      where: { id: { in: variantIds } },
-      select: {
-        id: true,
-        productColor: {
-          select: {
-            productId: true,
-          },
-        },
-      },
-    });
+    // Sales history can reference a soft-deleted variant or color.
+    const variants = variantIds.length
+      ? await this.prismaService.extended.$queryRaw<
+          Array<{ id: string; productId: string }>
+        >(Prisma.sql`
+          SELECT variant.id, color."productId"
+          FROM "ProductVariant" AS variant
+          JOIN "ProductColor" AS color ON color.id = variant."productColorId"
+          WHERE variant.id IN (${Prisma.join(variantIds.map((id) => Prisma.sql`${id}::uuid`))})
+        `)
+      : [];
 
     const variantToProduct = new Map<string, string>();
     for (const v of variants) {
-      if (v.productColor?.productId) {
-        variantToProduct.set(v.id, v.productColor.productId);
+      if (v.productId) {
+        variantToProduct.set(v.id, v.productId);
       }
     }
 
@@ -302,7 +292,7 @@ export class ProductService extends PrismaBaseService<'product'> {
 
   async addFavorite(productId: string, clientId: string) {
     await this.getProductById(productId);
-    const favorite = await this.prismaService.productFavorite.upsert({
+    const favorite = await this.prismaService.extended.productFavorite.upsert({
       where: { clientId_productId: { clientId, productId } },
       create: { clientId, productId },
       update: {},
@@ -312,14 +302,14 @@ export class ProductService extends PrismaBaseService<'product'> {
   }
 
   async removeFavorite(productId: string, clientId: string) {
-    await this.prismaService.productFavorite.deleteMany({
+    await this.prismaService.extended.productFavorite.deleteMany({
       where: { clientId, productId },
     });
     return { productId, favorited: false };
   }
 
   async favoriteStatus(productId: string, clientId: string) {
-    const favorite = await this.prismaService.productFavorite.findUnique({
+    const favorite = await this.prismaService.extended.productFavorite.findUnique({
       where: { clientId_productId: { clientId, productId } },
       select: { id: true },
     });
@@ -327,7 +317,7 @@ export class ProductService extends PrismaBaseService<'product'> {
   }
 
   async listFavorites(clientId: string) {
-    const favorites = await this.prismaService.productFavorite.findMany({
+    const favorites = await this.prismaService.extended.productFavorite.findMany({
       where: {
         clientId,
         product: {
@@ -464,7 +454,7 @@ export class ProductService extends PrismaBaseService<'product'> {
         : undefined);
 
     // Toàn bộ thay đổi sản phẩm, màu và biến thể nằm trong một transaction để không bị cập nhật dở.
-    const updated = await this.prismaService.$transaction(async (tx) => {
+    const updated = await this.prismaService.extendedTransaction(async (tx) => {
       const product = await tx.product.update({
         where: { id },
         data: {
@@ -491,7 +481,7 @@ export class ProductService extends PrismaBaseService<'product'> {
   async deleteProduct(id: string, vendorId?: string, isAdmin = false) {
     await this.assertCanManage(id, vendorId, isAdmin);
 
-    const deleted = await this.prismaService.product.update({
+    const deleted = await this.prismaService.extended.product.update({
       where: { id },
       data: {
         status: 'inactive',
@@ -630,18 +620,10 @@ export class ProductService extends PrismaBaseService<'product'> {
   }
 
   /**
-   * Loại URL ảnh trống/trùng và giới hạn số ảnh mỗi màu, giống ProductColorService.
+   * Loại URL ảnh trống/trùng và giới hạn số ảnh mỗi màu (tái sử dụng hàm dùng chung).
    */
   private normalizeImages(imageUrls?: string[]): string[] {
-    const unique = [
-      ...new Set((imageUrls ?? []).map((url) => url.trim()).filter(Boolean)),
-    ];
-    if (unique.length > MAX_IMAGES_PER_COLOR) {
-      throw new BadRequestException(
-        `Mỗi màu chỉ được có tối đa ${MAX_IMAGES_PER_COLOR} ảnh`,
-      );
-    }
-    return unique;
+    return normalizeProductColorImages(imageUrls, MAX_IMAGES_PER_COLOR);
   }
 
   private async getOwnedProduct(id: string, vendorId: string) {

@@ -22,8 +22,8 @@ export class ReviewsService {
   async listAll(query: GetReviewsPaginationDto) {
     const { page, itemPerPage, skip } = normalizePagination(query);
     const where = { deletedAt: null };
-    const totalItems = await this.prisma.review.count({ where });
-    const list = await this.prisma.review.findMany({
+    const totalItems = await this.prisma.extended.review.count({ where });
+    const list = await this.prisma.extended.review.findMany({
       where,
       skip,
       take: itemPerPage,
@@ -38,19 +38,31 @@ export class ReviewsService {
   }
 
   listByProduct(productId: string) {
-    return this.prisma.review.findMany({
+    return this.prisma.extended.review.findMany({
       where: {
         productId,
         deletedAt: null,
         product: { deletedAt: null, status: ProductStatus.active },
       },
-      include: { client: { select: { id: true, fullName: true } } },
+      include: {
+        client: { select: { id: true, fullName: true, avatarUrl: true } },
+        orderDetail: {
+          select: {
+            productVariant: {
+              select: {
+                size: true,
+                productColor: { select: { color: true } },
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async create(clientId: string, dto: CreateReviewDto) {
-    const detail = await this.prisma.orderDetail.findFirst({
+    const detail = await this.prisma.extended.orderDetail.findFirst({
       where: {
         id: dto.orderDetailId,
         order: { clientId, status: OrderStatus.completed },
@@ -66,7 +78,7 @@ export class ReviewsService {
       );
     if (detail.review)
       throw new ConflictException('Sản phẩm trong đơn này đã được đánh giá');
-    return this.prisma.review.create({
+    return this.prisma.extended.review.create({
       data: {
         clientId,
         orderDetailId: detail.id,
@@ -80,30 +92,30 @@ export class ReviewsService {
 
   async update(clientId: string, id: string, dto: UpdateReviewDto) {
     await this.getOwned(clientId, id);
-    return this.prisma.review.update({ where: { id }, data: dto });
+    return this.prisma.extended.review.update({ where: { id }, data: dto });
   }
 
   async remove(clientId: string, id: string) {
     await this.getOwned(clientId, id);
-    return this.prisma.review.update({
+    return this.prisma.extended.review.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
   }
 
   async moderateRemove(id: string) {
-    const review = await this.prisma.review.findFirst({
+    const review = await this.prisma.extended.review.findFirst({
       where: { id, deletedAt: null },
     });
     if (!review) throw new NotFoundException('Đánh giá không tồn tại');
-    return this.prisma.review.update({
+    return this.prisma.extended.review.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
   }
 
   private async getOwned(clientId: string, id: string) {
-    const review = await this.prisma.review.findFirst({
+    const review = await this.prisma.extended.review.findFirst({
       where: { id, clientId, deletedAt: null },
     });
     if (!review) throw new NotFoundException('Đánh giá không tồn tại');

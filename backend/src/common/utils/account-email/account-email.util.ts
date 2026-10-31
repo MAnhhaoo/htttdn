@@ -1,11 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
-import type { Prisma, PrismaClient } from '@prisma/client';
+import type { PrismaService } from '../../prisma/prisma.service';
 
 export type AccountRole = 'client' | 'vendor' | 'admin' | 'employee';
 
-type AccountDb =
-  | Pick<PrismaClient, 'client' | 'vendor' | 'admin' | 'employee'>
-  | Prisma.TransactionClient;
+type AccountDb = Pick<
+  PrismaService['extended'],
+  'client' | 'vendor' | 'admin' | 'employee'
+>;
 
 export const ACCOUNT_ROLES: AccountRole[] = ['client', 'vendor', 'admin', 'employee'];
 

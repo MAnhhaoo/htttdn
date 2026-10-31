@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../hooks/useAuth';
+import { authService } from '../../services/authService';
 import { addressService } from '../../services/addressService';
 import { useToast } from '../../components/common/Toast/Toast';
 import Button from '../../components/common/Button/Button';
 import Input from '../../components/common/Input/Input';
-import { User, Mail, MapPin, Phone, Calendar, Users, Pencil, X, Check } from 'lucide-react';
+import { User, Mail, MapPin, Phone, Calendar, Users, Pencil, X, Check, Upload, Trash2 } from 'lucide-react';
 
 const GENDER_OPTIONS = [
   { value: '', label: 'Chưa chọn' },
@@ -63,7 +64,8 @@ export default function Profile() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
-  const [form, setForm] = useState({ fullName: '', phone: '', gender: '', dateOfBirth: '' });
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [form, setForm] = useState({ fullName: '', phone: '', gender: '', dateOfBirth: '', avatarUrl: '' });
   const [addressText, setAddressText] = useState('');
   const [errors, setErrors] = useState({});
 
@@ -73,6 +75,7 @@ export default function Profile() {
       phone: user?.phone || '',
       gender: user?.gender || '',
       dateOfBirth: toDateInput(user?.dateOfBirth),
+      avatarUrl: user?.avatarUrl || '',
     });
     setAddressText(joinAddress(defaultAddress) || user?.address || '');
     setErrors({});
@@ -120,6 +123,7 @@ export default function Profile() {
       phone: form.phone.trim() || null,
       gender: form.gender || null,
       dateOfBirth: form.dateOfBirth || null,
+      avatarUrl: form.avatarUrl.trim() || null,
     };
 
     try {
@@ -150,13 +154,50 @@ export default function Profile() {
   };
 
   const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-  const isSaving = isUpdatingProfile || isSavingAddress;
+  const isSaving = isUpdatingProfile || isSavingAddress || isUploadingAvatar;
+
+  const handleAvatarFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingAvatar(true);
+      const uploadedUrl = await authService.uploadAvatar(file);
+      if (uploadedUrl) {
+        setForm((f) => ({ ...f, avatarUrl: uploadedUrl }));
+        toast.success('Đã tải ảnh đại diện lên');
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Không thể tải ảnh đại diện lên'));
+    } finally {
+      setIsUploadingAvatar(false);
+      e.target.value = '';
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8 py-12">
       <div className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl p-8">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-8 border-b border-light-border dark:border-dark-border pb-6">
-          <h1 className="text-2xl font-bold text-light-text dark:text-dark-text">Hồ sơ của tôi</h1>
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary overflow-hidden shrink-0">
+              {(isEditing ? form.avatarUrl.trim() : user.avatarUrl) ? (
+                <img
+                  src={isEditing ? form.avatarUrl.trim() : user.avatarUrl}
+                  alt={user.fullName}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <User className="w-8 h-8" />
+              )}
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-light-text dark:text-dark-text">Hồ sơ của tôi</h1>
+              <p className="text-sm text-light-muted dark:text-dark-muted">{user.email}</p>
+            </div>
+          </div>
           <div className="flex gap-2">
             {!isEditing && (
               <Button id="profile-edit-btn" variant="primary" onClick={() => setIsEditing(true)}>
@@ -199,6 +240,35 @@ export default function Profile() {
                       <option key={g.value} value={g.value}>{g.label}</option>
                     ))}
                   </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-semibold text-light-text dark:text-dark-text">Ảnh đại diện</span>
+                  <div className="flex items-center gap-3">
+                    <label
+                      htmlFor="profile-avatar-file"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-light-border dark:border-dark-border bg-white dark:bg-dark-card text-sm font-semibold text-light-text dark:text-dark-text hover:border-primary hover:text-primary cursor-pointer transition-colors"
+                    >
+                      <Upload className="w-4 h-4" />
+                      {isUploadingAvatar ? 'Đang tải ảnh...' : 'Chọn ảnh'}
+                      <input
+                        id="profile-avatar-file"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarFileChange}
+                        disabled={isUploadingAvatar}
+                        className="hidden"
+                      />
+                    </label>
+                    {form.avatarUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, avatarUrl: '' }))}
+                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Xóa ảnh
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <p className="text-xs text-light-muted dark:text-dark-muted">Email dùng để đăng nhập nên không thể thay đổi tại đây.</p>

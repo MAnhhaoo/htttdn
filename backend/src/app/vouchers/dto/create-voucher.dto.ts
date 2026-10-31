@@ -20,7 +20,9 @@ export const VoucherFieldsSchema = z
     startDate: z.iso.datetime({ offset: true }),
     endDate: z.iso.datetime({ offset: true }),
     status: z.enum(VoucherStatus).default(VoucherStatus.draft),
-    productIds: z.array(z.uuid()).min(1).max(100).optional()})
+    productIds: z.array(z.uuid()).min(1).max(100).optional(),
+    categoryIds: z.array(z.uuid()).max(100).optional(),
+  })
   .strict();
 
 const validateVoucher = (

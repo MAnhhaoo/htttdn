@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   User, Mail, Phone, MapPin, CreditCard, Calendar, Briefcase, 
   Clock, TrendingUp, ShieldCheck, Check, AlertCircle, Loader2, Edit3, Save,
-  DollarSign, CheckCircle2, Calculator, ArrowUpRight
+  DollarSign, CheckCircle2, Calculator, ArrowUpRight, Upload, Trash2
 } from 'lucide-react';
 import { profileApi, payrollApi } from '../../api/axiosClient';
 import { AttendanceCheckInModal } from '../../components/attendance/AttendanceCheckInModal';
@@ -26,6 +26,8 @@ export const MyProfilePage = () => {
   const [editing, setEditing] = useState(false);
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -39,6 +41,7 @@ export const MyProfilePage = () => {
       setProfile(res);
       setPhone(res.phone || '');
       setAddress(res.address || '');
+      setAvatarUrl(res.avatarUrl || '');
 
       if (res.id) {
         const [histRes, payRes, attRes] = await Promise.allSettled([
@@ -62,11 +65,33 @@ export const MyProfilePage = () => {
     fetchProfileAndData();
   }, []);
 
+  const handleAvatarFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingAvatar(true);
+      const uploadedUrl = await profileApi.uploadAvatar(file);
+      if (uploadedUrl) {
+        setAvatarUrl(uploadedUrl);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Không thể tải ảnh đại diện lên');
+    } finally {
+      setUploadingAvatar(false);
+      e.target.value = '';
+    }
+  };
+
   const handleUpdate = async (e) => {
     e.preventDefault();
     try {
       setSaving(true);
-      await profileApi.updateProfile({ phone, address });
+      await profileApi.updateProfile({
+        phone,
+        address,
+        avatarUrl: avatarUrl.trim() || null,
+      });
       setMsg('Cập nhật thông tin liên hệ thành công!');
       setEditing(false);
       setTimeout(() => setMsg(''), 3000);
@@ -177,8 +202,19 @@ export const MyProfilePage = () => {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 relative overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-md shadow-indigo-100">
-                  {profile.fullName?.[0]?.toUpperCase() || 'E'}
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-md shadow-indigo-100 overflow-hidden shrink-0">
+                  {(editing ? avatarUrl.trim() : profile.avatarUrl) ? (
+                    <img
+                      src={editing ? avatarUrl.trim() : profile.avatarUrl}
+                      alt={profile.fullName}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    profile.fullName?.[0]?.toUpperCase() || 'E'
+                  )}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -230,6 +266,33 @@ export const MyProfilePage = () => {
 
                 {editing ? (
                   <div className="space-y-3 pt-1">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                        Ảnh Đại Diện
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 cursor-pointer transition-colors">
+                          {uploadingAvatar ? <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" /> : <Upload className="w-3.5 h-3.5 text-indigo-600" />}
+                          {uploadingAvatar ? 'Đang tải...' : 'Chọn ảnh'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleAvatarFileChange}
+                            disabled={uploadingAvatar}
+                            className="hidden"
+                          />
+                        </label>
+                        {avatarUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setAvatarUrl('')}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Xóa
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-500 mb-1">
                         Số Điện Thoại

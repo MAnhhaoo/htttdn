@@ -17,6 +17,7 @@ describe('RealtimeGateway', () => {
       vendor: { findUnique: jest.fn().mockResolvedValue(role === 'vendor' ? user : null) },
       employee: { findUnique: jest.fn().mockResolvedValue(role === 'employee' ? user : null) },
     };
+    Object.assign(prisma, { extended: prisma });
     const client = {
       id: 'socket-1',
       handshake: { headers: { cookie }, auth: { role } },

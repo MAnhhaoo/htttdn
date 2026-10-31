@@ -110,17 +110,6 @@ describe('ProductService', () => {
     );
   });
 
-  it('keeps inactive and all-status filters in the admin product list', async () => {
-    await service.getAdminProducts({ page: 1, itemPerPage: 10, status: ProductStatus.inactive });
-    expect(productDelegate.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ status: ProductStatus.inactive }) }),
-    );
-    await service.getAdminProducts({ page: 1, itemPerPage: 10, status: 'all' });
-    expect(productDelegate.findMany).toHaveBeenLastCalledWith(
-      expect.objectContaining({ where: expect.not.objectContaining({ status: expect.anything() }) }),
-    );
-  });
-
   it('requires an active product and active category for public detail', async () => {
     await service.getProductById(product.id);
 
@@ -137,6 +126,34 @@ describe('ProductService', () => {
     await expect(service.getProductById(product.id)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('keeps sales from historical variants in the best-seller total', async () => {
+    const historicalVariantId = '77777777-7777-4777-8777-777777777777';
+    const db = {
+      extended: {
+        orderDetail: {
+          groupBy: jest.fn().mockResolvedValue([
+            { productVariantId: historicalVariantId, _sum: { quantity: 5 } },
+          ]),
+        },
+        $queryRaw: jest.fn().mockResolvedValue([
+          { id: historicalVariantId, productId: product.id },
+        ]),
+        product: { findMany: jest.fn().mockResolvedValue([product]) },
+      },
+    };
+    const bestSellers = new ProductService(
+      db as unknown as PrismaService,
+      new PaginationUtilService(),
+      new QueryUtilService(),
+      new StringUtilService(),
+      { emitProductUpdated: jest.fn() } as unknown as RealtimeService,
+    );
+
+    const result = await bestSellers.getBestSellingProducts(1);
+
+    expect(result[0]).toMatchObject({ id: product.id, soldQuantity: 5 });
   });
 });
 
@@ -167,6 +184,7 @@ describe('ProductService â€“ ownership and shared rules', () => {
       extended: { product: productDelegate },
       $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
     };
+    Object.assign(prisma, { extendedTransaction: prisma.$transaction });
     const realtime = { emitProductUpdated: jest.fn() };
     const service = new ProductService(
       prisma as unknown as PrismaService,
@@ -261,7 +279,7 @@ describe('ProductService â€“ ownership and shared rules', () => {
     expect(tx.productColor.create).not.toHaveBeenCalled();
   });
 
-  it('lets the admin and the public list filter categories by UUID', async () => {
+  it('lets the public list filter categories by UUID', async () => {
     const { service, productDelegate } = setup();
     const categoryId = '88888888-8888-4888-8888-888888888888';
     const delegate = { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) };
@@ -274,7 +292,6 @@ describe('ProductService â€“ ownership and shared rules', () => {
       { emitProductUpdated: jest.fn() } as unknown as RealtimeService,
     );
 
-    await listService.getAdminProducts({ page: 1, itemPerPage: 10, category: categoryId });
     await listService.getProducts({ page: 1, itemPerPage: 10, category: categoryId });
 
     for (const call of delegate.findMany.mock.calls) {

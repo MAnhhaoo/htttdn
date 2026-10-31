@@ -52,7 +52,7 @@ describe('SurveysService', () => {
   it('creates a vendor survey as draft and assigns ownership from JWT', async () => {
     const create = jest.fn().mockResolvedValue(managementSurvey());
     const service = new SurveysService({
-      survey: { create }} as unknown as PrismaService);
+      extended: { survey: { create } }} as unknown as PrismaService);
 
     await service.create(
       {
@@ -86,6 +86,7 @@ describe('SurveysService', () => {
   it('does not let another vendor edit survey content they did not create', async () => {
     const prisma = {
       survey: { findFirst: jest.fn().mockResolvedValue(managementSurvey()) }};
+    Object.assign(prisma, { extended: prisma });
     const service = new SurveysService(prisma as unknown as PrismaService);
 
     await expect(
@@ -126,6 +127,7 @@ describe('SurveysService', () => {
       $transaction: jest.fn(
         (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
       )};
+    Object.assign(prisma, { extended: prisma, extendedTransaction: prisma.$transaction });
     const service = new SurveysService(prisma as unknown as PrismaService);
 
     await service.submitResponse(
@@ -174,6 +176,7 @@ describe('SurveysService', () => {
       $transaction: jest.fn(
         (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
       )};
+    Object.assign(prisma, { extended: prisma, extendedTransaction: prisma.$transaction });
     const service = new SurveysService(prisma as unknown as PrismaService);
 
     await expect(

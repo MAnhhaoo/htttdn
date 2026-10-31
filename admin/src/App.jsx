@@ -6,7 +6,6 @@ import ProtectedRoute from './components/layout/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 import Dashboard from './pages/dashboard/Dashboard';
 import UserManagement from './pages/users/UserManagement';
-import ProductManagement from './pages/products/ProductManagement';
 import CategoryManagement from './pages/categories/CategoryManagement';
 import OrderManagement from './pages/orders/OrderManagement';
 import VoucherManagement from './pages/vouchers/VoucherManagement';
@@ -35,7 +34,6 @@ function App() {
             <Route element={<DashboardLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/users" element={<UserManagement />} />
-              <Route path="/products" element={<ProductManagement />} />
               <Route path="/categories" element={<CategoryManagement />} />
               <Route path="/orders" element={<OrderManagement />} />
               <Route path="/shipping" element={<ShippingManagement />} />

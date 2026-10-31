@@ -7,7 +7,7 @@ const { PrismaClient } = require('@prisma/client');
 const { chromium } = require('../../frontend/node_modules/playwright');
 
 const portals = [
-  { role: 'admin', port: 5174, email: process.env.MIVA_TEST_ADMIN_EMAIL || 'admin1@miva.vn', password: process.env.MIVA_TEST_ADMIN_PASSWORD || 'admin123', routes: ['/dashboard', '/users', '/products', '/categories', '/orders', '/shipping', '/vouchers', '/reviews', '/vendors', '/vendor-registrations', '/employees', '/payroll', '/surveys', '/analytics', '/customer-analytics'] },
+  { role: 'admin', port: 5174, email: process.env.MIVA_TEST_ADMIN_EMAIL || 'admin1@miva.vn', password: process.env.MIVA_TEST_ADMIN_PASSWORD || 'admin123', routes: ['/dashboard', '/users', '/categories', '/orders', '/shipping', '/vouchers', '/reviews', '/vendors', '/vendor-registrations', '/employees', '/payroll', '/surveys', '/analytics', '/customer-analytics'] },
   { role: 'vendor', port: 5175, email: process.env.MIVA_TEST_VENDOR_EMAIL || 'vendor1@miva.vn', password: process.env.MIVA_TEST_VENDOR_PASSWORD || 'admin123', routes: ['/dashboard', '/analytics', '/products', '/orders', '/fulfillment', '/vouchers', '/reviews', '/surveys', '/settings'] },
   { role: 'employee', port: 5176, email: process.env.MIVA_TEST_EMPLOYEE_EMAIL || 'employee1@miva.vn', password: process.env.MIVA_TEST_EMPLOYEE_PASSWORD || 'admin123', routes: ['/orders', '/vendor-tracking', '/vendor-approvals', '/shipping', '/audit-history', '/permissions-faq', '/profile'] },
   { role: 'client', port: 5173, routes: ['/', '/products', '/cart', '/profile', '/orders', '/favorites', '/surveys', '/about', '/contact'] },

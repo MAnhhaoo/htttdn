@@ -4,7 +4,7 @@ export function bestVoucherPrice(price, quantity, offers, productId, now = Date.
   let best = null;
   for (const offer of offers || []) {
     if (new Date(offer.startDate).getTime() > now || new Date(offer.endDate).getTime() < now) continue;
-    if (offer.scope === 'vendor' && !offer.productIds?.includes(productId)) continue;
+    if ((offer.scope === 'vendor' || offer.productIds?.length > 0) && !offer.productIds?.includes(productId)) continue;
     if (Number(offer.minOrderAmount || 0) > amount) continue;
     let discount = offer.discountType === 'percentage' ? amount * Number(offer.discountValue) / 100 : Number(offer.discountValue);
     if (offer.maxDiscountAmount != null) discount = Math.min(discount, Number(offer.maxDiscountAmount));

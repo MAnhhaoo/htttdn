@@ -45,14 +45,19 @@ export class VouchersService {
 
   async catalogOffers(productIds: string[]) {
     const now = new Date();
-    const offers = await this.prisma.voucher.findMany({
+    const offers = await this.prisma.extended.voucher.findMany({
       where: {
         deletedAt: null,
         status: 'active',
         startDate: { lte: now },
         endDate: { gte: now },
         OR: [
-          { scope: 'platform' },
+          {
+            scope: 'platform',
+            details: {
+              none: { productId: { not: null }, orderId: null },
+            },
+          },
           {
             details: {
               some: { productId: { in: productIds }, orderId: null },
@@ -104,24 +109,30 @@ export class VouchersService {
 
     const scope =
       user.role === 'admin' ? VoucherScope.platform : VoucherScope.vendor;
-    const productIds = [...new Set(dto.productIds ?? [])];
+    let productIds = [...new Set(dto.productIds ?? [])];
+    const categoryIds = [...new Set(dto.categoryIds ?? [])];
 
     if (scope === VoucherScope.vendor) {
       if (!productIds.length) {
         throw new BadRequestException('Vendor phải chọn ít nhất một sản phẩm');
       }
       await this.assertOwnedProducts(productIds, user.userID);
-    } else if (productIds.length) {
-      throw new BadRequestException('Voucher toàn sàn không nhận productIds');
+    } else {
+      if (productIds.length) {
+        throw new BadRequestException('Voucher toàn sàn không nhận productIds');
+      }
+      if (categoryIds.length) {
+        productIds = await this.resolveCategoryProductIds(categoryIds);
+      }
     }
 
-    const duplicate = await this.prisma.voucher.findUnique({
+    const duplicate = await this.prisma.extended.voucher.findUnique({
       where: { code: dto.code },
     });
     if (duplicate) throw new ConflictException('Mã voucher đã tồn tại');
 
-    const { productIds: _productIds, ...data } = dto;
-    const created = await this.prisma.voucher.create({
+    const { productIds: _productIds, categoryIds: _categoryIds, ...data } = dto;
+    const created = await this.prisma.extended.voucher.create({
       data: {
         ...data,
         scope,
@@ -136,11 +147,11 @@ export class VouchersService {
       include: this.detailsInclude(),
     });
     this.emitUpdated(created);
-    return created;
+    return this.enrichVoucher(created);
   }
 
-  getMine(userId: string) {
-    return this.prisma.voucher.findMany({
+  async getMine(userId: string) {
+    const list = await this.prisma.extended.voucher.findMany({
       where: {
         OR: [{ adminId: userId }, { vendorId: userId }],
         deletedAt: null,
@@ -148,10 +159,11 @@ export class VouchersService {
       include: this.detailsInclude(),
       orderBy: { createdAt: 'desc' },
     });
+    return list.map((v) => this.enrichVoucher(v));
   }
 
-  getAll() {
-    return this.prisma.voucher.findMany({
+  async getAll() {
+    const list = await this.prisma.extended.voucher.findMany({
       where: { deletedAt: null },
       include: {
         ...this.detailsInclude(),
@@ -160,11 +172,12 @@ export class VouchersService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    return list.map((v) => this.enrichVoucher(v));
   }
 
   async getAvailable() {
     const now = new Date();
-    const vouchers = await this.prisma.voucher.findMany({
+    const vouchers = await this.prisma.extended.voucher.findMany({
       where: {
         deletedAt: null,
         status: VoucherStatus.active,
@@ -178,13 +191,13 @@ export class VouchersService {
       },
       orderBy: { endDate: 'asc' },
     });
-    return vouchers.filter(
-      (voucher) => voucher.usedQuantity < voucher.quantity,
-    );
+    return vouchers
+      .filter((voucher) => voucher.usedQuantity < voucher.quantity)
+      .map((v) => this.enrichVoucher(v));
   }
 
   async getById(id: string, user: UserInfo) {
-    const voucher = await this.prisma.voucher.findFirst({
+    const voucher = await this.prisma.extended.voucher.findFirst({
       where: { id, deletedAt: null },
       include: this.detailsInclude(),
     });
@@ -196,7 +209,7 @@ export class VouchersService {
     ) {
       throw new ForbiddenException('Bạn không có quyền xem voucher này');
     }
-    return voucher;
+    return this.enrichVoucher(voucher);
   }
 
   async update(id: string, dto: UpdateVoucherDto, user: UserInfo) {
@@ -207,14 +220,22 @@ export class VouchersService {
       );
     }
 
-    const productIds = dto.productIds
+    let productIds = dto.productIds
       ? [...new Set(dto.productIds)]
       : undefined;
     if (current.scope === VoucherScope.vendor && productIds) {
       await this.assertOwnedProducts(productIds, current.vendorId!);
     }
-    if (current.scope === VoucherScope.platform && productIds) {
-      throw new BadRequestException('Voucher toàn sàn không nhận productIds');
+    if (current.scope === VoucherScope.platform) {
+      if (productIds) {
+        throw new BadRequestException('Voucher toàn sàn không nhận productIds');
+      }
+      if (dto.categoryIds !== undefined) {
+        const categoryIds = [...new Set(dto.categoryIds)];
+        productIds = categoryIds.length
+          ? await this.resolveCategoryProductIds(categoryIds)
+          : [];
+      }
     }
     const quantity = dto.quantity ?? current.quantity;
     const perUserLimit = dto.perUserLimit ?? current.perUserLimit;
@@ -239,15 +260,15 @@ export class VouchersService {
       throw new BadRequestException('Phần trăm giảm không được vượt quá 100');
     }
     if (dto.code && dto.code !== current.code) {
-      const duplicate = await this.prisma.voucher.findUnique({
+      const duplicate = await this.prisma.extended.voucher.findUnique({
         where: { code: dto.code },
       });
       if (duplicate) throw new ConflictException('Mã voucher đã tồn tại');
     }
 
-    const { productIds: _productIds, ...data } = dto;
-    const updated = await this.prisma.$transaction(async (tx) => {
-      if (productIds) {
+    const { productIds: _productIds, categoryIds: _categoryIds, ...data } = dto;
+    const updated = await this.prisma.extendedTransaction(async (tx) => {
+      if (productIds !== undefined) {
         await tx.voucherDetail.deleteMany({
           where: {
             voucherId: id,
@@ -255,12 +276,14 @@ export class VouchersService {
             orderId: null,
           },
         });
-        await tx.voucherDetail.createMany({
-          data: productIds.map((productId) => ({
-            voucherId: id,
-            productId,
-          })),
-        });
+        if (productIds.length > 0) {
+          await tx.voucherDetail.createMany({
+            data: productIds.map((productId) => ({
+              voucherId: id,
+              productId,
+            })),
+          });
+        }
       }
 
       return tx.voucher.update({
@@ -270,7 +293,7 @@ export class VouchersService {
       });
     });
     this.emitUpdated(updated);
-    return updated;
+    return this.enrichVoucher(updated);
   }
 
   async setStatus(
@@ -287,7 +310,7 @@ export class VouchersService {
     ) {
       throw new ForbiddenException('Bạn không có quyền cập nhật voucher này');
     }
-    const updated = await this.prisma.voucher.update({
+    const updated = await this.prisma.extended.voucher.update({
       where: { id },
       data: { status },
     });
@@ -300,7 +323,7 @@ export class VouchersService {
     if (voucher.vendorId !== user.userID && voucher.adminId !== user.userID) {
       throw new ForbiddenException('Bạn không có quyền xóa voucher này');
     }
-    const updated = await this.prisma.voucher.update({
+    const updated = await this.prisma.extended.voucher.update({
       where: { id },
       data: { status: VoucherStatus.inactive, deletedAt: new Date() },
     });
@@ -309,7 +332,12 @@ export class VouchersService {
   }
 
   preview(dto: PreviewVoucherDto, userId: string) {
-    return this.calculate(dto.codes, userId, dto.items, this.prisma);
+    return this.calculate(
+      dto.codes,
+      userId,
+      dto.items,
+      this.prisma.extended as unknown as Prisma.TransactionClient,
+    );
   }
 
   async calculate(
@@ -432,12 +460,13 @@ export class VouchersService {
           detail.productId ? [detail.productId] : [],
         ),
       );
-      const eligibleItems =
-        voucher.scope === VoucherScope.platform
-          ? items
-          : items.filter((item) =>
-              productIds.has(item.variant.productColor.productId),
-            );
+      const isAllPlatform =
+        voucher.scope === VoucherScope.platform && productIds.size === 0;
+      const eligibleItems = isAllPlatform
+        ? items
+        : items.filter((item) =>
+            productIds.has(item.variant.productColor.productId),
+          );
       const originalEligible = eligibleItems.reduce(
         (sum, item) => sum.plus(item.amount),
         new Prisma.Decimal(0),
@@ -457,8 +486,9 @@ export class VouchersService {
         );
       }
 
-      const discountBase =
-        voucher.scope === VoucherScope.platform ? remaining : originalEligible;
+      const discountBase = isAllPlatform
+        ? remaining
+        : Prisma.Decimal.min(remaining, originalEligible);
       let discount =
         voucher.discountType === DiscountType.percentage
           ? discountBase.mul(voucher.discountValue).div(100)
@@ -502,12 +532,54 @@ export class VouchersService {
   }
 
   private async assertOwnedProducts(productIds: string[], vendorId: string) {
-    const count = await this.prisma.product.count({
+    const count = await this.prisma.extended.product.count({
       where: { id: { in: productIds }, vendorId, deletedAt: null },
     });
     if (count !== productIds.length) {
       throw new ForbiddenException('Có sản phẩm không thuộc cửa hàng của bạn');
     }
+  }
+
+  private async resolveCategoryProductIds(categoryIds: string[]): Promise<string[]> {
+    const validCategories = await this.prisma.extended.category.count({
+      where: { id: { in: categoryIds }, deletedAt: null },
+    });
+    if (validCategories !== categoryIds.length) {
+      throw new BadRequestException('Có danh mục áp dụng không tồn tại');
+    }
+    const products = await this.prisma.extended.product.findMany({
+      where: { categoryId: { in: categoryIds }, deletedAt: null },
+      select: { id: true },
+    });
+    if (products.length === 0) {
+      throw new BadRequestException('Các danh mục đã chọn hiện chưa có sản phẩm nào');
+    }
+    return products.map((p) => p.id);
+  }
+
+  private enrichVoucher<
+    T extends {
+      details?: Array<{
+        product?: {
+          categoryId?: string | null;
+          category?: { id: string; name: string; slug: string } | null;
+        } | null;
+      }>;
+    },
+  >(voucher: T) {
+    const categoryMap = new Map<string, { id: string; name: string; slug: string }>();
+    for (const detail of voucher.details ?? []) {
+      const cat = detail.product?.category;
+      if (cat?.id && !categoryMap.has(cat.id)) {
+        categoryMap.set(cat.id, cat);
+      }
+    }
+    const categories = Array.from(categoryMap.values());
+    return {
+      ...voucher,
+      categoryIds: categories.map((c) => c.id),
+      categories,
+    };
   }
 
   private detailsInclude() {
@@ -516,7 +588,16 @@ export class VouchersService {
         where: { productId: { not: null }, orderId: null },
         include: {
           product: {
-            select: { id: true, name: true, slug: true, status: true },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              status: true,
+              categoryId: true,
+              category: {
+                select: { id: true, name: true, slug: true },
+              },
+            },
           },
         },
       },

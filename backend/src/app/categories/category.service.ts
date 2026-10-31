@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -73,19 +73,15 @@ export class CategoryService extends PrismaBaseService<'category'> {
       where: { slug },
     });
 
-    if (existingCategory?.deletedAt) {
-      const category = await this.extended.update({
-        where: { id: existingCategory.id },
-        data: { name: createCategoryDto.name, deletedAt: null },
-      });
-      this.realtime.emitCategoryUpdated(category.id);
-      return category;
-    }
+    const restoredCategory = await this.restoreOrThrowIfActive({
+      existing: existingCategory,
+      conflictMessage: `Danh mục "${createCategoryDto.name}" đã tồn tại`,
+      restoreData: { name: createCategoryDto.name },
+    });
 
-    if (existingCategory) {
-      throw new ConflictException(
-        `Danh mục "${createCategoryDto.name}" đã tồn tại`,
-      );
+    if (restoredCategory) {
+      this.realtime.emitCategoryUpdated(restoredCategory.id);
+      return restoredCategory;
     }
 
     const category = await this.extended.create({

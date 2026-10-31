@@ -17,7 +17,11 @@ export default function VoucherPricing({ items, pricing }) {
         const groupItems = items.filter(item => (item.productVariant?.productColor?.product?.vendorId || 'platform') === vendorId);
         const name = groupItems[0]?.productVariant?.productColor?.product?.vendor?.storeName || 'Cửa hàng MIVA';
         const codes = pricing.selections.find(selection => selection.vendorId === vendorId)?.codes || [];
-        const groupOffers = offers.filter(offer => offer.scope === 'platform' || (offer.vendorId === vendorId && groupItems.some(item => offer.productIds.includes(item.productVariant.productColor.product.id))));
+        const groupOffers = offers.filter(offer =>
+          offer.scope === 'platform'
+            ? (!offer.productIds?.length || groupItems.some(item => offer.productIds.includes(item.productVariant.productColor.product.id)))
+            : (offer.vendorId === vendorId && groupItems.some(item => offer.productIds.includes(item.productVariant.productColor.product.id)))
+        );
         const pack = pricing.data?.packages.find(value => value.vendorId === vendorId);
         return <div key={vendorId} className="space-y-2 text-sm" data-vendor-pricing={vendorId}>
           <label htmlFor={`voucher-${vendorId}`} className="block font-medium text-light-text dark:text-dark-text">{name}</label>

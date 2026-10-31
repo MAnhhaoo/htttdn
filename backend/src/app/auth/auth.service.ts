@@ -86,12 +86,29 @@ export class AuthService {
   }
 
   private async registerClient(signUpDto: SignUpDto) {
-    const { email, password, ...otherInformation } = signUpDto;
+    const {
+      email,
+      password,
+      storeName: _sn,
+      taxId: _tax,
+      subscriptionPlan: _sp,
+      businessType: _bt,
+      dateOfBirth,
+      gender,
+      ...otherInformation
+    } = signUpDto;
     // Email phải chưa thuộc về bất kỳ tài khoản nào (kể cả admin/vendor/nhân viên).
-    await assertEmailAvailable(this.prisma, email);
+    await assertEmailAvailable(this.prisma.extended, email);
     const passwordHashed = await this.stringUtilService.hash(password);
+    const parsedDob =
+      typeof dateOfBirth === 'string' && dateOfBirth.trim()
+        ? new Date(`${dateOfBirth.slice(0, 10)}T00:00:00.000Z`)
+        : null;
+
     const userCreated = await this.clientsService.createClient({
       ...otherInformation,
+      ...(parsedDob ? { dateOfBirth: parsedDob } : {}),
+      ...(gender ? { gender } : {}),
       email,
       password: passwordHashed,
     } as any); // cast to any temporarily to avoid typing issue with missing fields
@@ -101,8 +118,16 @@ export class AuthService {
   }
 
   private async registerVendor(signUpDto: SignUpDto) {
-    const { email, password, address: _addr, businessType: _bt, ...otherInformation } = signUpDto;
-    await assertEmailAvailable(this.prisma, email);
+    const {
+      email,
+      password,
+      address: _addr,
+      businessType: _bt,
+      dateOfBirth: _dob,
+      gender: _gender,
+      ...otherInformation
+    } = signUpDto;
+    await assertEmailAvailable(this.prisma.extended, email);
     const passwordHashed = await this.stringUtilService.hash(password);
     const storeName = (otherInformation as any).storeName || otherInformation.fullName;
     const plan = (otherInformation as any).subscriptionPlan === '2_years' ? '2_years' : '1_year';
@@ -136,7 +161,7 @@ export class AuthService {
     const preferred = ACCOUNT_ROLES.includes(appRole as AccountRole)
       ? (appRole as AccountRole)
       : undefined;
-    const candidates = (await findAccountsByEmail(this.prisma, email))
+    const candidates = (await findAccountsByEmail(this.prisma.extended, email))
       .filter(({ role }) => appRole !== 'vendor' || role === 'vendor')
       .filter(({ user }) => user.status === 'active' && !user.deletedAt)
       .sort((a, b) => Number(b.role === preferred) - Number(a.role === preferred));
@@ -185,7 +210,7 @@ export class AuthService {
     } else if (payload.role === 'admin') {
       user = await this.adminsService.getAdmin({ id: payload.userID }).catch(() => null);
     } else if (payload.role === 'employee') {
-      user = await this.prisma.employee.findUnique({ where: { id: payload.userID } }).catch(() => null);
+      user = await this.prisma.extended.employee.findUnique({ where: { id: payload.userID } }).catch(() => null);
     }
 
     if (!user || user.status !== 'active' || user.deletedAt) {
@@ -210,7 +235,7 @@ export class AuthService {
 
   async getMe(userInfo: { userID: string; role: string }) {
     if (userInfo.role === 'employee') {
-      const emp = await this.prisma.employee.findUnique({
+      const emp = await this.prisma.extended.employee.findUnique({
         where: { id: userInfo.userID },
       });
       if (emp) {

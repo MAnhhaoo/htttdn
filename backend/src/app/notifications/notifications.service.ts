@@ -32,8 +32,8 @@ export class NotificationsService {
     const where = { ...targetWhere, ...(unreadOnly ? { isRead: false } : {}) };
 
     const [totalItems, list] = await Promise.all([
-      this.prisma.notification.count({ where }),
-      this.prisma.notification.findMany({
+      this.prisma.extended.notification.count({ where }),
+      this.prisma.extended.notification.findMany({
         where,
         skip,
         take: itemPerPage,
@@ -69,7 +69,7 @@ export class NotificationsService {
   async unreadCount(user: UserInfo) {
     const targetWhere = this.getTargetWhere(user);
     return {
-      count: await this.prisma.notification.count({
+      count: await this.prisma.extended.notification.count({
         where: { ...targetWhere, isRead: false },
       }),
     };
@@ -77,14 +77,14 @@ export class NotificationsService {
 
   async markRead(id: string, user: UserInfo) {
     const targetWhere = this.getTargetWhere(user);
-    const changed = await this.prisma.notification.updateMany({
+    const changed = await this.prisma.extended.notification.updateMany({
       where: { id, ...targetWhere },
       data: { isRead: true, readAt: new Date() },
     });
     if (!changed.count) {
       throw new NotFoundException('Thông báo không tồn tại');
     }
-    const notification = await this.prisma.notification.findUniqueOrThrow({
+    const notification = await this.prisma.extended.notification.findUniqueOrThrow({
       where: { id },
     });
     this.realtime.emitToUser(user.userID, 'notification:updated', { id });
@@ -94,7 +94,7 @@ export class NotificationsService {
   async markAllRead(user: UserInfo) {
     const targetWhere = this.getTargetWhere(user);
     const now = new Date();
-    const result = await this.prisma.notification.updateMany({
+    const result = await this.prisma.extended.notification.updateMany({
       where: { ...targetWhere, isRead: false },
       data: { isRead: true, readAt: now },
     });

@@ -149,7 +149,7 @@ export default function CustomerAnalytics() {
             {overview?.averageAge || 0} <span className="text-lg font-normal text-slate-500">tuổi</span>
           </div>
           <div className="text-xs text-slate-500 mt-1">
-            Tính từ ngày sinh của 120 khách hàng thực tế
+            Tính từ ngày sinh của {overview?.clientsWithAgeCount ?? 0} / {overview?.totalClients ?? 0} khách hàng
           </div>
         </div>
 
@@ -443,6 +443,11 @@ export default function CustomerAnalytics() {
                     {g.label} ({g.count})
                   </option>
                 ))}
+                {(overview?.unknownAgeCount || 0) > 0 && (
+                  <option value="unknown">
+                    Chưa xác định ({overview.unknownAgeCount})
+                  </option>
+                )}
               </select>
             </div>
 
@@ -497,7 +502,15 @@ export default function CustomerAnalytics() {
 
                     <td className="py-3 px-4">
                       <div className="font-medium text-slate-700 dark:text-slate-300">
-                        {client.gender === 'male' ? 'Nam' : client.gender === 'female' ? 'Nữ' : 'Khác'}
+                        {client.gender === 'male'
+                          ? 'Nam'
+                          : client.gender === 'female'
+                          ? 'Nữ'
+                          : client.gender === 'other'
+                          ? 'Khác'
+                          : client.gender === 'prefer_not_to_say'
+                          ? 'Không tiết lộ'
+                          : 'Chưa cập nhật'}
                       </div>
                       <div className="text-[11px] text-slate-400">{formatDate(client.dateOfBirth)}</div>
                     </td>

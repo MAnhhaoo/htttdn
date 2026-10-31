@@ -9,6 +9,15 @@ export const userService = {
     return apiClient.patch('/users/profile', data);
   },
 
+  uploadAvatar: async (file) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const res = await apiClient.post('/users/upload-avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res?.data?.url || res?.url;
+  },
+
   getSubscription: async () => {
     return apiClient.get('/vendors/subscription/me');
   },

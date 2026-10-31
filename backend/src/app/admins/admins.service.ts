@@ -107,7 +107,7 @@ export class AdminsService extends PrismaBaseService<'admin'> {
         'Không thể tự khóa tài khoản của chính mình',
       );
     }
-    const activeAdmins = await this.prismaService.admin.findMany({
+    const activeAdmins = await this.prismaService.extended.admin.findMany({
       where: { status: 'active' },
       select: { id: true },
     });
@@ -139,12 +139,12 @@ export class AdminsService extends PrismaBaseService<'admin'> {
       dataUpdate.email = dataUpdate.email.trim().toLowerCase();
       const current = where.id
         ? { id: where.id }
-        : await this.prismaService.admin.findUnique({
+        : await this.prismaService.extended.admin.findUnique({
             where,
             select: { id: true },
           });
       await assertEmailAvailable(
-        this.prismaService,
+        this.prismaService.extended,
         dataUpdate.email,
         current ? { role: 'admin', id: current.id } : undefined,
       );

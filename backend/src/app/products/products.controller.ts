@@ -23,7 +23,6 @@ import { CreateProductDto } from './dto/create-product.dto';
 
 import {
   GetProductsPaginationDto,
-  GetAdminProductsPaginationDto,
   GetVendorProductsPaginationDto,
 } from './dto/get-product.dto';
 
@@ -37,7 +36,7 @@ export class ProductsController {
   constructor(private readonly productService: ProductService) {}
 
   @Post('upload-image')
-  @Roles('vendor', 'admin')
+  @Roles('vendor')
   @UseInterceptors(
     AnyFilesInterceptor({
       storage: diskStorage({
@@ -83,13 +82,12 @@ export class ProductsController {
   }
 
   @Post()
-  @Roles('vendor', 'admin')
+  @Roles('vendor')
   createProduct(
     @Body() createProductDto: CreateProductDto,
     @CurrentUser() user: UserInfo,
   ) {
-    const vendorId = user.role === 'vendor' ? user.userID : undefined;
-    return this.productService.createProduct(createProductDto, vendorId);
+    return this.productService.createProduct(createProductDto, user.userID);
   }
 
   @Get('vendor/mine')
@@ -99,12 +97,6 @@ export class ProductsController {
     @CurrentUser() user: UserInfo,
   ) {
     return this.productService.getVendorProducts(query, user.userID);
-  }
-
-  @Get('admin/all')
-  @Roles('admin')
-  getAdminProducts(@Query() query: GetAdminProductsPaginationDto) {
-    return this.productService.getAdminProducts(query);
   }
 
   @Get()
@@ -165,7 +157,7 @@ export class ProductsController {
     return this.productService.getProductById(id);
   }
   @Patch(':id')
-  @Roles('vendor', 'admin')
+  @Roles('vendor')
   updateProduct(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateProductDto: UpdateProductDto,
@@ -175,11 +167,11 @@ export class ProductsController {
       id,
       updateProductDto,
       user.userID,
-      user.role === 'admin',
+      false,
     );
   }
   @Delete(':id')
-  @Roles('vendor', 'admin')
+  @Roles('vendor')
   deleteProduct(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserInfo,
@@ -187,7 +179,7 @@ export class ProductsController {
     return this.productService.deleteProduct(
       id,
       user.userID,
-      user.role === 'admin',
+      false,
     );
   }
 }

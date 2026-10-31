@@ -41,7 +41,7 @@ export class CartService {
   constructor(private readonly prisma: PrismaService) {}
 
   async get(clientId: string) {
-    const cart = await this.prisma.cart.upsert({
+    const cart = await this.prisma.extended.cart.upsert({
       where: { clientId },
       create: { clientId },
       update: { deletedAt: null },
@@ -51,12 +51,12 @@ export class CartService {
 
   async add(clientId: string, dto: AddCartItemDto) {
     const variant = await this.getSellableVariant(dto.productVariantId);
-    const cart = await this.prisma.cart.upsert({
+    const cart = await this.prisma.extended.cart.upsert({
       where: { clientId },
       create: { clientId },
       update: { deletedAt: null },
       select: { id: true }});
-    const current = await this.prisma.cartItem.findUnique({
+    const current = await this.prisma.extended.cartItem.findUnique({
       where: {
         cartId_productVariantId: {
           cartId: cart.id,
@@ -65,7 +65,7 @@ export class CartService {
     if (quantity > variant.stock) {
       throw new BadRequestException('Số lượng vượt quá tồn kho');
     }
-    await this.prisma.cartItem.upsert({
+    await this.prisma.extended.cartItem.upsert({
       where: {
         cartId_productVariantId: {
           cartId: cart.id,
@@ -81,7 +81,7 @@ export class CartService {
     if (quantity > variant.stock) {
       throw new BadRequestException('Số lượng vượt quá tồn kho');
     }
-    await this.prisma.cartItem.update({
+    await this.prisma.extended.cartItem.update({
       where: { id: itemId },
       data: { quantity }});
     return this.get(clientId);
@@ -89,19 +89,19 @@ export class CartService {
 
   async remove(clientId: string, itemId: string) {
     await this.getOwnedItem(clientId, itemId);
-    await this.prisma.cartItem.delete({ where: { id: itemId } });
+    await this.prisma.extended.cartItem.delete({ where: { id: itemId } });
     return this.get(clientId);
   }
 
   async clear(clientId: string) {
-    const cart = await this.prisma.cart.findUnique({ where: { clientId } });
+    const cart = await this.prisma.extended.cart.findUnique({ where: { clientId } });
     if (cart)
-      await this.prisma.cartItem.deleteMany({ where: { cartId: cart.id } });
+      await this.prisma.extended.cartItem.deleteMany({ where: { cartId: cart.id } });
     return this.get(clientId);
   }
 
   private getSellableVariant(id: string) {
-    return this.prisma.productVariant
+    return this.prisma.extended.productVariant
       .findFirst({
         where: {
           id,
@@ -117,7 +117,7 @@ export class CartService {
   }
 
   private getOwnedItem(clientId: string, itemId: string) {
-    return this.prisma.cartItem
+    return this.prisma.extended.cartItem
       .findFirst({ where: { id: itemId, cart: { clientId, deletedAt: null } } })
       .then((item) => {
         if (!item)

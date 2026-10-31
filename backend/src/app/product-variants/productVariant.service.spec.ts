@@ -12,14 +12,16 @@ describe('ProductVariantService', () => {
       update: jest.fn().mockImplementation(({ data }) => ({ id: 'old', ...data })),
       create: jest.fn().mockImplementation(({ data }) => ({ id: 'new', ...data })),
       findFirst: jest.fn().mockResolvedValue(null),
+      findUnique: jest.fn().mockResolvedValue(null),
     };
     const prisma = {
       extended: {
-        productColor: { findFirst: jest.fn().mockResolvedValue({ id: productColorId }) },
+        productColor: {
+          findFirst: jest.fn().mockResolvedValue({ id: productColorId }),
+          findUnique: jest.fn().mockResolvedValue({ productId: 'product' }),
+        },
         productVariant: variantDelegate,
       },
-      productVariant: { findUnique: jest.fn().mockResolvedValue(null), findFirst: jest.fn().mockResolvedValue(null) },
-      productColor: { findUnique: jest.fn().mockResolvedValue({ productId: 'product' }) },
     };
     const realtime = { emitProductUpdated: jest.fn() };
     const service = new ProductVariantService(
@@ -31,7 +33,7 @@ describe('ProductVariantService', () => {
 
   it('restores a soft-deleted size instead of failing on the unique constraint', async () => {
     const { service, prisma, variantDelegate } = setup();
-    prisma.productVariant.findUnique.mockResolvedValue({ id: 'old', deletedAt: new Date() });
+    prisma.extended.productVariant.findUnique.mockResolvedValue({ id: 'old', deletedAt: new Date() });
 
     const result = await service.createProductVariant(
       { productColorId, size: 'S', price: 100, stock: 3 },
@@ -48,7 +50,7 @@ describe('ProductVariantService', () => {
 
   it('rejects a size that already exists and is active', async () => {
     const { service, prisma } = setup();
-    prisma.productVariant.findUnique.mockResolvedValue({ id: 'live', deletedAt: null });
+    prisma.extended.productVariant.findUnique.mockResolvedValue({ id: 'live', deletedAt: null });
 
     await expect(
       service.createProductVariant({ productColorId, size: 'S', price: 100, stock: 3 }, vendorId),

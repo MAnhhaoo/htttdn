@@ -11,9 +11,13 @@ import { RealtimeService } from '../realtime/realtime.service';
 
 @Injectable()
 export class ProductVariantService extends PrismaBaseService<'productVariant'> {
-  constructor(private readonly prismaDb: PrismaService, private readonly realtime: RealtimeService) {
+  constructor(
+    private readonly prismaDb: PrismaService,
+    private readonly realtime: RealtimeService,
+  ) {
     super(prismaDb, 'productVariant');
   }
+
   async createProductVariant(
     createProductVariantDto: CreateProductVariantDto,
     vendorId: string,
@@ -22,20 +26,18 @@ export class ProductVariantService extends PrismaBaseService<'productVariant'> {
 
     await this.getActiveProductColor(productColorId, vendorId);
 
-    const existing = await this.prismaDb.productVariant.findUnique({
+    const existing = await this.prismaDb.extended.productVariant.findUnique({
       where: { productColorId_size: { productColorId, size } },
     });
 
-    if (existing && !existing.deletedAt) {
-      throw new ConflictException(`Size "${size}" đã tồn tại trong màu này`);
-    }
+    // Kiểm tra trùng hoặc khôi phục size đã xóa mềm qua PrismaBaseService.
+    const restored = await this.restoreOrThrowIfActive({
+      existing,
+      conflictMessage: `Size "${size}" đã tồn tại trong màu này`,
+      restoreData: { price, stock },
+    });
 
-    // Size đã xóa mềm vẫn chịu ràng buộc unique nên được khôi phục thay vì tạo mới.
-    if (existing) {
-      const restored = await this.extended.update({
-        where: { id: existing.id },
-        data: { deletedAt: null, price, stock },
-      });
+    if (restored) {
       await this.emitForColor(productColorId, vendorId);
       return restored;
     }
@@ -97,8 +99,9 @@ export class ProductVariantService extends PrismaBaseService<'productVariant'> {
   }
 
   private async emitForColor(productColorId: string, vendorId: string) {
-    const color = await this.prismaDb.productColor.findUnique({
-      where: { id: productColorId }, select: { productId: true },
+    const color = await this.prismaDb.extended.productColor.findUnique({
+      where: { id: productColorId },
+      select: { productId: true },
     });
     if (color) this.realtime.emitProductUpdated(color.productId, vendorId);
   }
@@ -148,7 +151,7 @@ export class ProductVariantService extends PrismaBaseService<'productVariant'> {
     includeDeleted = false,
   ) {
     // Bản ghi đã xóa mềm vẫn nằm trong ràng buộc unique, nên khi đổi size phải tính cả chúng.
-    const duplicate = await this.prismaDb.productVariant.findFirst({
+    const duplicate = await this.prismaDb.extended.productVariant.findFirst({
       where: {
         productColorId,
         size,

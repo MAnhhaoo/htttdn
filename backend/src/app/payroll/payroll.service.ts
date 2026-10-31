@@ -23,7 +23,7 @@ export class PayrollService {
       ...(department ? { department } : {}),
     };
 
-    const employees = await this.prisma.employee.findMany({
+    const employees = await this.prisma.extended.employee.findMany({
       where,
       select: {
         id: true,
@@ -54,7 +54,7 @@ export class PayrollService {
       let lateSummaryNote = '';
 
       // Fetch attendance hours for the month
-      const attendances = await this.prisma.employeeAttendance.findMany({
+      const attendances = await this.prisma.extended.employeeAttendance.findMany({
         where: {
           employeeId: emp.id,
           date: {
@@ -98,7 +98,7 @@ export class PayrollService {
 
       const notes = `Bảng tính lương tháng ${month}/${year}${lateSummaryNote}`;
 
-      const payroll = await this.prisma.employeePayroll.upsert({
+      const payroll = await this.prisma.extended.employeePayroll.upsert({
         where: {
           employeeId_month_year: {
             employeeId: emp.id,
@@ -165,7 +165,7 @@ export class PayrollService {
       ...(department ? { employee: { department } } : {}),
     };
 
-    const list = await this.prisma.employeePayroll.findMany({
+    const list = await this.prisma.extended.employeePayroll.findMany({
       where,
       include: {
         employee: {
@@ -201,7 +201,7 @@ export class PayrollService {
   }
 
   async updatePayrollItem(id: string, dto: UpdatePayrollItemDto) {
-    const existing = await this.prisma.employeePayroll.findUnique({
+    const existing = await this.prisma.extended.employeePayroll.findUnique({
       where: { id },
     });
 
@@ -222,7 +222,7 @@ export class PayrollService {
 
     const isPaid = dto.status === 'paid';
 
-    const updated = await this.prisma.employeePayroll.update({
+    const updated = await this.prisma.extended.employeePayroll.update({
       where: { id },
       data: {
         allowances,
@@ -249,7 +249,7 @@ export class PayrollService {
   }
 
   async getMyPayrolls(employeeId: string) {
-    return this.prisma.employeePayroll.findMany({
+    return this.prisma.extended.employeePayroll.findMany({
       where: { employeeId },
       orderBy: [{ year: 'desc' }, { month: 'desc' }],
     });
@@ -259,7 +259,7 @@ export class PayrollService {
     const dateObj = new Date(dto.date);
 
     // Get employee to check assigned schedule
-    const employee = await this.prisma.employee.findUnique({
+    const employee = await this.prisma.extended.employee.findUnique({
       where: { id: dto.employeeId },
       select: { permissions: true },
     });
@@ -317,7 +317,7 @@ export class PayrollService {
       }
     }
 
-    return this.prisma.employeeAttendance.upsert({
+    return this.prisma.extended.employeeAttendance.upsert({
       where: {
         employeeId_date: {
           employeeId: dto.employeeId,
@@ -350,7 +350,7 @@ export class PayrollService {
     const startOfMonth = new Date(Date.UTC(targetYear, targetMonth - 1, 1));
     const endOfMonth = new Date(Date.UTC(targetYear, targetMonth, 0, 23, 59, 59));
 
-    return this.prisma.employeeAttendance.findMany({
+    return this.prisma.extended.employeeAttendance.findMany({
       where: {
         ...(employeeId ? { employeeId } : {}),
         date: {

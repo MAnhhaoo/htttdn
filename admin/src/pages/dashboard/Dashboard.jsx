@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Users, Store, Package, ShoppingCart, TrendingUp, AlertCircle, Loader2 } from 'lucide-react';
-import { usersApi, productsApi, categoriesApi } from '../../api';
+import { usersApi, vendorsApi, categoriesApi } from '../../api';
 import { useAuth } from '../../contexts/AuthContext';
 
 function StatCard({ title, value, icon: Icon, trend, trendValue, color, loading }) {
@@ -34,7 +34,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState({
     totalUsers: 0,
-    totalProducts: 0,
+    totalVendors: 0,
     totalCategories: 0,
   });
   const [recentUsers, setRecentUsers] = useState([]);
@@ -45,19 +45,19 @@ export default function Dashboard() {
       setLoading(true);
       try {
         // Fetch dữ liệu song song
-        const [usersRes, productsRes, categoriesRes] = await Promise.allSettled([
+        const [usersRes, vendorsRes, categoriesRes] = await Promise.allSettled([
           usersApi.getUsers({ page: 1, itemPerPage: 5 }),
-          productsApi.getProducts({ page: 1, itemPerPage: 1 }),
+          vendorsApi.getVendors({ page: 1, itemPerPage: 1 }),
           categoriesApi.getCategories({ page: 1, itemPerPage: 1 }),
         ]);
 
         const usersData = usersRes.status === 'fulfilled' ? usersRes.value.data : null;
-        const productsData = productsRes.status === 'fulfilled' ? productsRes.value.data : null;
+        const vendorsData = vendorsRes.status === 'fulfilled' ? vendorsRes.value.data : null;
         const categoriesData = categoriesRes.status === 'fulfilled' ? categoriesRes.value.data : null;
 
         setStats({
           totalUsers: usersData?.totalItems || 0,
-          totalProducts: productsData?.totalItems || 0,
+          totalVendors: vendorsData?.totalItems || 0,
           totalCategories: categoriesData?.totalItems || 0,
         });
 
@@ -92,16 +92,16 @@ export default function Dashboard() {
           loading={loading}
         />
         <StatCard 
-          title="Total Products" 
-          value={stats.totalProducts}
-          icon={Package} 
+          title="Total Vendors" 
+          value={stats.totalVendors}
+          icon={Store} 
           color="bg-green-500"
           loading={loading}
         />
         <StatCard 
           title="Total Categories" 
           value={stats.totalCategories}
-          icon={Store} 
+          icon={Package} 
           color="bg-purple-500"
           loading={loading}
         />
@@ -174,10 +174,10 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-start">
-              <Package className="w-5 h-5 text-blue-500 mr-3 mt-0.5" />
+              <Store className="w-5 h-5 text-blue-500 mr-3 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{stats.totalProducts} Sản phẩm</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Tổng số sản phẩm trong hệ thống.</p>
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{stats.totalVendors} Đối tác bán hàng</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Tổng số đối tác (Vendor) trong hệ thống.</p>
               </div>
             </div>
             <div className="flex items-start">

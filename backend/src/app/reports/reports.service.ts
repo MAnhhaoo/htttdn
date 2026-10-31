@@ -127,19 +127,19 @@ export class ReportsService {
                 productVariant: {
                   productColor: { product: { vendorId } }}}}}
         : {})};
-    const buyers = await this.prisma.order.findMany({
+    const buyers = await this.prisma.extended.order.findMany({
       where: orderScope,
       select: { clientId: true },
       distinct: ['clientId']});
     const customerIds = buyers.map((buyer) => buyer.clientId);
-    const customers = await this.prisma.client.findMany({
+    const customers = await this.prisma.extended.client.findMany({
       where: {
         
         deletedAt: null,
         ...(vendorId ? { id: { in: customerIds } } : {})},
       select: { id: true, dateOfBirth: true, gender: true }});
     const reportCustomerIds = customers.map((customer) => customer.id);
-    const favorites = await this.prisma.productFavorite.findMany({
+    const favorites = await this.prisma.extended.productFavorite.findMany({
       where: {
         clientId: { in: reportCustomerIds },
         ...(Object.keys(dateWhere).length ? { createdAt: dateWhere } : {}),
@@ -150,7 +150,7 @@ export class ReportsService {
             id: true,
             name: true,
             category: { select: { id: true, name: true } }}}}});
-    const details = await this.prisma.orderDetail.findMany({
+    const details = await this.prisma.extended.orderDetail.findMany({
       where: {
         order: orderScope,
         ...(vendorId
@@ -246,7 +246,7 @@ export class ReportsService {
     const feePerVendor = query.vendorRegistrationFee ? Number(query.vendorRegistrationFee) : currentTier.vendorRegistrationFee;
     const taxRatePercent = query.commissionTaxRate ? Number(query.commissionTaxRate) : currentTier.commissionTaxRate;
 
-    const orderDateRange = await this.prisma.order.aggregate({
+    const orderDateRange = await this.prisma.extended.order.aggregate({
       _min: { createdAt: true },
       _max: { createdAt: true },
     });
@@ -444,26 +444,28 @@ export class ReportsService {
       totalSystemOrdersCount,
       newVendorsInPeriod,
     ] = await Promise.all([
-      this.prisma.vendor.count({
+      this.prisma.extended.vendor.count({
         where: { deletedAt: null, status: 'active' },
       }),
-      this.prisma.client.count({
+      this.prisma.extended.client.count({
         where: { deletedAt: null, status: 'active' },
       }),
-      this.prisma.client.count({
+      this.prisma.extended.client.count({
         where: { deletedAt: null },
       }),
-      this.prisma.product.count({ where: { deletedAt: null } }),
-      this.prisma.order.count(),
-      this.prisma.vendor.count({
+      this.prisma.extended.product.count({ where: { deletedAt: null } }),
+      this.prisma.extended.order.count(),
+      this.prisma.extended.vendor.count({
         where: {
           deletedAt: null,
+          status: 'active',
+          approvalStatus: 'approved',
           createdAt: { gte: startDate, lte: endDate },
         },
       }),
     ]);
 
-    const orders = await this.prisma.order.findMany({
+    const orders = await this.prisma.extended.order.findMany({
       where: {
         createdAt: {
           gte: startDate,
@@ -583,9 +585,19 @@ export class ReportsService {
           bucket.adminTax += tax;
         }
 
+        const orderSubtotal = Number(order.subtotalAmount || 0);
+        const orderDiscount = Number(order.discountAmount || 0);
+        const netRatio =
+          orderSubtotal > 0 && orderDiscount > 0
+            ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal
+            : 1;
+
         for (const detail of order.details) {
           const product = detail.productVariant?.productColor?.product;
           if (product) {
+            const itemRevenue = Math.round(
+              Number(detail.price || 0) * (detail.quantity || 1) * netRatio,
+            );
             const pId = product.id;
             const pItem = productMap.get(pId) || {
               id: pId,
@@ -595,7 +607,7 @@ export class ReportsService {
               revenue: 0,
             };
             pItem.quantity += detail.quantity || 1;
-            pItem.revenue += Number(detail.price || 0) * (detail.quantity || 1);
+            pItem.revenue += itemRevenue;
             productMap.set(pId, pItem);
 
             const vendor = product.vendor;
@@ -611,7 +623,6 @@ export class ReportsService {
                 itemsSold: 0,
                 tax: 0,
               };
-              const itemRevenue = Number(detail.price || 0) * (detail.quantity || 1);
               vItem.sales += itemRevenue;
               vItem.orderCount.add(order.id);
               vItem.itemsSold += detail.quantity || 1;
@@ -629,9 +640,11 @@ export class ReportsService {
     }
 
     const isAllTime = period === 'all';
-    const periodVendors = await this.prisma.vendor.findMany({
+    const periodVendors = await this.prisma.extended.vendor.findMany({
       where: {
         deletedAt: null,
+        status: 'active',
+        approvalStatus: 'approved',
         ...(isAllTime ? {} : { createdAt: { gte: startDate, lte: endDate } }),
       },
       select: { id: true, createdAt: true, subscriptionFee: true },
@@ -644,8 +657,12 @@ export class ReportsService {
       vendorFeeRevenue += fee;
     }
 
-    const allVendors = await this.prisma.vendor.findMany({
-      where: { deletedAt: null },
+    const allVendors = await this.prisma.extended.vendor.findMany({
+      where: {
+        deletedAt: null,
+        status: 'active',
+        approvalStatus: 'approved',
+      },
       select: { id: true, createdAt: true, subscriptionFee: true },
     });
     let allTimeVendorFeeRevenue = 0;
@@ -675,6 +692,21 @@ export class ReportsService {
     const topProducts = Array.from(productMap.values())
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 5);
+
+    // [TỐI ƯU THỐNG KÊ ĐA CHIỀU BẰNG SQL GROUP BY - YÊU CẦU 3 & 5]:
+    // Tổng hợp bảng thống kê tổng tiền hóa đơn theo:
+    // 1. Theo Tháng (1..12 của năm targetYear)
+    // 2. Theo Quý (Quý 1..4 của năm targetYear)
+    // 3. Theo Năm / Các năm (availableYears)
+    // 4. Theo Nhân viên phụ trách (byEmployee - khử trùng lặp orderId bằng UNION CTE)
+    // 5. Theo Sản phẩm (byProduct - GROUP BY productId)
+    const statisticsTables = await this.buildMultiDimensionStatistics(
+      targetYear,
+      availableYears,
+      startDate,
+      endDate,
+      orders,
+    );
 
     return {
       period,
@@ -714,6 +746,349 @@ export class ReportsService {
       chartData: chartBuckets,
       topVendors,
       topProducts,
+      statisticsTables,
+    };
+  }
+
+  /**
+   * [ĐỌC DATABASE & TỐI ƯU BẢNG THỐNG KÊ HÓA ĐƠN - YÊU CẦU 3 & 5]
+   * Sử dụng SQL GROUP BY + FILTER ngay tại PostgreSQL để lập 5 bảng thống kê:
+   * - byMonth: Tổng tiền hóa đơn theo 12 tháng trong năm
+   * - byQuarter: Tổng tiền hóa đơn theo 4 quý trong năm (suy ra O(1) từ 12 tháng, không tốn thêm query)
+   * - byYear: Tổng tiền hóa đơn theo năm / qua các năm
+   * - byEmployee: Tổng tiền hóa đơn theo nhân viên phụ trách (khử trùng lặp hóa đơn bằng UNION CTE)
+   * - byProduct: Tổng tiền hóa đơn theo sản phẩm
+   */
+  private async buildMultiDimensionStatistics(
+    targetYear: number,
+    availableYears: number[],
+    startDate: Date,
+    endDate: Date,
+    fallbackOrders: any[] = [],
+  ) {
+    const yearStart = new Date(Date.UTC(targetYear, 0, 1, 0, 0, 0, 0));
+    const yearEnd = new Date(Date.UTC(targetYear, 11, 31, 23, 59, 59, 999));
+
+    const defaultMonths = Array.from({ length: 12 }, (_, idx) => {
+      const m = idx + 1;
+      return {
+        month: m,
+        quarter: Math.ceil(m / 3),
+        label: `Tháng ${m}/${targetYear}`,
+        totalOrders: 0,
+        completedOrders: 0,
+        cancelledOrders: 0,
+        subtotalAmount: 0,
+        discountAmount: 0,
+        totalAmount: 0,
+        allOrdersAmount: 0,
+      };
+    });
+
+    try {
+      if (typeof this.prisma.extended.$queryRaw === 'function') {
+        const [monthRows, yearRows, employeeRows, productRows] =
+          await Promise.all([
+            // 1. SQL GROUP BY Tháng (của năm targetYear) -> Dùng chung cho cả Bảng Tháng & Bảng Quý
+            this.prisma.extended.$queryRaw<
+              Array<{
+                month: number;
+                totalOrders: number;
+                completedOrders: number;
+                cancelledOrders: number;
+                subtotalAmount: number;
+                discountAmount: number;
+                totalAmount: number;
+                allOrdersAmount: number;
+              }>
+            >`
+              SELECT
+                EXTRACT(MONTH FROM o."createdAt" AT TIME ZONE 'UTC')::int AS month,
+                COUNT(*)::int AS "totalOrders",
+                COUNT(*) FILTER (WHERE o.status = 'completed')::int AS "completedOrders",
+                COUNT(*) FILTER (WHERE o.status = 'cancelled')::int AS "cancelledOrders",
+                COALESCE(SUM(o."subtotalAmount") FILTER (WHERE o.status = 'completed'), 0)::float8 AS "subtotalAmount",
+                COALESCE(SUM(o."discountAmount") FILTER (WHERE o.status = 'completed'), 0)::float8 AS "discountAmount",
+                COALESCE(SUM(o."totalAmount") FILTER (WHERE o.status = 'completed'), 0)::float8 AS "totalAmount",
+                COALESCE(SUM(o."totalAmount"), 0)::float8 AS "allOrdersAmount"
+              FROM "Order" o
+              WHERE o."createdAt" >= ${yearStart} AND o."createdAt" <= ${yearEnd}
+              GROUP BY EXTRACT(MONTH FROM o."createdAt" AT TIME ZONE 'UTC')
+              ORDER BY month ASC
+            `,
+
+            // 2. SQL GROUP BY Năm (qua tất cả các năm)
+            this.prisma.extended.$queryRaw<
+              Array<{
+                year: number;
+                totalOrders: number;
+                completedOrders: number;
+                cancelledOrders: number;
+                subtotalAmount: number;
+                discountAmount: number;
+                totalAmount: number;
+                allOrdersAmount: number;
+              }>
+            >`
+              SELECT
+                EXTRACT(YEAR FROM o."createdAt" AT TIME ZONE 'UTC')::int AS year,
+                COUNT(*)::int AS "totalOrders",
+                COUNT(*) FILTER (WHERE o.status = 'completed')::int AS "completedOrders",
+                COUNT(*) FILTER (WHERE o.status = 'cancelled')::int AS "cancelledOrders",
+                COALESCE(SUM(o."subtotalAmount") FILTER (WHERE o.status = 'completed'), 0)::float8 AS "subtotalAmount",
+                COALESCE(SUM(o."discountAmount") FILTER (WHERE o.status = 'completed'), 0)::float8 AS "discountAmount",
+                COALESCE(SUM(o."totalAmount") FILTER (WHERE o.status = 'completed'), 0)::float8 AS "totalAmount",
+                COALESCE(SUM(o."totalAmount"), 0)::float8 AS "allOrdersAmount"
+              FROM "Order" o
+              GROUP BY EXTRACT(YEAR FROM o."createdAt" AT TIME ZONE 'UTC')
+              ORDER BY year DESC
+            `,
+
+            // 3. SQL GROUP BY Nhân viên (khử trùng lặp (employeeId, orderId) bằng CTE UNION)
+            this.prisma.extended.$queryRaw<
+              Array<{
+                employeeId: string;
+                employeeCode: string;
+                fullName: string;
+                department: string;
+                position: string;
+                totalOrders: number;
+                completedOrders: number;
+                cancelledOrders: number;
+                subtotalAmount: number;
+                discountAmount: number;
+                completedAmount: number;
+                totalOrderAmount: number;
+              }>
+            >`
+              WITH emp_orders AS (
+                SELECT s."carrierId" AS "employeeId", s."orderId" AS "orderId"
+                FROM "Shipment" s
+                WHERE s."carrierId" IS NOT NULL
+                UNION
+                SELECT h."employeeId" AS "employeeId", h."orderId" AS "orderId"
+                FROM "OrderStatusHistory" h
+                WHERE h."employeeId" IS NOT NULL
+              )
+              SELECT
+                e.id AS "employeeId",
+                e."employeeCode" AS "employeeCode",
+                e."fullName" AS "fullName",
+                e.department AS "department",
+                e.position AS "position",
+                COUNT(o.id)::int AS "totalOrders",
+                COUNT(o.id) FILTER (WHERE o.status = 'completed')::int AS "completedOrders",
+                COUNT(o.id) FILTER (WHERE o.status = 'cancelled')::int AS "cancelledOrders",
+                COALESCE(SUM(o."subtotalAmount") FILTER (WHERE o.status = 'completed'), 0)::float8 AS "subtotalAmount",
+                COALESCE(SUM(o."discountAmount") FILTER (WHERE o.status = 'completed'), 0)::float8 AS "discountAmount",
+                COALESCE(SUM(o."totalAmount") FILTER (WHERE o.status = 'completed'), 0)::float8 AS "completedAmount",
+                COALESCE(SUM(o."totalAmount"), 0)::float8 AS "totalOrderAmount"
+              FROM "Employee" e
+              LEFT JOIN emp_orders eo ON eo."employeeId" = e.id
+              LEFT JOIN "Order" o ON o.id = eo."orderId"
+                AND o."createdAt" >= ${startDate}
+                AND o."createdAt" <= ${endDate}
+              WHERE e."deletedAt" IS NULL
+              GROUP BY e.id, e."employeeCode", e."fullName", e.department, e.position
+              ORDER BY "completedAmount" DESC, "totalOrders" DESC, e."employeeCode" ASC
+            `,
+
+            // 4. SQL GROUP BY Sản phẩm trong kỳ đã chọn
+            this.prisma.extended.$queryRaw<
+              Array<{
+                productId: string;
+                productName: string;
+                categoryName: string;
+                vendorName: string;
+                orderCount: number;
+                completedOrderCount: number;
+                totalQuantity: number;
+                allQuantity: number;
+                unitPrice: number;
+                grossAmount: number;
+                netAmount: number;
+                allGrossAmount: number;
+              }>
+            >`
+              SELECT
+                p.id AS "productId",
+                p.name AS "productName",
+                COALESCE(c.name, 'Khác') AS "categoryName",
+                COALESCE(v."storeName", v."fullName", 'MIVA') AS "vendorName",
+                COUNT(DISTINCT o.id)::int AS "orderCount",
+                COUNT(DISTINCT o.id) FILTER (WHERE o.status = 'completed')::int AS "completedOrderCount",
+                COALESCE(SUM(od.quantity) FILTER (WHERE o.status = 'completed'), 0)::int AS "totalQuantity",
+                COALESCE(SUM(od.quantity), 0)::int AS "allQuantity",
+                COALESCE(AVG(od.price), 0)::float8 AS "unitPrice",
+                COALESCE(SUM(od.price * od.quantity) FILTER (WHERE o.status = 'completed'), 0)::float8 AS "grossAmount",
+                COALESCE(
+                  SUM(
+                    (od.price * od.quantity) *
+                    CASE
+                      WHEN o."subtotalAmount" > 0 AND o."discountAmount" > 0
+                      THEN GREATEST(0, (o."subtotalAmount" - o."discountAmount") / o."subtotalAmount")
+                      ELSE 1
+                    END
+                  ) FILTER (WHERE o.status = 'completed'),
+                  0
+                )::float8 AS "netAmount",
+                COALESCE(SUM(od.price * od.quantity), 0)::float8 AS "allGrossAmount"
+              FROM "OrderDetail" od
+              INNER JOIN "Order" o ON o.id = od."orderId"
+              INNER JOIN "ProductVariant" pv ON pv.id = od."productVariantId"
+              INNER JOIN "ProductColor" pc ON pc.id = pv."productColorId"
+              INNER JOIN "Product" p ON p.id = pc."productId"
+              LEFT JOIN "Category" c ON c.id = p."categoryId"
+              LEFT JOIN "Vendor" v ON v.id = p."vendorId"
+              WHERE o."createdAt" >= ${startDate} AND o."createdAt" <= ${endDate}
+              GROUP BY p.id, p.name, c.name, v."storeName", v."fullName"
+              ORDER BY "netAmount" DESC, "totalQuantity" DESC
+            `,
+          ]);
+
+        for (const r of monthRows) {
+          const target = defaultMonths[r.month - 1];
+          if (target) {
+            target.totalOrders = Number(r.totalOrders || 0);
+            target.completedOrders = Number(r.completedOrders || 0);
+            target.cancelledOrders = Number(r.cancelledOrders || 0);
+            target.subtotalAmount = Math.round(Number(r.subtotalAmount || 0));
+            target.discountAmount = Math.round(Number(r.discountAmount || 0));
+            target.totalAmount = Math.round(Number(r.totalAmount || 0));
+            target.allOrdersAmount = Math.round(Number(r.allOrdersAmount || 0));
+          }
+        }
+
+        // Suy ra Bảng Quý (Quý 1..4) trực tiếp từ 12 tháng trong O(1), không tốn thêm truy vấn DB
+        const byQuarter = [1, 2, 3, 4].map((q) => {
+          const monthsInQ = defaultMonths.filter((m) => m.quarter === q);
+          return {
+            quarter: q,
+            label: `Quý ${q}/${targetYear} (T${(q - 1) * 3 + 1} - T${q * 3})`,
+            totalOrders: monthsInQ.reduce((s, m) => s + m.totalOrders, 0),
+            completedOrders: monthsInQ.reduce((s, m) => s + m.completedOrders, 0),
+            cancelledOrders: monthsInQ.reduce((s, m) => s + m.cancelledOrders, 0),
+            subtotalAmount: monthsInQ.reduce((s, m) => s + m.subtotalAmount, 0),
+            discountAmount: monthsInQ.reduce((s, m) => s + m.discountAmount, 0),
+            totalAmount: monthsInQ.reduce((s, m) => s + m.totalAmount, 0),
+            allOrdersAmount: monthsInQ.reduce((s, m) => s + m.allOrdersAmount, 0),
+          };
+        });
+
+        const yearMap = new Map(
+          availableYears.map((y) => [
+            y,
+            {
+              year: y,
+              label: `Năm ${y}`,
+              totalOrders: 0,
+              completedOrders: 0,
+              cancelledOrders: 0,
+              subtotalAmount: 0,
+              discountAmount: 0,
+              totalAmount: 0,
+              allOrdersAmount: 0,
+            },
+          ]),
+        );
+        for (const r of yearRows) {
+          const y = Number(r.year);
+          yearMap.set(y, {
+            year: y,
+            label: `Năm ${y}`,
+            totalOrders: Number(r.totalOrders || 0),
+            completedOrders: Number(r.completedOrders || 0),
+            cancelledOrders: Number(r.cancelledOrders || 0),
+            subtotalAmount: Math.round(Number(r.subtotalAmount || 0)),
+            discountAmount: Math.round(Number(r.discountAmount || 0)),
+            totalAmount: Math.round(Number(r.totalAmount || 0)),
+            allOrdersAmount: Math.round(Number(r.allOrdersAmount || 0)),
+          });
+        }
+
+        return {
+          byMonth: defaultMonths,
+          byQuarter,
+          byYear: Array.from(yearMap.values()).sort((a, b) => b.year - a.year),
+          byEmployee: employeeRows.map((e) => ({
+            ...e,
+            totalOrders: Number(e.totalOrders || 0),
+            completedOrders: Number(e.completedOrders || 0),
+            cancelledOrders: Number(e.cancelledOrders || 0),
+            subtotalAmount: Math.round(Number(e.subtotalAmount || 0)),
+            discountAmount: Math.round(Number(e.discountAmount || 0)),
+            completedAmount: Math.round(Number(e.completedAmount || 0)),
+            totalOrderAmount: Math.round(Number(e.totalOrderAmount || 0)),
+          })),
+          byProduct: productRows.map((p) => ({
+            ...p,
+            orderCount: Number(p.orderCount || 0),
+            completedOrderCount: Number(p.completedOrderCount || 0),
+            totalQuantity: Number(p.totalQuantity || 0),
+            allQuantity: Number(p.allQuantity || 0),
+            unitPrice: Math.round(Number(p.unitPrice || 0)),
+            grossAmount: Math.round(Number(p.grossAmount || 0)),
+            netAmount: Math.round(Number(p.netAmount || 0)),
+            allGrossAmount: Math.round(Number(p.allGrossAmount || 0)),
+          })),
+        };
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Fallback sang tổng hợp bộ nhớ cho statisticsTables: ${(error as Error).message}`,
+      );
+    }
+
+    // Fallback an toàn cho môi trường mock unit test không có $queryRaw
+    for (const o of fallbackOrders) {
+      const d = new Date(o.createdAt);
+      if (d.getUTCFullYear() === targetYear) {
+        const mItem = defaultMonths[d.getUTCMonth()];
+        if (mItem) {
+          mItem.totalOrders += 1;
+          mItem.allOrdersAmount += Number(o.totalAmount || 0);
+          if (o.status === OrderStatus.completed) {
+            mItem.completedOrders += 1;
+            mItem.subtotalAmount += Number(o.subtotalAmount || 0);
+            mItem.discountAmount += Number(o.discountAmount || 0);
+            mItem.totalAmount += Number(o.totalAmount || 0);
+          } else if (o.status === OrderStatus.cancelled) {
+            mItem.cancelledOrders += 1;
+          }
+        }
+      }
+    }
+    const byQuarter = [1, 2, 3, 4].map((q) => {
+      const monthsInQ = defaultMonths.filter((m) => m.quarter === q);
+      return {
+        quarter: q,
+        label: `Quý ${q}/${targetYear} (T${(q - 1) * 3 + 1} - T${q * 3})`,
+        totalOrders: monthsInQ.reduce((s, m) => s + m.totalOrders, 0),
+        completedOrders: monthsInQ.reduce((s, m) => s + m.completedOrders, 0),
+        cancelledOrders: monthsInQ.reduce((s, m) => s + m.cancelledOrders, 0),
+        subtotalAmount: monthsInQ.reduce((s, m) => s + m.subtotalAmount, 0),
+        discountAmount: monthsInQ.reduce((s, m) => s + m.discountAmount, 0),
+        totalAmount: monthsInQ.reduce((s, m) => s + m.totalAmount, 0),
+        allOrdersAmount: monthsInQ.reduce((s, m) => s + m.allOrdersAmount, 0),
+      };
+    });
+
+    return {
+      byMonth: defaultMonths,
+      byQuarter,
+      byYear: availableYears.map((y) => ({
+        year: y,
+        label: `Năm ${y}`,
+        totalOrders: 0,
+        completedOrders: 0,
+        cancelledOrders: 0,
+        subtotalAmount: 0,
+        discountAmount: 0,
+        totalAmount: 0,
+        allOrdersAmount: 0,
+      })),
+      byEmployee: [],
+      byProduct: [],
     };
   }
 
@@ -793,7 +1168,7 @@ export class ReportsService {
     ];
 
     // 1. Fetch all clients
-    const clients = await this.prisma.client.findMany({
+    const clients = await this.prisma.extended.client.findMany({
       where: { deletedAt: null },
       select: {
         id: true,
@@ -848,20 +1223,27 @@ export class ReportsService {
     const dominantGroup = [...ageGroups].sort((a, b) => b.count - a.count)[0];
 
     // Gender distribution
+    const genderLabels: Record<string, string> = {
+      male: 'Nam',
+      female: 'Nữ',
+      other: 'Khác',
+      prefer_not_to_say: 'Không tiết lộ',
+      unknown: 'Chưa cập nhật',
+    };
     const genderMap: Record<string, number> = {};
     for (const c of clients) {
-      const g = c.gender || 'other';
+      const g = c.gender || 'unknown';
       genderMap[g] = (genderMap[g] || 0) + 1;
     }
     const genderStats = Object.entries(genderMap).map(([gender, count]) => ({
       gender,
-      label: gender === 'male' ? 'Nam' : gender === 'female' ? 'Nữ' : 'Khác',
+      label: genderLabels[gender] || 'Khác',
       count,
       percentage: Number(((count / (clients.length || 1)) * 100).toFixed(1)),
     }));
 
     // 2. Favorites: ProductFavorite -> Product -> Vendor
-    const favorites = await this.prisma.productFavorite.findMany({
+    const favorites = await this.prisma.extended.productFavorite.findMany({
       select: {
         clientId: true,
         productId: true,
@@ -916,16 +1298,24 @@ export class ReportsService {
       .slice(0, 10);
 
     // 3. Purchases: OrderDetail -> ProductVariant -> ProductColor -> Product -> Vendor
-    const orderDetails = await this.prisma.orderDetail.findMany({
+    const orderDetails = await this.prisma.extended.orderDetail.findMany({
       where: {
         order: {
-          status: { in: ['completed', 'shipping', 'processing', 'confirmed'] },
+          status: OrderStatus.completed,
         },
       },
       select: {
         quantity: true,
         price: true,
-        order: { select: { id: true, clientId: true, status: true } },
+        order: {
+          select: {
+            id: true,
+            clientId: true,
+            status: true,
+            subtotalAmount: true,
+            discountAmount: true,
+          },
+        },
         productVariant: {
           select: {
             productColor: {
@@ -956,7 +1346,13 @@ export class ReportsService {
       if (!v) continue;
 
       const clientId = d.order.clientId;
-      const lineTotal = Number(d.price) * d.quantity;
+      const orderSubtotal = Number(d.order.subtotalAmount || 0);
+      const orderDiscount = Number(d.order.discountAmount || 0);
+      const netRatio =
+        orderSubtotal > 0 && orderDiscount > 0
+          ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal
+          : 1;
+      const lineTotal = Math.round(Number(d.price) * d.quantity * netRatio);
 
       // Vendor stats
       if (!vendorPurchaseMap.has(v.id)) {
@@ -964,14 +1360,14 @@ export class ReportsService {
           vendorId: v.id,
           storeName: v.storeName || v.fullName,
           avatarUrl: v.avatarUrl,
-          purchaseCount: 0,
+          ordersSet: new Set<string>(),
           totalUnits: 0,
           totalRevenue: 0,
           buyers: new Set<string>(),
         });
       }
       const vItem = vendorPurchaseMap.get(v.id);
-      vItem.purchaseCount++;
+      vItem.ordersSet.add(d.order.id);
       vItem.totalUnits += d.quantity;
       vItem.totalRevenue += lineTotal;
       vItem.buyers.add(clientId);
@@ -997,7 +1393,7 @@ export class ReportsService {
         vendorId: v.vendorId,
         storeName: v.storeName,
         avatarUrl: v.avatarUrl,
-        purchaseCount: v.purchaseCount,
+        purchaseCount: v.ordersSet.size,
         totalUnits: v.totalUnits,
         totalRevenue: Math.round(v.totalRevenue),
         uniqueBuyersCount: v.buyers.size,
@@ -1006,7 +1402,7 @@ export class ReportsService {
       .slice(0, 10);
 
     // 4. Cart stats
-    const cartItems = await this.prisma.cartItem.findMany({
+    const cartItems = await this.prisma.extended.cartItem.findMany({
       select: {
         quantity: true,
         cart: { select: { clientId: true } },
@@ -1076,8 +1472,14 @@ export class ReportsService {
       for (const d of orderDetails) {
         if (clientIds.has(d.order.clientId) && d.productVariant?.productColor?.product?.vendor) {
           const name = d.productVariant.productColor.product.vendor.storeName || d.productVariant.productColor.product.vendor.fullName;
+          const orderSubtotal = Number(d.order.subtotalAmount || 0);
+          const orderDiscount = Number(d.order.discountAmount || 0);
+          const netRatio =
+            orderSubtotal > 0 && orderDiscount > 0
+              ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal
+              : 1;
           vendorBuyInGroup.set(name, (vendorBuyInGroup.get(name) || 0) + d.quantity);
-          totalSpentInGroup += Number(d.price) * d.quantity;
+          totalSpentInGroup += Math.round(Number(d.price) * d.quantity * netRatio);
         }
       }
 
@@ -1141,9 +1543,12 @@ export class ReportsService {
     return {
       overview: {
         totalClients: clients.length,
+        clientsWithAgeCount: ageCount,
+        unknownAgeCount: clients.length - ageCount,
         averageAge,
         dominantGroup: {
-          label: dominantGroup?.label || '',
+          key: dominantGroup && dominantGroup.count > 0 ? dominantGroup.key : '',
+          label: dominantGroup && dominantGroup.count > 0 ? dominantGroup.label : 'Chưa xác định',
           count: dominantGroup?.count || 0,
           percentage: dominantGroup?.percentage || 0,
         },

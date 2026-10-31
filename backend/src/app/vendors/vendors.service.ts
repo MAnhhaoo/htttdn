@@ -109,7 +109,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       throw new NotFoundException('Vendor not found');
     }
 
-    const revenueAgg = await this.prismaService.vendorOrder.aggregate({
+    const revenueAgg = await this.prismaService.extended.vendorOrder.aggregate({
       where: {
         vendorId: vendor.id,
         status: { in: ['delivered', 'shipping', 'processing', 'confirmed'] },
@@ -142,10 +142,16 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
   }
 
   async createVendor(createVendorDto: CreateVendorDto) {
-    const { address: _address, ...vendorData } = createVendorDto as any;
+    const {
+      address: _address,
+      id: _id,
+      createdBy: _createdBy,
+      user: _user,
+      ...vendorData
+    } = createVendorDto as any;
     if (typeof vendorData.email === 'string') {
       vendorData.email = vendorData.email.trim().toLowerCase();
-      await assertEmailAvailable(this.prismaService, vendorData.email);
+      await assertEmailAvailable(this.prismaService.extended, vendorData.email);
     }
     return this.extended.create({
       data: vendorData,
@@ -167,12 +173,12 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       vendorData.email = vendorData.email.trim().toLowerCase();
       const current = where.id
         ? { id: where.id }
-        : await this.prismaService.vendor.findUnique({
+        : await this.prismaService.extended.vendor.findUnique({
             where,
             select: { id: true },
           });
       await assertEmailAvailable(
-        this.prismaService,
+        this.prismaService.extended,
         vendorData.email,
         current ? { role: 'vendor', id: current.id } : undefined,
       );
@@ -444,7 +450,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       user.userEmail ||
       (user.role === 'admin' ? 'Quản trị viên' : 'Nhân viên kiểm duyệt');
 
-    const changed = await this.prismaService.vendor.updateMany({
+    const changed = await this.prismaService.extended.vendor.updateMany({
       where: {
         id,
         approvalStatus: isNewRegistration ? 'pending_approval' : 'approved',
@@ -488,7 +494,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       throw new ConflictException('Hồ sơ không còn chờ phê duyệt');
     }
 
-    const changed = await this.prismaService.vendor.updateMany({
+    const changed = await this.prismaService.extended.vendor.updateMany({
       where: {
         id,
         approvalStatus: isNewRegistration ? 'pending_approval' : 'approved',
@@ -517,7 +523,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
     userID: string;
   }) {
     if (user.role !== 'employee') return;
-    const employee = await this.prismaService.employee.findUnique({
+    const employee = await this.prismaService.extended.employee.findUnique({
       where: { id: user.userID },
       select: { department: true, permissions: true },
     });
@@ -555,7 +561,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       throw new NotFoundException('Người bán không tồn tại');
     }
 
-    const totalProducts = await this.prismaService.product.count({
+    const totalProducts = await this.prismaService.extended.product.count({
       where: {
         vendorId: id,
         deletedAt: null,
@@ -563,13 +569,13 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       },
     });
 
-    const totalOrders = await this.prismaService.vendorOrder.count({
+    const totalOrders = await this.prismaService.extended.vendorOrder.count({
       where: {
         vendorId: id,
       },
     });
 
-    const reviewsAgg = await this.prismaService.review.aggregate({
+    const reviewsAgg = await this.prismaService.extended.review.aggregate({
       where: {
         product: {
           vendorId: id,
@@ -596,7 +602,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
           ? `${diffMonths} tháng trước`
           : 'Gần đây';
 
-    const categories = await this.prismaService.category.findMany({
+    const categories = await this.prismaService.extended.category.findMany({
       where: {
         deletedAt: null,
         products: {
@@ -614,7 +620,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       },
     });
 
-    const categoryCounts = await this.prismaService.product.groupBy({
+    const categoryCounts = await this.prismaService.extended.product.groupBy({
       by: ['categoryId'],
       where: {
         vendorId: id,
