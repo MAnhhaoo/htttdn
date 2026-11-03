@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Eye, Edit, Trash2, Plus, Image, Loader2 } from 'lucide-react';
+import { Search, Eye, Edit, Lock, Unlock, Plus, Image, Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatHelpers';
 import { Button, Input, Select, Badge } from '../../components/ui';
 import { productService } from '../../services/productService';
@@ -16,6 +16,7 @@ export default function ProductManagement() {
   
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -56,7 +57,8 @@ export default function ProductManagement() {
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
     const matchCategory = categoryFilter === 'all' || p.categoryId === categoryFilter;
-    return matchSearch && matchCategory;
+    const matchStatus = statusFilter === 'all' || p.status === statusFilter;
+    return matchSearch && matchCategory && matchStatus;
   });
 
   const handleAddClick = () => {
@@ -79,14 +81,18 @@ export default function ProductManagement() {
     setIsModalOpen(true);
   };
 
-  const handleDeleteClick = async (productId) => {
-    if (window.confirm("Are you sure you want to delete this product?")) {
+  const handleToggleStatus = async (product) => {
+    const isLocking = product.status === 'active';
+    const actionText = isLocking ? 'khóa' : 'mở khóa';
+    const nextStatus = isLocking ? 'inactive' : 'active';
+
+    if (window.confirm(`Bạn có chắc muốn ${actionText} sản phẩm "${product.name}"?`)) {
       try {
-        await productService.deleteProduct(productId);
-        setProducts(prev => prev.filter(p => p.id !== productId));
+        await productService.updateProduct(product.id, { status: nextStatus });
+        setProducts(prev => prev.map(p => p.id === product.id ? { ...p, status: nextStatus } : p));
       } catch (error) {
-        console.error('Failed to delete product', error);
-        alert('Có lỗi xảy ra khi xóa sản phẩm');
+        console.error(`Failed to ${actionText} product`, error);
+        alert(`Có lỗi xảy ra khi ${actionText} sản phẩm`);
       }
     }
   };
@@ -118,8 +124,8 @@ export default function ProductManagement() {
       </div>
 
       <div className="bg-white dark:bg-slate-900 transition-colors rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-4">
-          <div className="flex-1 max-w-md relative">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-4 flex-wrap">
+          <div className="flex-1 min-w-[240px] max-w-md relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
             <Input 
               placeholder="Search your products..." 
@@ -135,7 +141,17 @@ export default function ProductManagement() {
             ]}
             value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value)}
-            className="focus:ring-indigo-500 focus:border-indigo-500"
+            className="focus:ring-indigo-500 focus:border-indigo-500 w-48"
+          />
+          <Select 
+            options={[
+              { value: 'all', label: 'Tất cả trạng thái' },
+              { value: 'active', label: 'Active (Đang bán)' },
+              { value: 'inactive', label: 'Inactive (Đã khóa)' }
+            ]}
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="focus:ring-indigo-500 focus:border-indigo-500 w-48"
           />
         </div>
 
@@ -161,17 +177,27 @@ export default function ProductManagement() {
                 filtered.map(product => {
                   const stock = product.totalStock || 0;
                   const colorsList = product.colors?.map(c => c.color).join(', ') || 'N/A';
+                  const isInactive = product.status === 'inactive';
                   return (
-                    <tr key={product.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
+                    <tr 
+                      key={product.id} 
+                      className={`border-b border-slate-100 dark:border-slate-800 transition-colors ${
+                        isInactive 
+                          ? 'bg-slate-50/70 dark:bg-slate-900/40 text-slate-500' 
+                          : 'hover:bg-slate-50 dark:bg-slate-900/50'
+                      }`}
+                    >
                       <td className="px-4 py-3">
                         <div className="flex items-center">
                           {product.thumbnail ? (
-                            <img src={product.thumbnail} alt={product.name} className="w-10 h-10 rounded-lg object-cover mr-3 border border-slate-200 dark:border-slate-800" />
+                            <img src={product.thumbnail} alt={product.name} className={`w-10 h-10 rounded-lg object-cover mr-3 border border-slate-200 dark:border-slate-800 ${isInactive ? 'grayscale contrast-75 opacity-70' : ''}`} />
                           ) : (
                             <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200 dark:border-slate-800 flex items-center justify-center mr-3"><Image className="w-5 h-5 text-slate-400" /></div>
                           )}
                           <div>
-                            <p className="text-sm font-medium text-slate-800 dark:text-slate-100 line-clamp-1">{product.name}</p>
+                            <p className={`text-sm font-medium line-clamp-1 ${isInactive ? 'text-slate-500 dark:text-slate-400' : 'text-slate-800 dark:text-slate-100'}`}>
+                              {product.name}
+                            </p>
                             <p className="text-xs text-slate-400">#{product.slug}</p>
                           </div>
                         </div>
@@ -185,15 +211,54 @@ export default function ProductManagement() {
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{colorsList}</td>
                       <td className="px-4 py-3">
-                        <Badge variant={product.status === 'active' ? 'success' : 'default'} className={product.status === 'active' ? 'bg-green-100 text-green-700' : ''}>
+                        <Badge 
+                          variant={product.status === 'active' ? 'success' : 'error'} 
+                          className={
+                            product.status === 'active' 
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium' 
+                              : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-medium'
+                          }
+                        >
                           {product.status}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-indigo-600" onClick={() => handleViewClick(product)} />
-                          <Button variant="ghost" size="sm" icon={Edit} className="text-slate-400 hover:text-amber-600" onClick={() => handleEditClick(product)} />
-                          <Button variant="ghost" size="sm" icon={Trash2} className="text-slate-400 hover:text-red-600" onClick={() => handleDeleteClick(product.id)} />
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            icon={Eye} 
+                            title="Xem chi tiết" 
+                            className="text-slate-400 hover:text-indigo-600" 
+                            onClick={() => handleViewClick(product)} 
+                          />
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            icon={Edit} 
+                            title="Chỉnh sửa sản phẩm" 
+                            className="text-slate-400 hover:text-amber-600" 
+                            onClick={() => handleEditClick(product)} 
+                          />
+                          {product.status === 'active' ? (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              icon={Lock} 
+                              title="Khóa sản phẩm (Tạm ngừng kinh doanh)" 
+                              className="text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30" 
+                              onClick={() => handleToggleStatus(product)} 
+                            />
+                          ) : (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              icon={Unlock} 
+                              title="Mở khóa sản phẩm (Kích hoạt kinh doanh lại)" 
+                              className="text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30" 
+                              onClick={() => handleToggleStatus(product)} 
+                            />
+                          )}
                         </div>
                       </td>
                     </tr>

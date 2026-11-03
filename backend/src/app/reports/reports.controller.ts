@@ -11,7 +11,7 @@ import { ReportsService } from './reports.service';
 
 @Controller()
 export class ReportsController {
-  constructor(private readonly reportsService: ReportsService) {}
+  constructor(private readonly reportsService: ReportsService) { }
 
   @Get('admin/reports/finance-config')
   @Roles('admin')
@@ -27,6 +27,7 @@ export class ReportsController {
   updateFinanceConfig(@Body() dto: UpdateFinanceConfigDto) {
     return this.reportsService.saveNewFinanceConfig({
       ...dto,
+      // toán tử Nullish coalescing (??) kiểm tra xem note có null or undefine hay k
       note: dto.note ?? undefined,
     });
   }

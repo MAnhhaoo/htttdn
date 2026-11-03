@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 export class AnalyticsReportQueryDto extends createZodDto(
   z.object({
+
+    // z.coerce... là ép chuỗi or số  
     period: z.enum(['week', 'month', 'quarter', 'year', 'custom', 'all']).default('all'),
     year: z.coerce.number().int().min(2020).max(2035).optional(),
     month: z.coerce.number().int().min(1).max(12).optional(),
@@ -13,4 +15,5 @@ export class AnalyticsReportQueryDto extends createZodDto(
     vendorRegistrationFee: z.coerce.number().min(0).default(2000000),
     commissionTaxRate: z.coerce.number().min(0).max(100).default(8),
   }),
-) {}
+) { }
+
