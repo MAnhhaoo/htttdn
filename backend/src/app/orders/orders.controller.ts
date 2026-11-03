@@ -9,13 +9,15 @@ import {
   Query,
 } from '@nestjs/common';
 
-
 import { User } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
 import { CheckoutDto, PreviewCheckoutDto } from './dto/checkout.dto';
-import { UpdateOrderStatusDto, UpdateVendorOrderStatusDto } from './dto/update-order-status.dto';
+import {
+  UpdateOrderStatusDto,
+  UpdateVendorOrderStatusDto,
+} from './dto/update-order-status.dto';
 import { AssignOrderDto } from './dto/assign-order.dto';
 import { GetOrdersPaginationDto } from './dto/get-order.dto';
 import { OrdersService } from './orders.service';
@@ -57,7 +59,7 @@ export class OrdersController {
   @Patch('vendor-orders/:id/status')
   @Roles('vendor')
   updateVendorOrderStatus(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateVendorOrderStatusDto,
     @User() user: UserInfo,
   ) {
@@ -83,7 +85,8 @@ export class OrdersController {
   @Roles('admin')
   autoAssignOrder(
     @Param('id', ParseUUIDPipe) id: string,
-    @Query('department') department: 'handling' | 'shipping' | 'exception' | undefined,
+    @Query('department')
+    department: 'handling' | 'shipping' | 'exception' | undefined,
     @User() user: UserInfo,
   ) {
     return this.ordersService.autoAssignOrder(id, user, department);

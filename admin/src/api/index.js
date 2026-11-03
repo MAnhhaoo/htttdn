@@ -14,8 +14,18 @@ export const authApi = {
 export const usersApi = {
   getUsers: (params = {}) => axiosClient.get('/users', { params }),
   getUser: (id) => axiosClient.get(`/users/${id}`),
+  createUser: (data) => axiosClient.post('/users', data),
   updateUser: (id, data) => axiosClient.patch(`/users/${id}`, data),
+  updateUserStatus: (id, status) => axiosClient.patch(`/users/${id}/status`, { status }),
   deleteUser: (id) => axiosClient.delete(`/users/${id}`),
+  uploadAvatar: async (file) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const res = await axiosClient.post('/users/upload-avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res?.data?.data?.url || res?.data?.url || res?.url;
+  },
 };
 
 // ==================== VENDORS ====================
@@ -24,7 +34,6 @@ export const vendorsApi = {
   getVendors: (params = {}) => axiosClient.get('/vendors', { params }),
   getVendor: (id) => axiosClient.get(`/vendors/${id}`),
   updateVendor: (id, data) => axiosClient.patch(`/vendors/${id}`, data),
-  deleteVendor: (id) => axiosClient.delete(`/vendors/${id}`),
   getRegistrations: (params = {}) => axiosClient.get('/vendors/admin/registrations', { params }),
   approveRegistration: (id, data = {}) => axiosClient.patch(`/vendors/admin/registrations/${id}/approve`, data),
   rejectRegistration: (id, data = {}) => axiosClient.patch(`/vendors/admin/registrations/${id}/reject`, data),
@@ -37,36 +46,6 @@ export const categoriesApi = {
   createCategory: (data) => axiosClient.post('/categories', data),
   updateCategory: (id, data) => axiosClient.patch(`/categories/${id}`, data),
   deleteCategory: (id) => axiosClient.delete(`/categories/${id}`),
-};
-
-// ==================== PRODUCTS ====================
-
-export const productsApi = {
-  getProducts: (params = {}) => axiosClient.get('/products/admin/all', { params }),
-  createProduct: (data) => axiosClient.post('/products', data),
-  updateProduct: (id, data) => axiosClient.patch(`/products/${id}`, data),
-  deleteProduct: (id) => axiosClient.delete(`/products/${id}`),
-  uploadImage: (file) => {
-    const formData = new FormData();
-    formData.append('files', file);
-    return axiosClient.post('/products/upload-image', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
-};
-
-// ==================== PRODUCT COLORS ====================
-
-export const productColorsApi = {
-  getByProductId: (productId) => axiosClient.get(`/productColors/product/${productId}`),
-  getById: (id) => axiosClient.get(`/productColors/${id}`),
-  create: (formData) => axiosClient.post('/productColors', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  update: (id, formData) => axiosClient.patch(`/productColors/${id}`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  delete: (id) => axiosClient.delete(`/productColors/${id}`),
 };
 
 // ==================== ORDERS ====================
@@ -114,7 +93,6 @@ export const employeesApi = {
   createEmployee: (data) => axiosClient.post('/employees', data),
   updateEmployee: (id, data) => axiosClient.patch(`/employees/${id}`, data),
   updateStatus: (id, status) => axiosClient.patch(`/employees/${id}/status`, { status }),
-  deleteEmployee: (id) => axiosClient.delete(`/employees/${id}`),
   getSalaryHistory: (id) => axiosClient.get(`/employees/${id}/salary-history`),
   updateSchedule: (id, data) => axiosClient.patch(`/employees/${id}/schedule`, data),
   sendNotification: (data) => axiosClient.post('/employees/notifications/send', data),
@@ -163,6 +141,3 @@ export const notificationsApi = {
   markAsRead: (id) => axiosClient.patch(`/notifications/${id}/read`),
   markAllAsRead: () => axiosClient.patch('/notifications/read-all'),
 };
-
-
-

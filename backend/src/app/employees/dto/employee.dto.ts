@@ -1,5 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import { PaginationQuerySchema } from '../../../common/utils/paginaton-util/pagination-util.interface';
 
 export class CreateEmployeeDto extends createZodDto(
   z.object({
@@ -7,7 +8,7 @@ export class CreateEmployeeDto extends createZodDto(
     email: z.string().email('Email không đúng định dạng'),
     password: z.string().min(6, 'Mật khẩu phải từ 6 ký tự'),
     phone: z.string().max(50).optional().nullable(),
-    avatarUrl: z.string().url().optional().nullable(),
+    avatarUrl: z.string().max(2048).optional().nullable(),
     dateOfBirth: z.string().optional().nullable(),
     gender: z.enum(['male', 'female', 'other']).optional().nullable(),
     citizenId: z.string().max(50).optional().nullable(),
@@ -28,7 +29,7 @@ export class UpdateEmployeeDto extends createZodDto(
     fullName: z.string().min(2).max(255).optional(),
     password: z.string().min(6).optional(),
     phone: z.string().max(50).optional().nullable(),
-    avatarUrl: z.string().url().optional().nullable(),
+    avatarUrl: z.string().max(2048).optional().nullable(),
     dateOfBirth: z.string().optional().nullable(),
     gender: z.enum(['male', 'female', 'other']).optional().nullable(),
     citizenId: z.string().max(50).optional().nullable(),
@@ -46,10 +47,33 @@ export class UpdateEmployeeDto extends createZodDto(
   }),
 ) {}
 
-export class GetEmployeesPaginationDto extends createZodDto(
+export class UpdateEmployeeProfileDto extends createZodDto(
   z.object({
-    page: z.coerce.number().int().min(1).default(1),
-    itemPerPage: z.coerce.number().int().min(1).max(100).default(10),
+    phone: z.string().max(50).optional().nullable(),
+    address: z.string().max(500).optional().nullable(),
+    avatarUrl: z.string().max(2048).optional().nullable(),
+  }),
+) {}
+
+export class UpdateEmployeeScheduleDto extends createZodDto(
+  z.object({
+    shiftName: z.string().max(100).optional(),
+    shiftStart: z.string().max(20).optional(),
+    shiftEnd: z.string().max(20).optional(),
+    shiftHours: z.coerce.number().min(0).max(24).optional(),
+    workDays: z.array(z.string()).optional(),
+    note: z.string().max(500).optional(),
+  }),
+) {}
+
+export class UpdateEmployeeStatusDto extends createZodDto(
+  z.object({
+    status: z.enum(['active', 'inactive']),
+  }),
+) {}
+
+export class GetEmployeesPaginationDto extends createZodDto(
+  PaginationQuerySchema.extend({
     q: z.string().optional(),
     department: z.string().optional(),
     employmentType: z.enum(['full_time', 'part_time']).optional(),

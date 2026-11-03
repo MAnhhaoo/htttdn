@@ -37,9 +37,11 @@ export default function VoucherManagement() {
 
   // Client-side filtering
   const filteredVouchers = useMemo(() => {
+    const q = search.toLowerCase();
     return vouchers.filter(v =>
-      (v.code || '').toLowerCase().includes(search.toLowerCase()) ||
-      (v.name || '').toLowerCase().includes(search.toLowerCase())
+      (v.code || '').toLowerCase().includes(q) ||
+      (v.name || '').toLowerCase().includes(q) ||
+      (v.categories || []).some(c => (c.name || '').toLowerCase().includes(q))
     );
   }, [vouchers, search]);
 
@@ -125,6 +127,7 @@ export default function VoucherManagement() {
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Mã code</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Tên</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Phạm vi áp dụng</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Giảm giá</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Đã dùng</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Thời hạn</th>
@@ -139,6 +142,28 @@ export default function VoucherManagement() {
                       <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded font-mono text-sm font-medium">{v.code}</span>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">{v.name}</td>
+                    <td className="px-4 py-3 text-xs">
+                      {v.scope === 'vendor' ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 font-medium">
+                          Shop: {v.vendor?.fullName || 'Vendor'} ({v.details?.length || 0} SP)
+                        </span>
+                      ) : Array.isArray(v.categories) && v.categories.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {v.categories.map(cat => (
+                            <span
+                              key={cat.id}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800 font-medium"
+                            >
+                              {cat.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-medium">
+                          Tất cả sản phẩm (Toàn sàn)
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">
                       {v.discountType === 'percentage' ? `${v.discountValue}%` : formatCurrency(v.discountValue)}
                     </td>

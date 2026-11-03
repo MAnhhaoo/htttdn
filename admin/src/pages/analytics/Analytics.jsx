@@ -7,7 +7,7 @@ import {
   DollarSign, ShoppingBag, Users, TrendingUp, Loader2, Package, 
   Settings, Sliders, RefreshCw, Check, Percent, Building2, Store, HelpCircle,
   ArrowUpRight, AlertCircle, Sparkles, Coins, Calendar, Wallet, CheckCircle2,
-  XCircle, Award
+  XCircle, Award, Table2, UserCheck, Search, Database
 } from 'lucide-react';
 import { reportsApi } from '../../api';
 import { Button, Input, Modal, Badge } from '../../components/ui';
@@ -31,6 +31,10 @@ export default function Analytics() {
   const [availableYears, setAvailableYears] = useState([2026, 2025]);
   const [startDate, setStartDate] = useState('2026-09-19');
   const [endDate, setEndDate] = useState('2026-09-29');
+
+  // Tab bảng thống kê đa chiều (Yêu cầu đồ án #5)
+  const [statsTab, setStatsTab] = useState('month'); // 'month' | 'quarter' | 'year' | 'employee' | 'product'
+  const [statsQuickFilter, setStatsQuickFilter] = useState('');
 
   // Cấu hình tài chính (Phí đăng ký & Thuế hoa hồng)
   const [financeConfig, setFinanceConfig] = useState(() => {
@@ -73,6 +77,13 @@ export default function Analytics() {
     chartData: [],
     topVendors: [],
     topProducts: [],
+    statisticsTables: {
+      byMonth: [],
+      byQuarter: [],
+      byYear: [],
+      byEmployee: [],
+      byProduct: [],
+    },
   });
 
   const fetchAnalytics = useCallback(async () => {
@@ -90,7 +101,17 @@ export default function Analytics() {
       });
 
       if (res.data) {
-        setAnalyticsData(res.data);
+        setAnalyticsData((prev) => ({
+          ...prev,
+          ...res.data,
+          statisticsTables: res.data.statisticsTables || {
+            byMonth: [],
+            byQuarter: [],
+            byYear: [],
+            byEmployee: [],
+            byProduct: [],
+          },
+        }));
         if (res.data.availableYears && res.data.availableYears.length > 0) {
           setAvailableYears(res.data.availableYears);
         }
@@ -164,7 +185,106 @@ export default function Analytics() {
 
   const formatVND = (val) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0);
 
-  const { summary, chartData, topVendors, topProducts } = analyticsData;
+  const { summary, chartData, topVendors, topProducts, statisticsTables } = analyticsData;
+
+  // Lọc nhanh trên RAM (useMemo - không gọi lại API) cho bảng Nhân viên & Sản phẩm
+  const filteredEmployeesStats = useMemo(() => {
+    const list = statisticsTables?.byEmployee || [];
+    const q = statsQuickFilter.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (e) =>
+        (e.fullName || '').toLowerCase().includes(q) ||
+        (e.employeeCode || '').toLowerCase().includes(q) ||
+        (e.department || '').toLowerCase().includes(q)
+    );
+  }, [statisticsTables?.byEmployee, statsQuickFilter]);
+
+  const filteredProductsStats = useMemo(() => {
+    const list = statisticsTables?.byProduct || [];
+    const q = statsQuickFilter.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (p) =>
+        (p.productName || '').toLowerCase().includes(q) ||
+        (p.categoryName || '').toLowerCase().includes(q) ||
+        (p.vendorName || '').toLowerCase().includes(q)
+    );
+  }, [statisticsTables?.byProduct, statsQuickFilter]);
+
+  // Tính dòng Tổng cộng (Footer) cho các bảng thống kê Thời gian (Tháng / Quý / Năm)
+  const timeRowsForCurrentTab = useMemo(() => {
+    if (statsTab === 'month') return statisticsTables?.byMonth || [];
+    if (statsTab === 'quarter') return statisticsTables?.byQuarter || [];
+    if (statsTab === 'year') return statisticsTables?.byYear || [];
+    return [];
+  }, [statsTab, statisticsTables]);
+
+  const timeTableTotals = useMemo(() => {
+    return timeRowsForCurrentTab.reduce(
+      (acc, r) => {
+        acc.totalOrders += Number(r.totalOrders || 0);
+        acc.completedOrders += Number(r.completedOrders || 0);
+        acc.cancelledOrders += Number(r.cancelledOrders || 0);
+        acc.subtotalAmount += Number(r.subtotalAmount || 0);
+        acc.discountAmount += Number(r.discountAmount || 0);
+        acc.allOrdersAmount += Number(r.allOrdersAmount ?? r.totalAmount ?? 0);
+        acc.completedAmount += Number(r.completedAmount ?? r.totalAmount ?? 0);
+        return acc;
+      },
+      {
+        totalOrders: 0,
+        completedOrders: 0,
+        cancelledOrders: 0,
+        subtotalAmount: 0,
+        discountAmount: 0,
+        allOrdersAmount: 0,
+        completedAmount: 0,
+      }
+    );
+  }, [timeRowsForCurrentTab]);
+
+  const employeeTableTotals = useMemo(() => {
+    return filteredEmployeesStats.reduce(
+      (acc, r) => {
+        acc.totalOrders += Number(r.totalOrders || 0);
+        acc.completedOrders += Number(r.completedOrders || 0);
+        acc.cancelledOrders += Number(r.cancelledOrders || 0);
+        acc.discountAmount += Number(r.discountAmount || 0);
+        acc.totalOrderAmount += Number(r.totalOrderAmount ?? r.totalAmount ?? 0);
+        acc.completedAmount += Number(r.completedAmount || 0);
+        return acc;
+      },
+      {
+        totalOrders: 0,
+        completedOrders: 0,
+        cancelledOrders: 0,
+        discountAmount: 0,
+        totalOrderAmount: 0,
+        completedAmount: 0,
+      }
+    );
+  }, [filteredEmployeesStats]);
+
+  const productTableTotals = useMemo(() => {
+    return filteredProductsStats.reduce(
+      (acc, r) => {
+        acc.orderCount += Number(r.orderCount || 0);
+        acc.allQuantity += Number(r.allQuantity ?? r.totalQuantity ?? 0);
+        acc.totalQuantity += Number(r.totalQuantity || 0);
+        acc.allGrossAmount += Number(r.allGrossAmount ?? r.totalLineAmount ?? 0);
+        acc.netAmount += Number(r.netAmount ?? r.grossAmount ?? r.completedLineAmount ?? 0);
+        return acc;
+      },
+      {
+        orderCount: 0,
+        allQuantity: 0,
+        totalQuantity: 0,
+        allGrossAmount: 0,
+        netAmount: 0,
+      }
+    );
+  }, [filteredProductsStats]);
 
   return (
     <div className="space-y-6 pb-10">
@@ -178,7 +298,7 @@ export default function Analytics() {
             </Badge>
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
-            Phân tích đa chu kỳ theo Tuần, Tháng, Quý, Năm • Bóc tách Thực thu sàn vs Tổng GMV vs Doanh thu Admin
+            Phân tích đa chu kỳ theo Tuần, Tháng, Quý, Năm • Bảng thống kê hóa đơn theo Thời gian, Nhân viên, Sản phẩm
           </p>
         </div>
 
@@ -303,22 +423,20 @@ export default function Analytics() {
             </div>
           )}
 
-          {period !== 'all' && period !== 'custom' && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500">Năm:</span>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                {availableYears.map((yr) => (
-                  <option key={yr} value={yr}>
-                    {yr}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Năm:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              {availableYears.map((yr) => (
+                <option key={yr} value={yr}>
+                  {yr}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {period === 'month' && (
             <div className="flex items-center gap-2">
@@ -358,14 +476,14 @@ export default function Analytics() {
               period === 'custom'
                 ? `Từ ${startDate} đến ${endDate} (${summary.totalOrdersCount} đơn)`
                 : period === 'year'
-                ? `Cả năm ${selectedYear} (${summary.totalOrdersCount} / ${summary.totalSystemOrdersCount || 800} đơn toàn sàn)`
+                ? `Cả năm ${selectedYear} (${summary.totalOrdersCount} / ${summary.totalSystemOrdersCount ?? 0} đơn toàn sàn)`
                 : period === 'quarter'
                 ? `Quý ${selectedQuarter}/${selectedYear} (${summary.totalOrdersCount} đơn)`
                 : period === 'month'
                 ? `Tháng ${selectedMonth}/${selectedYear} (${summary.totalOrdersCount} đơn)`
                 : period === 'week'
                 ? `Tuần gần nhất (${selectedYear})`
-                : `Toàn bộ thời gian (${summary.totalOrdersCount || 800} đơn)`
+                : `Toàn bộ thời gian (${summary.totalOrdersCount ?? 0} đơn)`
             }
           </Badge>
         </div>
@@ -389,7 +507,7 @@ export default function Analytics() {
               <p className="text-xs text-indigo-200/70 mt-1">
                 {summary.vendorFeeRevenue > 0
                   ? `Doanh thu nền tảng = Phí ĐK vendor (${formatVND(summary.vendorFeeRevenue)}) + Thuế sàn ${financeConfig.commissionTaxRate}% (${formatVND(summary.orderTaxRevenue)})`
-                  : `Doanh thu sàn trong kỳ = Thuế sàn ${financeConfig.commissionTaxRate}% trên đơn hoàn tất (${formatVND(summary.orderTaxRevenue)}) • Lũy kế phí ĐK toàn sàn: ${formatVND(summary.allTimeVendorFeeRevenue || 50000000)}`}
+                  : `Doanh thu sàn trong kỳ = Thuế sàn ${financeConfig.commissionTaxRate}% trên đơn hoàn tất (${formatVND(summary.orderTaxRevenue)}) • Lũy kế phí ĐK toàn sàn: ${formatVND(summary.allTimeVendorFeeRevenue ?? 0)}`}
               </p>
             </div>
 
@@ -517,7 +635,7 @@ export default function Analytics() {
           { 
             title: 'Khách Hàng', 
             value: (summary.activeClientsCount || 0).toLocaleString(), 
-            sub: `${summary.activeClientsCount} hoạt động / ${summary.totalClientsCount || 120} tài khoản`, 
+            sub: `${summary.activeClientsCount ?? 0} hoạt động / ${summary.totalClientsCount ?? 0} tài khoản`, 
             icon: Users, 
             color: 'text-cyan-600', 
             bg: 'bg-cyan-100 dark:bg-cyan-950/60' 
@@ -546,6 +664,361 @@ export default function Analytics() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* =====================================================================
+          BẢNG THỐNG KÊ TỔNG TIỀN HÓA ĐƠN ĐA CHIỀU (YÊU CẦU ĐỒ ÁN #5 - TỐI ƯU)
+          ===================================================================== */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/50 dark:bg-slate-900/40">
+          <div>
+            <div className="flex items-center gap-2">
+              <Table2 className="w-5 h-5 text-indigo-600" />
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                Bảng Thống Kê Tổng Tiền Hóa Đơn Đa Chiều
+              </h3>
+              <Badge variant="outline" className="text-[11px] border-emerald-200 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                <Database className="w-3 h-3 mr-1 inline" />
+                Tối ưu SQL GROUP BY
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Tổng hợp trực tiếp từ CSDL theo Tháng, Quý, Năm / Các năm, theo Nhân viên phụ trách, và theo Sản phẩm
+            </p>
+          </div>
+
+          {/* 5 Tabs Selector */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+            {[
+              { id: 'month', label: `Theo Tháng (${selectedYear})` },
+              { id: 'quarter', label: `Theo Quý (${selectedYear})` },
+              { id: 'year', label: 'Theo Năm / Các năm' },
+              { id: 'employee', label: `Theo Nhân viên (${statisticsTables?.byEmployee?.length || 0})` },
+              { id: 'product', label: `Theo Sản phẩm (${statisticsTables?.byProduct?.length || 0})` },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => {
+                  setStatsTab(tab.id);
+                  setStatsQuickFilter('');
+                }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  statsTab === tab.id
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Sub-toolbar for quick client-side filter when on Employee or Product tab */}
+        {(statsTab === 'employee' || statsTab === 'product') && (
+          <div className="px-5 py-3 bg-slate-50/80 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              {statsTab === 'employee' ? (
+                <span>
+                  Thống kê tổng tiền hóa đơn theo từng <strong>Nhân viên phụ trách</strong> (kết hợp từ bảng <code className="font-mono text-indigo-600">Shipment.carrierId</code> &amp; <code className="font-mono text-indigo-600">OrderStatusHistory.employeeId</code>, mỗi hóa đơn tính 1 lần/NV).
+                </span>
+              ) : (
+                <span>
+                  Thống kê tổng thành tiền và số lượng bán theo từng <strong>Sản phẩm</strong> (nhóm trực tiếp từ bảng <code className="font-mono text-indigo-600">OrderDetail</code>).
+                </span>
+              )}
+            </div>
+            <div className="relative w-full sm:w-72">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={statsQuickFilter}
+                onChange={(e) => setStatsQuickFilter(e.target.value)}
+                placeholder={
+                  statsTab === 'employee'
+                    ? 'Lọc nhanh tên NV, mã NV, phòng ban...'
+                    : 'Lọc nhanh tên SP, danh mục, gian hàng...'
+                }
+                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Table Content */}
+        <div className="overflow-x-auto">
+          {(statsTab === 'month' || statsTab === 'quarter' || statsTab === 'year') && (
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="px-4 py-3">
+                    {statsTab === 'month'
+                      ? `Tháng (Năm ${selectedYear})`
+                      : statsTab === 'quarter'
+                      ? `Quý (Năm ${selectedYear})`
+                      : 'Năm'}
+                  </th>
+                  <th className="px-4 py-3 text-center">Tổng số HĐ</th>
+                  <th className="px-4 py-3 text-center">HĐ Hoàn tất</th>
+                  <th className="px-4 py-3 text-center">HĐ Đã hủy</th>
+                  <th className="px-4 py-3 text-right">Tổng Tạm tính</th>
+                  <th className="px-4 py-3 text-right">Giảm giá KM (Voucher)</th>
+                  <th className="px-4 py-3 text-right">Tổng tiền tất cả HĐ</th>
+                  <th className="px-4 py-3 text-right">Tổng tiền HĐ hoàn tất</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {timeRowsForCurrentTab.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                      Chưa có dữ liệu thống kê cho kỳ đã chọn.
+                    </td>
+                  </tr>
+                ) : (
+                  timeRowsForCurrentTab.map((row, idx) => (
+                    <tr key={row.month || row.quarter || row.year || row.key || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-100">
+                        {row.label || row.period}
+                      </td>
+                      <td className="px-4 py-3 text-center font-bold text-slate-700 dark:text-slate-200">
+                        {Number(row.totalOrders || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-emerald-600">
+                        {Number(row.completedOrders || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-rose-500">
+                        {Number(row.cancelledOrders || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">
+                        {formatVND(row.subtotalAmount)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-emerald-600 font-medium">
+                        {Number(row.discountAmount) > 0 ? `-${formatVND(row.discountAmount)}` : formatVND(0)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-800 dark:text-slate-100">
+                        {formatVND(row.allOrdersAmount ?? row.totalAmount)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-indigo-600 dark:text-indigo-400">
+                        {formatVND(row.completedAmount ?? row.totalAmount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {timeRowsForCurrentTab.length > 0 && (
+                <tfoot className="bg-indigo-50/70 dark:bg-indigo-950/40 border-t-2 border-indigo-200 dark:border-indigo-800 font-bold text-slate-800 dark:text-slate-100">
+                  <tr>
+                    <td className="px-4 py-3 uppercase text-indigo-700 dark:text-indigo-300">
+                      {statsTab === 'month'
+                        ? `TỔNG CỘNG 12 THÁNG (${selectedYear})`
+                        : statsTab === 'quarter'
+                        ? `TỔNG CỘNG 4 QUÝ (${selectedYear})`
+                        : 'TỔNG CỘNG TẤT CẢ CÁC NĂM'}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {timeTableTotals.totalOrders.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-center text-emerald-600">
+                      {timeTableTotals.completedOrders.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-center text-rose-500">
+                      {timeTableTotals.cancelledOrders.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {formatVND(timeTableTotals.subtotalAmount)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-emerald-600">
+                      -{formatVND(timeTableTotals.discountAmount)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {formatVND(timeTableTotals.allOrdersAmount)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-indigo-600 dark:text-indigo-400 text-sm">
+                      {formatVND(timeTableTotals.completedAmount)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          )}
+
+          {statsTab === 'employee' && (
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="px-4 py-3 w-12 text-center">STT</th>
+                  <th className="px-4 py-3">Nhân viên phụ trách</th>
+                  <th className="px-4 py-3">Phòng ban</th>
+                  <th className="px-4 py-3 text-center">Số HĐ phụ trách</th>
+                  <th className="px-4 py-3 text-center">HĐ Hoàn tất</th>
+                  <th className="px-4 py-3 text-center">HĐ Đã hủy</th>
+                  <th className="px-4 py-3 text-right">Tổng KM trên HĐ</th>
+                  <th className="px-4 py-3 text-right">Tổng tiền tất cả HĐ</th>
+                  <th className="px-4 py-3 text-right">Tổng tiền HĐ hoàn tất</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredEmployeesStats.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                      Không tìm thấy nhân viên phù hợp trong bảng thống kê.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredEmployeesStats.map((emp, idx) => (
+                    <tr key={emp.employeeId || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="px-4 py-3 text-center font-mono text-slate-400">
+                        {idx + 1}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-800 dark:text-slate-100">
+                          {emp.fullName}
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-400">
+                          Mã NV: {emp.employeeCode}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className="text-[11px]">
+                          {emp.department}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-center font-bold text-slate-700 dark:text-slate-200">
+                        {Number(emp.totalOrders || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-emerald-600">
+                        {Number(emp.completedOrders || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-rose-500">
+                        {Number(emp.cancelledOrders || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-right text-emerald-600">
+                        {Number(emp.discountAmount) > 0 ? `-${formatVND(emp.discountAmount)}` : formatVND(0)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-800 dark:text-slate-100">
+                        {formatVND(emp.totalOrderAmount ?? emp.totalAmount)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-indigo-600 dark:text-indigo-400">
+                        {formatVND(emp.completedAmount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {filteredEmployeesStats.length > 0 && (
+                <tfoot className="bg-indigo-50/70 dark:bg-indigo-950/40 border-t-2 border-indigo-200 dark:border-indigo-800 font-bold text-slate-800 dark:text-slate-100">
+                  <tr>
+                    <td colSpan={3} className="px-4 py-3 uppercase text-indigo-700 dark:text-indigo-300">
+                      TỔNG CỘNG ({filteredEmployeesStats.length} NHÂN VIÊN)
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {employeeTableTotals.totalOrders.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-center text-emerald-600">
+                      {employeeTableTotals.completedOrders.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-center text-rose-500">
+                      {employeeTableTotals.cancelledOrders.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-right text-emerald-600">
+                      -{formatVND(employeeTableTotals.discountAmount)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {formatVND(employeeTableTotals.totalOrderAmount)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-indigo-600 dark:text-indigo-400 text-sm">
+                      {formatVND(employeeTableTotals.completedAmount)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          )}
+
+          {statsTab === 'product' && (
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase font-semibold border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="px-4 py-3 w-12 text-center">STT</th>
+                  <th className="px-4 py-3">Sản phẩm</th>
+                  <th className="px-4 py-3">Danh mục</th>
+                  <th className="px-4 py-3">Gian hàng (Vendor)</th>
+                  <th className="px-4 py-3 text-center">Số HĐ chứa SP</th>
+                  <th className="px-4 py-3 text-center">Tổng SL bán</th>
+                  <th className="px-4 py-3 text-right">Đơn giá TB</th>
+                  <th className="px-4 py-3 text-right">Tổng tiền tất cả HĐ</th>
+                  <th className="px-4 py-3 text-right">Tổng tiền HĐ hoàn tất</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredProductsStats.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                      Không tìm thấy sản phẩm phù hợp trong bảng thống kê.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProductsStats.map((prod, idx) => (
+                    <tr key={prod.productId || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="px-4 py-3 text-center font-mono text-slate-400">
+                        {idx + 1}
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-100 max-w-xs truncate">
+                        {prod.productName}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className="text-[11px]">
+                          {prod.categoryName}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                        {prod.vendorName}
+                      </td>
+                      <td className="px-4 py-3 text-center font-semibold text-slate-700 dark:text-slate-200">
+                        {Number(prod.orderCount || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-center font-bold text-blue-600 dark:text-blue-400">
+                        {Number(prod.totalQuantity || prod.allQuantity || 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">
+                        {formatVND(prod.unitPrice ?? prod.unitPriceAvg)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-800 dark:text-slate-100">
+                        {formatVND(prod.allGrossAmount ?? prod.totalLineAmount)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-indigo-600 dark:text-indigo-400">
+                        {formatVND(prod.netAmount ?? prod.grossAmount ?? prod.completedLineAmount)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {filteredProductsStats.length > 0 && (
+                <tfoot className="bg-indigo-50/70 dark:bg-indigo-950/40 border-t-2 border-indigo-200 dark:border-indigo-800 font-bold text-slate-800 dark:text-slate-100">
+                  <tr>
+                    <td colSpan={4} className="px-4 py-3 uppercase text-indigo-700 dark:text-indigo-300">
+                      TỔNG CỘNG ({filteredProductsStats.length} SẢN PHẨM)
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {productTableTotals.orderCount.toLocaleString()} lượt HĐ
+                    </td>
+                    <td className="px-4 py-3 text-center text-blue-600 dark:text-blue-400">
+                      {productTableTotals.totalQuantity.toLocaleString()} SP
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-400">—</td>
+                    <td className="px-4 py-3 text-right">
+                      {formatVND(productTableTotals.allGrossAmount)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-indigo-600 dark:text-indigo-400 text-sm">
+                      {formatVND(productTableTotals.netAmount)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          )}
+        </div>
       </div>
 
       {/* Charts Section */}

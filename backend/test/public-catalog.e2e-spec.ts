@@ -40,7 +40,7 @@ describe('Public catalog (HTTP integration)', () => {
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue({
-        extended: {},
+        extended: { $queryRaw: jest.fn().mockResolvedValue([{ result: 1 }]) },
         $queryRaw: jest.fn().mockResolvedValue([{ result: 1 }]),
       })
       .overrideProvider(ProductService)
@@ -89,6 +89,6 @@ describe('Public catalog (HTTP integration)', () => {
   it('still protects catalog write operations', async () => {
     await request(server()).post('/api/products').send({}).expect(401);
     await request(server()).post('/api/categories').send({}).expect(401);
-    await request(server()).get('/api/products/admin/all').expect(401);
+    await request(server()).get('/api/products/vendor/mine').expect(401);
   });
 });

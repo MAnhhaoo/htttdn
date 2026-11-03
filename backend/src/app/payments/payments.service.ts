@@ -26,13 +26,13 @@ export class PaymentsService {
   ) {}
 
   listAll() {
-    return this.prisma.payment.findMany({
+    return this.prisma.extended.payment.findMany({
       include: paymentInclude,
       orderBy: { createdAt: 'desc' }});
   }
 
   async getByOrder(orderId: string, user: UserInfo) {
-    const payment = await this.prisma.payment.findUnique({
+    const payment = await this.prisma.extended.payment.findUnique({
       where: { orderId },
       include: paymentInclude});
     if (!payment) throw new NotFoundException('Thanh toán không tồn tại');
@@ -41,7 +41,7 @@ export class PaymentsService {
   }
 
   async processDemoPayment(id: string, success: boolean, user: UserInfo) {
-    const payment = await this.prisma.payment.findUnique({ where: { id }, include: paymentInclude });
+    const payment = await this.prisma.extended.payment.findUnique({ where: { id }, include: paymentInclude });
     if (!payment) throw new NotFoundException('Thanh toán không tồn tại');
     if (payment.order.clientId !== user.userID) throw new ForbiddenException('Bạn không có quyền thanh toán đơn hàng này');
     if (payment.method === PaymentMethod.cod) throw new BadRequestException('Đơn COD được thanh toán khi giao hàng');
@@ -49,7 +49,7 @@ export class PaymentsService {
   }
 
   async updateStatus(id: string, dto: UpdatePaymentStatusDto) {
-    const current = await this.prisma.payment.findUnique({
+    const current = await this.prisma.extended.payment.findUnique({
       where: { id },
       include: paymentInclude});
     if (!current) throw new NotFoundException('Thanh toán không tồn tại');
@@ -85,7 +85,7 @@ export class PaymentsService {
       );
     }
     const now = new Date();
-    const payment = await this.prisma.payment.update({
+    const payment = await this.prisma.extended.payment.update({
       where: { id },
       data: {
         ...dto,

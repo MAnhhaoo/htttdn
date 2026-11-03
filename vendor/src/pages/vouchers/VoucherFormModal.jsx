@@ -4,25 +4,17 @@ import { voucherService } from '../../services/voucherService';
 import { productService } from '../../services/productService';
 import { Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatHelpers';
+import {
+  dateInputValue,
+  buildBaseVoucherPayload,
+  validateBaseVoucherPayload,
+  extractVoucherErrorMessage,
+} from '../../utils/voucherFormHelpers';
 
 const emptyForm = () => ({
   code: '', name: '', discountType: 'percentage', discountValue: '', quantity: '',
   startDate: '', endDate: '', status: 'active', productIds: [],
 });
-
-function dateInputValue(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function dateTimestamp(value, endOfDay, original) {
-  if (original && value === dateInputValue(original)) return new Date(original).toISOString();
-  const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  if (endOfDay) date.setHours(23, 59, 59, 999);
-  return date.toISOString();
-}
 
 export default function VoucherFormModal({ isOpen, onClose, voucherToEdit, onSave }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -96,26 +88,14 @@ export default function VoucherFormModal({ isOpen, onClose, voucherToEdit, onSav
     setError('');
     try {
       const payload = {
-        code: formData.code.trim().toUpperCase(),
-        name: formData.name.trim(),
-        discountType: formData.discountType,
-        discountValue: Number(formData.discountValue),
-        quantity: Number(formData.quantity),
-        perUserLimit: voucherToEdit?.perUserLimit ?? 1,
-        startDate: dateTimestamp(formData.startDate, false, voucherToEdit?.startDate),
-        endDate: dateTimestamp(formData.endDate, true, voucherToEdit?.endDate),
-        status: formData.status,
+        ...buildBaseVoucherPayload(formData, voucherToEdit),
         productIds: formData.productIds,
       };
       if (payload.code.length < 3 || !payload.name) throw new Error('Mã cần ít nhất 3 ký tự và tên voucher không được để trống.');
       if (!payload.productIds.length) throw new Error('Vui lòng chọn ít nhất một sản phẩm áp dụng.');
       if (payload.productIds.length > 100) throw new Error('Mỗi voucher được chọn tối đa 100 sản phẩm.');
       if (payload.productIds.some(id => !products.some(product => product.id === id))) throw new Error('Có sản phẩm không còn khả dụng. Hãy bỏ chọn và chọn lại sản phẩm của shop.');
-      if (!Number.isFinite(payload.discountValue) || payload.discountValue <= 0) throw new Error('Giá trị giảm phải lớn hơn 0.');
-      if (payload.discountType === 'percentage' && payload.discountValue > 100) throw new Error('Phần trăm giảm không được vượt quá 100.');
-      if (!Number.isInteger(payload.quantity) || payload.quantity <= 0) throw new Error('Số lượng voucher phải là số nguyên lớn hơn 0.');
-      if (payload.perUserLimit > payload.quantity) throw new Error('Số lượng voucher không được nhỏ hơn giới hạn mỗi người.');
-      if (new Date(payload.endDate) <= new Date(payload.startDate)) throw new Error('Ngày kết thúc phải sau thời điểm bắt đầu.');
+      validateBaseVoucherPayload(payload);
       setIsSubmitting(true);
       if (voucherToEdit) {
         await voucherService.updateVoucher(voucherToEdit.id, payload);
@@ -124,9 +104,7 @@ export default function VoucherFormModal({ isOpen, onClose, voucherToEdit, onSav
       }
       await onSave();
     } catch (err) {
-      const data = err.response?.data;
-      const messages = data?.errors?.map(item => item.message).filter(Boolean);
-      setError(messages?.length ? messages.join(' ') : data?.message || err.message || 'Lưu voucher thất bại.');
+      setError(extractVoucherErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }

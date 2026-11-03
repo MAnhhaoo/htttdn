@@ -14,8 +14,12 @@ export default function UserDetailModal({ isOpen, onClose, user }) {
     >
       <div className="space-y-6">
         <div className="flex items-center space-x-4">
-          <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-2xl font-bold">
-            {user.fullName.charAt(0)}
+          <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-2xl font-bold overflow-hidden shrink-0">
+            {user.avatarUrl ? (
+              <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+            ) : (
+              user.fullName.charAt(0)
+            )}
           </div>
           <div>
             <h3 className="text-lg font-bold text-slate-800 dark:text-white">{user.fullName}</h3>

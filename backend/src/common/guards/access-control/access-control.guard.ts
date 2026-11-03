@@ -34,11 +34,11 @@ export class AccessControlGuard implements CanActivate {
 
   private async resolveUser(userID: string): Promise<{ user: any; role: UserRole }> {
     const select = { status: true, deletedAt: true };
-    let user: any = await this.prismaService.admin.findUnique({ where: { id: userID }, select });
+    let user: any = await this.prismaService.extended.admin.findUnique({ where: { id: userID }, select });
     let role: UserRole = 'admin';
-    if (!user) { user = await this.prismaService.client.findUnique({ where: { id: userID }, select }); role = 'client'; }
-    if (!user) { user = await this.prismaService.vendor.findUnique({ where: { id: userID }, select: { ...select, approvalStatus: true } }); role = 'vendor'; }
-    if (!user) { user = await this.prismaService.employee.findUnique({ where: { id: userID }, select }); role = 'employee'; }
+    if (!user) { user = await this.prismaService.extended.client.findUnique({ where: { id: userID }, select }); role = 'client'; }
+    if (!user) { user = await this.prismaService.extended.vendor.findUnique({ where: { id: userID }, select: { ...select, approvalStatus: true } }); role = 'vendor'; }
+    if (!user) { user = await this.prismaService.extended.employee.findUnique({ where: { id: userID }, select }); role = 'employee'; }
     return { user, role };
   }
 

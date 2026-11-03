@@ -29,9 +29,6 @@ const baseEnvSchema = z.object({
 
   MULTER_DESTINATION_FILE: z.string().default('./uploads'),
 
-  CLOUDINARY_NAME: zodWarnOptional(z.string(), 'CLOUDINARY_NAME'),
-  CLOUDINARY_API_KEY: zodWarnOptional(z.string(), 'CLOUDINARY_API_KEY'),
-  CLOUDINARY_API_SECRET: zodWarnOptional(z.string(), 'CLOUDINARY_API_SECRET'),
 
   CACHE_INTERNAL_TTL: z.coerce.number().default(30000),
 

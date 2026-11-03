@@ -1,51 +1,32 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Search, Edit, Trash2, Plus, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { Search, Edit, Trash2, Plus, Loader2, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { categoriesApi } from '../../api';
 import { formatDate } from '../../utils/formatHelpers';
-import { Button, Input } from '../../components/ui';
+import { Button } from '../../components/ui';
+import { usePaginatedCacheList } from '../../hooks/usePaginatedCacheList';
 import CategoryFormModal from './CategoryFormModal';
 
 export default function CategoryManagement() {
-  const [categories, setCategories] = useState([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+  const {
+    list: categories,
+    search,
+    setSearch,
+    loading,
+    page,
+    setPage,
+    totalPages,
+    totalItems,
+    reusedFromCache,
+    fetchList: fetchCategories,
+    handleResetAndReuseList,
+  } = usePaginatedCacheList({
+    fetcher: categoriesApi.getCategories,
+    itemsPerPage: 10,
+    realtimeEvent: 'miva:categories',
+  });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [categoryToEdit, setCategoryToEdit] = useState(null);
-
-  const fetchCategories = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = { page, itemPerPage: 10 };
-      if (search) params.search = search;
-
-      const res = await categoriesApi.getCategories(params);
-      const data = res.data;
-      setCategories(data.list || []);
-      setTotalPages(data.totalPages || 1);
-      setTotalItems(data.totalItems || 0);
-    } catch (err) {
-      console.error('Error fetching categories:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search]);
-
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
-
-  useEffect(() => {
-    window.addEventListener('miva:categories', fetchCategories);
-    return () => window.removeEventListener('miva:categories', fetchCategories);
-  }, [fetchCategories]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search]);
 
   const handleAddClick = () => {
     setCategoryToEdit(null);
@@ -61,7 +42,7 @@ export default function CategoryManagement() {
     if (window.confirm('Bạn có chắc chắn muốn xóa danh mục này?')) {
       try {
         await categoriesApi.deleteCategory(categoryId);
-        fetchCategories();
+        fetchCategories(true);
       } catch (err) {
         alert(err.response?.data?.message || 'Xóa danh mục thất bại');
       }
@@ -76,22 +57,44 @@ export default function CategoryManagement() {
         await categoriesApi.createCategory(savedData);
       }
       setIsModalOpen(false);
-      fetchCategories();
+      fetchCategories(true);
     } catch (err) {
       alert(err.response?.data?.message || 'Lưu danh mục thất bại');
     }
   };
 
+  const isFiltered = Boolean(search.trim() || page !== 1);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Category Management</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Category Management</h1>
+            {reusedFromCache && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800">
+                ⚡ Tái sử dụng DS gốc (Cache)
+              </span>
+            )}
+          </div>
           <p className="text-slate-500 dark:text-slate-400">{totalItems} categories</p>
         </div>
-        <Button icon={Plus} onClick={handleAddClick}>
-          Add Category
-        </Button>
+        <div className="flex items-center gap-2">
+          {isFiltered && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleResetAndReuseList()}
+              className="flex items-center gap-1.5 border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Bỏ tìm kiếm / Tái sử dụng DS gốc
+            </Button>
+          )}
+          <Button icon={Plus} onClick={handleAddClick}>
+            Add Category
+          </Button>
+        </div>
       </div>
 
       <div className="bg-white dark:bg-slate-900 transition-colors rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">

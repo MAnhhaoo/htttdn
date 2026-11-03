@@ -1,23 +1,48 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
-import { Mail, Lock, Eye, EyeOff, User, Phone, ArrowRight, MapPin } from 'lucide-react';
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  User,
+  Phone,
+  ArrowRight,
+  MapPin,
+  Calendar,
+  Users,
+} from "lucide-react";
+
+const GENDER_OPTIONS = [
+  { value: "", label: "Chọn giới tính (Tùy chọn)" },
+  { value: "male", label: "Nam" },
+  { value: "female", label: "Nữ" },
+  { value: "other", label: "Khác" },
+  { value: "prefer_not_to_say", label: "Không muốn tiết lộ" },
+];
 
 export default function Register() {
   const { register, isRegistering, registerError } = useAuth();
   const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    password: '',
-    phone: '',
-    address: ''
+    fullName: "",
+    email: "",
+    password: "",
+    phone: "",
+    address: "",
+    dateOfBirth: "",
+    gender: "",
   });
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await register(formData);
+      await register({
+        ...formData,
+        dateOfBirth: formData.dateOfBirth || null,
+        gender: formData.gender || null,
+      });
     } catch (err) {
       // Error handled by hook
     }
@@ -25,9 +50,11 @@ export default function Register() {
 
   return (
     <>
-      <div className="">
-        <p className="text-[#1a4f40] font-bold text-[10px] tracking-widest uppercase mb-3">Bắt đầu cùng miva</p>
-        <h2 className="text-[32px] font-medium text-gray-900 mb-3 tracking-tight">
+      <div className="mb-6">
+        <p className="text-[#1a4f40] font-bold text-[10px] tracking-widest uppercase mb-2">
+          Bắt đầu cùng miva
+        </p>
+        <h2 className="text-[32px] font-medium text-gray-900 mb-2 tracking-tight">
           Tạo tài khoản
         </h2>
         <p className="text-gray-500 text-sm">
@@ -35,91 +62,182 @@ export default function Register() {
         </p>
       </div>
 
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form className="space-y-4" onSubmit={handleSubmit}>
         {registerError && (
           <div className="bg-red-50 text-red-500 p-3 rounded-lg text-sm text-center font-medium">
-            {registerError.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.'}
+            {registerError.response?.data?.errors?.[0]?.message ||
+              registerError.response?.data?.message ||
+              "Đăng ký thất bại. Vui lòng thử lại."}
           </div>
         )}
 
         <div>
-          <label className="block text-xs font-bold text-gray-800 mb-2">Họ và Tên</label>
+          <label className="block text-xs font-bold text-gray-800 mb-2">
+            Họ và Tên
+          </label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <User className="h-[18px] w-[18px] text-gray-400" strokeWidth={1.5} />
+              <User
+                className="h-[18px] w-[18px] text-gray-400"
+                strokeWidth={1.5}
+              />
             </div>
             <input
               required
-              className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded text-sm transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
+              className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded text-sm text-[#1a4f40] transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
               placeholder="Nguyễn Minh Anh"
               value={formData.fullName}
-              onChange={e => setFormData({ ...formData, fullName: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, fullName: e.target.value })
+              }
             />
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-bold text-gray-800 mb-2">Email</label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <Mail className="h-[18px] w-[18px] text-gray-400" strokeWidth={1.5} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-800 mb-2">
+              Email
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Mail
+                  className="h-[18px] w-[18px] text-gray-400"
+                  strokeWidth={1.5}
+                />
+              </div>
+              <input
+                type="email"
+                required
+                className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded text-sm text-[#1a4f40] transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
+                placeholder="ban@email.com"
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
+              />
             </div>
-            <input
-              type="email"
-              required
-              className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded text-sm transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
-              placeholder="ban@email.com"
-              value={formData.email}
-              onChange={e => setFormData({ ...formData, email: e.target.value })}
-            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-800 mb-2">
+              Số điện thoại
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Phone
+                  className="h-[18px] w-[18px] text-gray-400"
+                  strokeWidth={1.5}
+                />
+              </div>
+              <input
+                required
+                className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded text-sm text-[#1a4f40] transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
+                placeholder="0912 345 678"
+                value={formData.phone}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: e.target.value })
+                }
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-800 mb-2">
+              Ngày sinh
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Calendar
+                  className="h-[18px] w-[18px] text-gray-400"
+                  strokeWidth={1.5}
+                />
+              </div>
+              <input
+                type="date"
+                max={new Date().toISOString().split("T")[0]}
+                className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded text-sm text-[#1a4f40] transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
+                value={formData.dateOfBirth}
+                onChange={(e) =>
+                  setFormData({ ...formData, dateOfBirth: e.target.value })
+                }
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-800 mb-2">
+              Giới tính
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                <Users
+                  className="h-[18px] w-[18px] text-gray-400"
+                  strokeWidth={1.5}
+                />
+              </div>
+              <select
+                className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded text-sm transition-colors bg-white outline-none text-[#1a4f40] focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
+                value={formData.gender}
+                onChange={(e) =>
+                  setFormData({ ...formData, gender: e.target.value })
+                }
+              >
+                {GENDER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-gray-800 mb-2">Số điện thoại</label>
+          <label className="block text-xs font-bold text-gray-800 mb-2">
+            Địa chỉ
+          </label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <Phone className="h-[18px] w-[18px] text-gray-400" strokeWidth={1.5} />
+              <MapPin
+                className="h-[18px] w-[18px] text-gray-400"
+                strokeWidth={1.5}
+              />
             </div>
             <input
               required
-              className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded text-sm transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
-              placeholder="0912 345 678"
-              value={formData.phone}
-              onChange={e => setFormData({ ...formData, phone: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-gray-800 mb-2">Địa chỉ</label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <MapPin className="h-[18px] w-[18px] text-gray-400" strokeWidth={1.5} />
-            </div>
-            <input
-              required
-              className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded text-sm transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
+              className="block w-full pl-10 pr-4 py-3 border border-gray-200 rounded text-sm text-[#1a4f40] transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
               placeholder="Nhập địa chỉ của bạn"
               value={formData.address}
-              onChange={e => setFormData({ ...formData, address: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, address: e.target.value })
+              }
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-bold text-gray-800 mb-2">Mật khẩu</label>
+          <label className="block text-xs font-bold text-gray-800 mb-2">
+            Mật khẩu
+          </label>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <Lock className="h-[18px] w-[18px] text-gray-400" strokeWidth={1.5} />
+              <Lock
+                className="h-[18px] w-[18px] text-gray-400"
+                strokeWidth={1.5}
+              />
             </div>
             <input
               type={showPassword ? "text" : "password"}
               required
-              className="block w-full pl-10 pr-10 py-3 border border-gray-200 rounded text-sm transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
+              className="block w-full pl-10 pr-10 py-3 border border-gray-200 rounded text-sm text-[#1a4f40] transition-colors bg-white outline-none focus:border-[#1a4f40] focus:ring-1 focus:ring-[#1a4f40]"
               placeholder="Nhập mật khẩu"
               value={formData.password}
-              onChange={e => setFormData({ ...formData, password: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
             />
             <button
               type="button"
@@ -127,9 +245,15 @@ export default function Register() {
               onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? (
-                <EyeOff className="h-[18px] w-[18px] text-gray-400 hover:text-gray-600" strokeWidth={1.5} />
+                <EyeOff
+                  className="h-[18px] w-[18px] text-gray-400 hover:text-gray-600"
+                  strokeWidth={1.5}
+                />
               ) : (
-                <Eye className="h-[18px] w-[18px] text-gray-400 hover:text-gray-600" strokeWidth={1.5} />
+                <Eye
+                  className="h-[18px] w-[18px] text-gray-400 hover:text-gray-600"
+                  strokeWidth={1.5}
+                />
               )}
             </button>
           </div>
@@ -146,7 +270,15 @@ export default function Register() {
           </div>
           <div className="ml-2.5 text-[11px] text-gray-600">
             <label htmlFor="terms" className="cursor-pointer">
-              Tôi đồng ý với <a href="#" className="font-bold text-gray-800 hover:underline">Điều khoản sử dụng</a> và <a href="#" className="font-bold text-gray-800 hover:underline">Chính sách bảo mật</a> của MIVA.
+              Tôi đồng ý với{" "}
+              <a href="#" className="font-bold text-gray-800 hover:underline">
+                Điều khoản sử dụng
+              </a>{" "}
+              và{" "}
+              <a href="#" className="font-bold text-gray-800 hover:underline">
+                Chính sách bảo mật
+              </a>{" "}
+              của MIVA.
             </label>
           </div>
         </div>
@@ -156,14 +288,17 @@ export default function Register() {
           disabled={isRegistering}
           className="w-full flex items-center justify-center gap-2 bg-[#1a4f40] text-white py-3.5 px-4 rounded-sm font-bold text-sm hover:bg-[#133c30] transition-colors disabled:opacity-70 mt-2"
         >
-          {isRegistering ? 'Đang xử lý...' : 'Tạo tài khoản'}
+          {isRegistering ? "Đang xử lý..." : "Tạo tài khoản"}
           {!isRegistering && <ArrowRight className="w-4 h-4" strokeWidth={2} />}
         </button>
       </form>
 
-      <p className="mt-8 text-center text-[13px] text-gray-600">
-        Đã có tài khoản?{' '}
-        <Link to="/login" className="font-bold text-[#1a4f40] hover:opacity-80 transition-opacity">
+      <p className="mt-6 text-center text-[13px] text-gray-600">
+        Đã có tài khoản?{" "}
+        <Link
+          to="/login"
+          className="font-bold text-[#1a4f40] hover:opacity-80 transition-opacity"
+        >
           Đăng nhập
         </Link>
       </p>

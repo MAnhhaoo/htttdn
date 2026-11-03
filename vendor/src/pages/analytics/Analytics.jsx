@@ -72,45 +72,29 @@ export default function Analytics() {
   const { stats, revenueData, topProductsData } = useMemo(() => {
     if (!allProducts.length && !allVendorOrders.length) {
       return {
-        stats: { revenue: 0, totalOrders: 0, avgRating: 0, conversionRate: 0 },
+        stats: { revenue: 0, totalOrders: 0, completedOrders: 0, avgRating: 0, conversionRate: 0 },
         revenueData: [],
         topProductsData: []
       };
     }
 
-    // --- Calculate overall KPIs ---
-    let revenue = 0;
-    const vendorOrderSet = new Set();
-    const completedOrderSet = new Set();
-    
-    allVendorOrders.forEach(od => {
-      vendorOrderSet.add(od.order.id);
-      if (od.order.status === 'completed') {
-        revenue += Number(od.price) * od.quantity;
-        completedOrderSet.add(od.order.id);
-      }
-    });
+    const getOrderNetRatio = (order) => {
+      const discount = Number(order?.discountAmount || 0);
+      if (discount <= 0) return 1;
+      const netTotal = Number(order?.totalAmount || 0);
+      const grossTotal = netTotal + discount;
+      return grossTotal > 0 ? netTotal / grossTotal : 1;
+    };
 
-    const totalOrders = vendorOrderSet.size;
-    const completedOrders = completedOrderSet.size;
-
-    let totalRating = 0;
-    allReviews.forEach(r => {
-      if (r.rating) totalRating += r.rating;
-    });
-    const avgRating = allReviews.length > 0 ? (totalRating / allReviews.length).toFixed(1) : 0;
-    const conversionRate = totalOrders > 0 ? ((completedOrders / totalOrders) * 100).toFixed(1) : 0;
-
-    const statsData = { revenue, totalOrders, avgRating, conversionRate };
-
-    // --- Calculate Chart Data based on timeRange ---
+    // --- Calculate Chart Data & Period Filter based on timeRange ---
     const rangeConfig = {
       '7d': { days: 7, type: 'day' },
       '1m': { days: 30, type: 'day' },
       '6m': { months: 6, type: 'month' },
-      '1y': { months: 12, type: 'month' }
+      '1y': { months: 12, type: 'month' },
+      'all': { months: 12, type: 'month' }
     };
-    const config = rangeConfig[timeRange];
+    const config = rangeConfig[timeRange] || rangeConfig['7d'];
     const chartDataMap = new Map();
     
     if (config.type === 'day') {
@@ -131,6 +115,8 @@ export default function Analytics() {
       }
     }
 
+    const filteredVendorOrders = [];
+
     allVendorOrders.forEach(od => {
       const orderDate = new Date(od.order.createdAt);
       let matchKey = '';
@@ -140,14 +126,45 @@ export default function Analytics() {
         matchKey = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
       }
 
+      const itemNetRevenue = Math.round(Number(od.price) * od.quantity * getOrderNetRatio(od.order));
+
       if (chartDataMap.has(matchKey)) {
         const dayData = chartDataMap.get(matchKey);
         dayData.orderIds.add(od.order.id);
         if (od.order.status === 'completed') {
-          dayData.revenue += Number(od.price) * od.quantity;
+          dayData.revenue += itemNetRevenue;
         }
       }
+
+      if (timeRange === 'all' || chartDataMap.has(matchKey)) {
+        filteredVendorOrders.push({ ...od, itemNetRevenue });
+      }
     });
+
+    // --- Calculate KPIs for selected period ---
+    let revenue = 0;
+    const vendorOrderSet = new Set();
+    const completedOrderSet = new Set();
+    
+    filteredVendorOrders.forEach(od => {
+      vendorOrderSet.add(od.order.id);
+      if (od.order.status === 'completed') {
+        revenue += od.itemNetRevenue;
+        completedOrderSet.add(od.order.id);
+      }
+    });
+
+    const totalOrders = vendorOrderSet.size;
+    const completedOrders = completedOrderSet.size;
+
+    let totalRating = 0;
+    allReviews.forEach(r => {
+      if (r.rating) totalRating += Number(r.rating);
+    });
+    const avgRating = allReviews.length > 0 ? (totalRating / allReviews.length).toFixed(1) : 0;
+    const conversionRate = totalOrders > 0 ? ((completedOrders / totalOrders) * 100).toFixed(1) : 0;
+
+    const statsData = { revenue, totalOrders, completedOrders, avgRating, conversionRate };
 
     const revData = Array.from(chartDataMap.values()).map(d => ({
       name: d.name,
@@ -155,13 +172,13 @@ export default function Analytics() {
       orders: d.orderIds.size
     }));
 
-    // --- Calculate Top Products Data ---
+    // --- Calculate Top Products Data for selected period ---
     const productSales = {};
-    allVendorOrders.forEach(od => {
+    filteredVendorOrders.forEach(od => {
       if (od.order.status === 'completed') {
         const pName = od.productName || 'Unknown Product';
         if (!productSales[pName]) productSales[pName] = 0;
-        productSales[pName] += Number(od.price) * od.quantity;
+        productSales[pName] += od.itemNetRevenue;
       }
     });
 
@@ -195,16 +212,16 @@ export default function Analytics() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { title: 'Total Revenue', value: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(stats.revenue), icon: DollarSign, color: 'text-indigo-600', bg: 'bg-indigo-100', trend: '+12%' },
-          { title: 'Total Orders', value: stats.totalOrders.toString(), icon: ShoppingBag, color: 'text-blue-600', bg: 'bg-blue-100', trend: '+8%' },
-          { title: 'Average Rating', value: stats.avgRating, icon: Star, color: 'text-amber-600', bg: 'bg-amber-100', trend: '+0.2' },
-          { title: 'Conversion Rate', value: `${stats.conversionRate}%`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-100', trend: '+0.5%' },
+          { title: 'Total Revenue', value: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(stats.revenue), icon: DollarSign, color: 'text-indigo-600', bg: 'bg-indigo-100', sub: `${stats.completedOrders || 0} đơn hoàn tất` },
+          { title: 'Total Orders', value: stats.totalOrders.toString(), icon: ShoppingBag, color: 'text-blue-600', bg: 'bg-blue-100', sub: 'Trong kỳ đã chọn' },
+          { title: 'Average Rating', value: stats.avgRating, icon: Star, color: 'text-amber-600', bg: 'bg-amber-100', sub: `${allReviews.length} lượt đánh giá` },
+          { title: 'Conversion Rate', value: `${stats.conversionRate}%`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-100', sub: 'Tỷ lệ đơn hoàn tất' },
         ].map((card, idx) => (
           <div key={idx} className="bg-white dark:bg-slate-900 transition-colors p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{card.title}</p>
               <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{card.value}</h3>
-              <p className="text-xs text-green-600 mt-1 font-medium">{card.trend} this week</p>
+              <p className="text-xs text-green-600 mt-1 font-medium">{card.sub}</p>
             </div>
             <div className={`w-12 h-12 rounded-full flex items-center justify-center ${card.bg}`}>
               <card.icon className={`w-6 h-6 ${card.color}`} />
@@ -227,6 +244,7 @@ export default function Analytics() {
               <option value="1m">1 tháng trước</option>
               <option value="6m">6 tháng trước</option>
               <option value="1y">1 năm trước</option>
+              <option value="all">Toàn thời gian</option>
             </select>
           </div>
           <div className="h-80 w-full">

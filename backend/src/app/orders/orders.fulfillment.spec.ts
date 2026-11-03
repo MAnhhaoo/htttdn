@@ -3,7 +3,8 @@ import { OrdersService } from './orders.service';
 
 const vendorId = '11111111-1111-4111-8111-111111111111';
 const parcelId = '22222222-2222-4222-8222-222222222222';
-const user = { userID: vendorId, role: 'vendor' as const };
+type TestUser = Parameters<OrdersService['updateStatus']>[2];
+const user = { userID: vendorId, role: 'vendor' } as unknown as TestUser;
 
 function setup(status: VendorOrderStatus = 'confirmed', parentStatus: OrderStatus = 'confirmed') {
   const parent = {
@@ -37,6 +38,7 @@ function setup(status: VendorOrderStatus = 'confirmed', parentStatus: OrderStatu
     order: { findUnique: jest.fn().mockResolvedValue(parent) },
     $transaction: jest.fn(callback => callback(tx)),
   };
+  Object.assign(prisma, { extended: prisma, extendedTransaction: prisma.$transaction });
   const realtime = {
     emitToUser: jest.fn(), emitToAdmins: jest.fn(), emitToEmployees: jest.fn(),
     emitToVendor: jest.fn(), emitProductUpdated: jest.fn(),
@@ -52,7 +54,7 @@ describe('Vendor fulfillment synchronization', () => {
   ] as const)('synchronizes an existing pending parcel when operations updates %s -> %s', async (parentStatus, nextStatus) => {
     const { service, parent, tx } = setup('pending', parentStatus);
     jest.spyOn(service, 'getById').mockResolvedValue(parent as any);
-    await service.updateStatus(parent.id, { status: nextStatus }, { userID: 'admin', role: 'admin' });
+    await service.updateStatus(parent.id, { status: nextStatus }, { userID: 'admin', role: 'admin' } as unknown as TestUser);
     expect(tx.vendorOrder.update).toHaveBeenCalledWith({ where: { id: parcelId }, data: { status: 'confirmed' } });
     expect(tx.vendorOrder.create).not.toHaveBeenCalled();
     expect(tx.shipment.create).not.toHaveBeenCalled();

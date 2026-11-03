@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSelector } from 'react-redux';
 import { voucherService } from '../services/voucherService';
 
-export function useCheckoutPricing(items, initialSelections = []) {
+export function useCheckoutPricing(items, initialSelections = [], enabled = true) {
   const userId = useSelector(state => state.auth.user?.id);
   const [selectionMap, setSelectionMap] = useState(() => Object.fromEntries(initialSelections.map(selection => [selection.vendorId, selection.codes])));
   const vendorIds = [...new Set(items.map(item => item.productVariant?.productColor?.product?.vendorId || 'platform'))];
@@ -13,7 +13,7 @@ export function useCheckoutPricing(items, initialSelections = []) {
   const query = useQuery({
     queryKey: ['checkout-preview', userId, fingerprint, JSON.stringify(selections)],
     queryFn: () => voucherService.previewCheckout(payload),
-    enabled: Boolean(userId) && items.length > 0,
+    enabled: Boolean(userId) && items.length > 0 && enabled,
     retry: false,
     refetchInterval: 30000,
   });

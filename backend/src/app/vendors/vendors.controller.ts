@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   Body,
   Controller,
@@ -9,7 +8,7 @@ import {
   Patch,
   Post,
   Query,
-  UsePipes} from '@nestjs/common';
+} from '@nestjs/common';
 
 import { Roles } from '../../common/guards/access-control/roles.decorator';
 import { SkipAuth } from '../auth/auth.decorator';
@@ -18,13 +17,9 @@ import { User } from '../../common/decorators/user.decorator';
 
 import type { UserInfo as VendorInfo } from '../../common/decorators/user.decorator';
 
-import { ParseParamsOptionPipe } from '../../common/pipes/parse-params-option.pipe';
-
-import type { GetOptionsParams } from '../../common/query/options.interface';
-
 import { VendorsService } from './vendors.service';
 
-import { UpdateProfileDto, UpdateVendorDto } from './dto/update-vendor.dto';
+import { UpdateVendorProfileDto, UpdateVendorDto } from './dto/update-vendor.dto';
 
 import { GetVendorsPaginationDto } from './dto/get-vendor.dto';
 
@@ -33,8 +28,6 @@ import {
   RejectRegistrationDto,
   RenewSubscriptionDto,
 } from './dto/registration.dto';
-
-import type { Vendor as VendorEntity } from './entities/vendor.entity';
 
 @Controller('vendors')
 export class VendorsController {
@@ -45,7 +38,6 @@ export class VendorsController {
    * - phân trang
    * - tìm kiếm
    * - lọc status
-   * - lọc role
    */
   @Get()
   @Roles('admin')
@@ -54,32 +46,18 @@ export class VendorsController {
   }
 
   /**
-   * Danh sách vendor rút gọn.
-   * Dùng cho dropdown/select.
-   *
-   * Phải đặt trước @Get(':id').
-   */
-  @Get('options')
-  @Roles('admin')
-  @UsePipes(ParseParamsOptionPipe)
-  getVendorOptions(
-    @Query()
-    query: GetOptionsParams<VendorEntity>,
-  ) {
-    return this.vendorsService.getOptions(query);
-  }
-
-  /**
    * Lấy thông tin người dùng
    * đang đăng nhập.
    */
   @Get('profile')
+  @Roles('vendor')
   getProfile(
     @User()
     vendor: VendorInfo,
   ) {
     return this.vendorsService.getVendor({
-      id: vendor.userID});
+      id: vendor.userID,
+    });
   }
 
   /**
@@ -87,19 +65,21 @@ export class VendorsController {
    * đang đăng nhập.
    */
   @Patch('profile')
-  @Roles('client', 'vendor', 'admin')
+  @Roles('vendor')
   updateProfile(
     @User()
     vendor: VendorInfo,
 
     @Body()
-    updateVendorDto: UpdateProfileDto,
+    updateVendorDto: UpdateVendorProfileDto,
   ) {
     return this.vendorsService.updateVendor({
       where: {
-        id: vendor.userID},
+        id: vendor.userID,
+      },
 
-      data: updateVendorDto});
+      data: updateVendorDto,
+    });
   }
 
   /**
@@ -120,7 +100,10 @@ export class VendorsController {
     @User() user: VendorInfo,
     @Body() body: RenewSubscriptionDto,
   ) {
-    return this.vendorsService.renewSubscription(user.userID, body?.plan || '1_year');
+    return this.vendorsService.renewSubscription(
+      user.userID,
+      body?.plan || '1_year',
+    );
   }
 
   /**
@@ -128,7 +111,15 @@ export class VendorsController {
    */
   @Get('admin/registrations')
   @Roles('admin', 'employee')
-  getRegistrations(@Query() query: { page?: number; itemPerPage?: number; tab?: string; search?: string }) {
+  getRegistrations(
+    @Query()
+    query: {
+      page?: number;
+      itemPerPage?: number;
+      tab?: string;
+      search?: string;
+    },
+  ) {
     return this.vendorsService.getRegistrations(query);
   }
 
@@ -158,7 +149,11 @@ export class VendorsController {
     @User() user: VendorInfo,
     @Body() body: RejectRegistrationDto,
   ) {
-    return this.vendorsService.rejectRegistration(id, user, body?.reason || '');
+    return this.vendorsService.rejectRegistration(
+      id,
+      user,
+      body?.reason || '',
+    );
   }
 
   /**
@@ -166,7 +161,7 @@ export class VendorsController {
    */
   @Get('public/:id')
   @SkipAuth()
-  getPublicVendorProfile(@Param('id') id: string) {
+  getPublicVendorProfile(@Param('id', ParseUUIDPipe) id: string) {
     return this.vendorsService.getPublicVendorProfile(id);
   }
 
@@ -176,11 +171,12 @@ export class VendorsController {
   @Get(':id')
   @Roles('admin')
   getVendor(
-    @Param('id')
+    @Param('id', ParseUUIDPipe)
     id: string,
   ) {
     return this.vendorsService.getVendor({
-      id});
+      id,
+    });
   }
 
   /**
@@ -189,7 +185,7 @@ export class VendorsController {
   @Patch(':id')
   @Roles('admin')
   updateVendor(
-    @Param('id')
+    @Param('id', ParseUUIDPipe)
     id: string,
 
     @Body()
@@ -197,21 +193,24 @@ export class VendorsController {
   ) {
     return this.vendorsService.updateVendor({
       where: {
-        id},
+        id,
+      },
 
-      data: updateVendorDto});
+      data: updateVendorDto,
+    });
   }
 
   /**
-   * Admin vô hiệu hóa vendor.
+   * Admin khóa tài khoản vendor.
    */
   @Delete(':id')
   @Roles('admin')
   deleteVendor(
-    @Param('id')
+    @Param('id', ParseUUIDPipe)
     id: string,
   ) {
     return this.vendorsService.deleteVendor({
-      id});
+      id,
+    });
   }
 }

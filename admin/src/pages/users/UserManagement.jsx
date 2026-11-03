@@ -1,20 +1,39 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Search, Eye, Edit, Trash2, Plus, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Search, Eye, Edit, Lock, Unlock, Trash2, Loader2, ChevronLeft, ChevronRight, Plus, RotateCcw } from 'lucide-react';
 import { usersApi } from '../../api';
 import { formatDate } from '../../utils/formatHelpers';
-import { Button, Input, Select, Badge } from '../../components/ui';
+import { Button, Input, Select } from '../../components/ui';
+import { usePaginatedCacheList } from '../../hooks/usePaginatedCacheList';
 import UserFormModal from './UserFormModal';
 import UserDetailModal from './UserDetailModal';
 
 export default function UserManagement() {
-  const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+
+  const extraParams = useMemo(() => ({
+    ...(roleFilter ? { role: roleFilter } : {}),
+    ...(statusFilter ? { status: statusFilter } : {}),
+  }), [roleFilter, statusFilter]);
+
+  const {
+    list: users,
+    search,
+    setSearch,
+    loading,
+    page,
+    setPage,
+    totalPages,
+    totalItems,
+    reusedFromCache,
+    fetchList: fetchUsers,
+    handleResetAndReuseList,
+  } = usePaginatedCacheList({
+    fetcher: usersApi.getUsers,
+    itemsPerPage: 10,
+    extraParams,
+    isDefaultExtraParams: !roleFilter && !statusFilter,
+  });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState(null);
@@ -22,39 +41,11 @@ export default function UserManagement() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [userToView, setUserToView] = useState(null);
 
-  const fetchUsers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = { page, itemPerPage: 10 };
-      if (search) params.search = search;
-      if (roleFilter) params.role = roleFilter;
-      if (statusFilter) params.status = statusFilter;
-
-      const res = await usersApi.getUsers(params);
-      const data = res.data;
-      setUsers(data.list || []);
-      setTotalPages(data.totalPages || 1);
-      setTotalItems(data.totalItems || 0);
-    } catch (err) {
-      console.error('Error fetching users:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, search, roleFilter, statusFilter]);
-
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
-
-  // Debounce search
-  useEffect(() => {
-    setPage(1);
-  }, [search, roleFilter, statusFilter]);
-
   const getRoleBadge = (role) => {
     const styles = {
       admin: 'bg-red-100 text-red-700',
       vendor: 'bg-purple-100 text-purple-700',
+      employee: 'bg-amber-100 text-amber-700',
       customer: 'bg-blue-100 text-blue-700',
     };
     return styles[role] || 'bg-slate-100 text-slate-700 dark:text-slate-300';
@@ -81,13 +72,26 @@ export default function UserManagement() {
     setIsDetailModalOpen(true);
   };
 
-  const handleDeleteClick = async (userId) => {
-    if (window.confirm('Bạn có chắc chắn muốn vô hiệu hóa user này?')) {
+  const handleToggleStatus = async (user) => {
+    const nextStatus = user.status === 'active' ? 'inactive' : 'active';
+    const actionLabel = nextStatus === 'inactive' ? 'khóa' : 'mở khóa';
+    if (window.confirm(`Bạn có chắc chắn muốn ${actionLabel} tài khoản ${user.fullName || user.email}?`)) {
       try {
-        await usersApi.deleteUser(userId);
-        fetchUsers();
+        await usersApi.updateUserStatus(user.id, nextStatus);
+        fetchUsers(true);
       } catch (err) {
-        alert(err.response?.data?.message || 'Xóa user thất bại');
+        alert(err.response?.data?.message || `Không thể ${actionLabel} tài khoản`);
+      }
+    }
+  };
+
+  const handleDeleteUser = async (user) => {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa khách hàng "${user.fullName || user.email}"?`)) {
+      try {
+        await usersApi.deleteUser(user.id);
+        fetchUsers(true);
+      } catch (err) {
+        alert(err.response?.data?.message || 'Không thể xóa tài khoản');
       }
     }
   };
@@ -96,22 +100,47 @@ export default function UserManagement() {
     try {
       if (userToEdit) {
         await usersApi.updateUser(userToEdit.id, savedData);
+      } else {
+        await usersApi.createUser(savedData);
       }
-      // Hiện tại backend không có POST /users (tạo user qua sign-up), 
-      // nên "Add User" chỉ update
       setIsModalOpen(false);
-      fetchUsers();
+      fetchUsers(true);
     } catch (err) {
-      alert(err.response?.data?.message || 'Lưu thất bại');
+      alert(err.response?.data?.errors?.[0]?.message || err.response?.data?.message || 'Lưu thất bại');
     }
   };
+
+  const isFiltered = Boolean(search.trim() || roleFilter || statusFilter || page !== 1);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">User Management</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">User Management</h1>
+            {reusedFromCache && (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800">
+                ⚡ Tái sử dụng DS gốc (Cache)
+              </span>
+            )}
+          </div>
           <p className="text-slate-500 dark:text-slate-400">{totalItems} users</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isFiltered && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleResetAndReuseList(() => { setRoleFilter(''); setStatusFilter(''); })}
+              className="flex items-center gap-1.5 border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Bỏ tìm kiếm / Tái sử dụng DS gốc
+            </Button>
+          )}
+          <Button variant="primary" icon={Plus} onClick={handleAddClick}>
+            Thêm khách hàng mới
+          </Button>
         </div>
       </div>
 
@@ -131,6 +160,7 @@ export default function UserManagement() {
               { value: '', label: 'Tất cả vai trò' },
               { value: 'customer', label: 'Customer (Khách hàng)' },
               { value: 'vendor', label: 'Vendor (Người bán)' },
+              { value: 'employee', label: 'Employee (Nhân viên)' },
               { value: 'admin', label: 'Admin (Quản trị)' }
             ]}
             value={roleFilter}
@@ -175,6 +205,7 @@ export default function UserManagement() {
               <tbody>
                 {users.map(user => {
                   const code = user.userCode || (user.role === 'vendor' ? `VND-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'admin' ? `ADM-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'employee' ? (user.employeeCode || `EMP-${user.id.slice(0, 8).toUpperCase()}`) : `CUS-${user.id.slice(0, 8).toUpperCase()}`);
+                  const isLocked = user.status === 'inactive';
                   return (
                   <tr key={user.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="px-4 py-3">
@@ -184,8 +215,12 @@ export default function UserManagement() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-600 dark:text-slate-400 mr-3">
-                          {user.fullName?.charAt(0) || '?'}
+                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-600 dark:text-slate-400 mr-3 overflow-hidden shrink-0">
+                          {user.avatarUrl ? (
+                            <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+                          ) : (
+                            user.fullName?.charAt(0) || '?'
+                          )}
                         </div>
                         <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{user.fullName}</span>
                       </div>
@@ -198,15 +233,30 @@ export default function UserManagement() {
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(user.status)}`}>
-                        {user.status}
+                        {isLocked ? 'inactive (Đã khóa)' : 'active'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{formatDate(user.createdAt)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-blue-600" onClick={() => handleViewClick(user)} />
-                        <Button variant="ghost" size="sm" icon={Edit} className="text-slate-400 hover:text-amber-600" onClick={() => handleEditClick(user)} />
-                        <Button variant="ghost" size="sm" icon={Trash2} className="text-slate-400 hover:text-red-600" onClick={() => handleDeleteClick(user.id)} />
+                        <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-blue-600" onClick={() => handleViewClick(user)} title="Xem chi tiết" />
+                        <Button variant="ghost" size="sm" icon={Edit} className="text-slate-400 hover:text-amber-600" onClick={() => handleEditClick(user)} title="Chỉnh sửa" />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={isLocked ? Unlock : Lock}
+                          className={isLocked ? 'text-slate-400 hover:text-emerald-600' : 'text-slate-400 hover:text-amber-600'}
+                          onClick={() => handleToggleStatus(user)}
+                          title={isLocked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={Trash2}
+                          className="text-slate-400 hover:text-rose-600"
+                          onClick={() => handleDeleteUser(user)}
+                          title="Xóa khách hàng"
+                        />
                       </div>
                     </td>
                   </tr>

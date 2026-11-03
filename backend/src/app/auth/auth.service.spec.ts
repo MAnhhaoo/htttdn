@@ -18,6 +18,7 @@ describe('Vendor approval before login', () => {
     db = Object.fromEntries(['admin', 'client', 'vendor', 'employee'].map(role => [role, {
       findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null),
     }]));
+    db.extended = db;
     vendors = {
       createVendor: jest.fn(async data => ({ id: 'new-vendor', ...data })),
       getVendor: jest.fn().mockResolvedValue(account),

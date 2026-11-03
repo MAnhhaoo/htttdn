@@ -60,25 +60,36 @@ export default function Dashboard() {
           });
         });
 
-        // Order stats
-        const completedOrders = orders.filter(o => o.status === 'completed');
-        const pendingOrders = orders.filter(o => o.status === 'pending');
-        
-        // Calculate revenue from completed orders that belong to this vendor
+        // Calculate revenue and order counts from orders that belong to this vendor
+        const getOrderNetRatio = (order) => {
+          const discount = Number(order?.discountAmount || 0);
+          if (discount <= 0) return 1;
+          const netTotal = Number(order?.totalAmount || 0);
+          const grossTotal = netTotal + discount;
+          return grossTotal > 0 ? netTotal / grossTotal : 1;
+        };
+
         let revenue = 0;
         let allOrderDetails = [];
+        const vendorOrderSet = new Set();
+        const pendingVendorOrderSet = new Set();
         const currentVendorId = user?.id || user?.userID;
         
         orders.forEach(order => {
+          const netRatio = getOrderNetRatio(order);
           (order.details || []).forEach(detail => {
             const matchesVendor = !currentVendorId || 
               detail.productVariant?.productColor?.product?.vendorId === currentVendorId ||
               order.vendorOrders?.some(vo => vo.vendorId === currentVendorId);
 
             if (matchesVendor) {
+              vendorOrderSet.add(order.id);
+              if (order.status === 'pending') {
+                pendingVendorOrderSet.add(order.id);
+              }
               allOrderDetails.push({ ...detail, order });
               if (order.status === 'completed') {
-                revenue += (Number(detail.price) || 0) * (detail.quantity || 1);
+                revenue += Math.round((Number(detail.price) || 0) * (detail.quantity || 1) * netRatio);
               }
             }
           });
@@ -110,8 +121,8 @@ export default function Dashboard() {
 
         setStats({
           revenue,
-          totalOrders: orders.length,
-          pendingOrders: pendingOrders.length,
+          totalOrders: vendorOrderSet.size,
+          pendingOrders: pendingVendorOrderSet.size,
           totalProducts: products.length,
           totalStock,
           lowStockCount,

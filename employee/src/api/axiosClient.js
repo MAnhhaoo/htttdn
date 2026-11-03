@@ -66,6 +66,14 @@ export const profileApi = {
   updateProfile: async (data) => {
     return axiosClient.patch('/employees/profile', data);
   },
+  uploadAvatar: async (file) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const res = await axiosClient.post('/users/upload-avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res?.data?.url || res?.url;
+  },
   getSalaryHistory: async (id) => {
     return axiosClient.get(`/employees/${id}/salary-history`);
   },

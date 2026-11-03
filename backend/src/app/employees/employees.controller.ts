@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -17,6 +18,9 @@ import {
   GetEmployeesPaginationDto,
   SendEmployeeNotificationDto,
   UpdateEmployeeDto,
+  UpdateEmployeeProfileDto,
+  UpdateEmployeeScheduleDto,
+  UpdateEmployeeStatusDto,
 } from './dto/employee.dto';
 import { EmployeesService } from './employees.service';
 
@@ -34,7 +38,7 @@ export class EmployeesController {
   @Roles('employee')
   updateProfile(
     @User() user: UserInfo,
-    @Body() body: { phone?: string; address?: string; avatarUrl?: string },
+    @Body() body: UpdateEmployeeProfileDto,
   ) {
     return this.employeesService.updateEmployeeProfile(user.userID, body);
   }
@@ -83,7 +87,7 @@ export class EmployeesController {
 
   @Get(':id')
   @Roles('admin', 'employee')
-  getEmployee(@Param('id') id: string, @User() user: UserInfo) {
+  getEmployee(@Param('id', ParseUUIDPipe) id: string, @User() user: UserInfo) {
     this.assertSelfOrAdmin(id, user);
     return this.employeesService.getEmployeeById(id);
   }
@@ -98,7 +102,7 @@ export class EmployeesController {
   @Roles('admin')
   updateEmployee(
     @User() user: UserInfo,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateEmployeeDto,
   ) {
     return this.employeesService.updateEmployee(user.userID, id, dto);
@@ -106,28 +110,34 @@ export class EmployeesController {
 
   @Patch(':id/schedule')
   @Roles('admin')
-  updateSchedule(@Param('id') id: string, @Body() body: any) {
+  updateSchedule(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateEmployeeScheduleDto,
+  ) {
     return this.employeesService.updateSchedule(id, body);
   }
 
   @Patch(':id/status')
   @Roles('admin')
   updateStatus(
-    @Param('id') id: string,
-    @Body('status') status: 'active' | 'inactive',
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateEmployeeStatusDto,
   ) {
-    return this.employeesService.updateStatus(id, status);
+    return this.employeesService.updateStatus(id, body.status);
   }
 
   @Delete(':id')
   @Roles('admin')
-  deleteEmployee(@Param('id') id: string) {
+  deleteEmployee(@Param('id', ParseUUIDPipe) id: string) {
     return this.employeesService.deleteEmployee(id);
   }
 
   @Get(':id/salary-history')
   @Roles('admin', 'employee')
-  getSalaryHistory(@Param('id') id: string, @User() user: UserInfo) {
+  getSalaryHistory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @User() user: UserInfo,
+  ) {
     this.assertSelfOrAdmin(id, user);
     return this.employeesService.getSalaryHistory(id);
   }

@@ -4,11 +4,10 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Query,
-  UsePipes} from '@nestjs/common';
-
-
+} from '@nestjs/common';
 
 import { Roles } from '../../common/guards/access-control/roles.decorator';
 
@@ -16,17 +15,11 @@ import { User } from '../../common/decorators/user.decorator';
 
 import type { UserInfo as AdminInfo } from '../../common/decorators/user.decorator';
 
-import { ParseParamsOptionPipe } from '../../common/pipes/parse-params-option.pipe';
-
-import type { GetOptionsParams } from '../../common/query/options.interface';
-
 import { AdminsService } from './admins.service';
 
-import { UpdateProfileDto, UpdateAdminDto } from './dto/update-admin.dto';
+import { UpdateAdminProfileDto, UpdateAdminDto } from './dto/update-admin.dto';
 
 import { GetAdminsPaginationDto } from './dto/get-admin.dto';
-
-import type { Admin as AdminEntity } from './entities/admin.entity';
 
 @Controller('admins')
 export class AdminsController {
@@ -37,7 +30,6 @@ export class AdminsController {
    * - phân trang
    * - tìm kiếm
    * - lọc status
-   * - lọc role
    */
   @Get()
   @Roles('admin')
@@ -46,32 +38,18 @@ export class AdminsController {
   }
 
   /**
-   * Danh sách admin rút gọn.
-   * Dùng cho dropdown/select.
-   *
-   * Phải đặt trước @Get(':id').
-   */
-  @Get('options')
-  @Roles('admin')
-  @UsePipes(ParseParamsOptionPipe)
-  getAdminOptions(
-    @Query()
-    query: GetOptionsParams<AdminEntity>,
-  ) {
-    return this.adminsService.getOptions(query);
-  }
-
-  /**
    * Lấy thông tin người dùng
    * đang đăng nhập.
    */
   @Get('profile')
+  @Roles('admin')
   getProfile(
     @User()
     admin: AdminInfo,
   ) {
     return this.adminsService.getAdmin({
-      id: admin.userID});
+      id: admin.userID,
+    });
   }
 
   /**
@@ -79,19 +57,22 @@ export class AdminsController {
    * đang đăng nhập.
    */
   @Patch('profile')
-  @Roles('client', 'vendor', 'admin')
+  @Roles('admin')
   updateProfile(
     @User()
     admin: AdminInfo,
 
     @Body()
-    updateAdminDto: UpdateProfileDto,
+    updateAdminDto: UpdateAdminProfileDto,
   ) {
     return this.adminsService.updateAdmin({
       where: {
-        id: admin.userID},
+        id: admin.userID,
+      },
 
-      data: updateAdminDto});
+      data: updateAdminDto,
+      currentUser: admin,
+    });
   }
 
   /**
@@ -100,11 +81,12 @@ export class AdminsController {
   @Get(':id')
   @Roles('admin')
   getAdmin(
-    @Param('id')
+    @Param('id', ParseUUIDPipe)
     id: string,
   ) {
     return this.adminsService.getAdmin({
-      id});
+      id,
+    });
   }
 
   /**
@@ -113,29 +95,37 @@ export class AdminsController {
   @Patch(':id')
   @Roles('admin')
   updateAdmin(
-    @Param('id')
+    @Param('id', ParseUUIDPipe)
     id: string,
 
     @Body()
     updateAdminDto: UpdateAdminDto,
+
+    @User()
+    admin: AdminInfo,
   ) {
     return this.adminsService.updateAdmin({
       where: {
-        id},
+        id,
+      },
 
-      data: updateAdminDto});
+      data: updateAdminDto,
+      currentUser: admin,
+    });
   }
 
   /**
-   * Admin vô hiệu hóa admin.
+   * Admin khóa tài khoản admin.
    */
   @Delete(':id')
   @Roles('admin')
   deleteAdmin(
-    @Param('id')
+    @Param('id', ParseUUIDPipe)
     id: string,
+
+    @User()
+    admin: AdminInfo,
   ) {
-    return this.adminsService.deleteAdmin({
-      id});
+    return this.adminsService.deleteAdmin({ id }, admin);
   }
 }

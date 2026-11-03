@@ -200,7 +200,11 @@ async function main() {
   } finally {
     await browser?.close();
     // Cleanup by exact disposable owner/IDs even if an assertion failed.
-    if (client) await prisma.order.deleteMany({ where: { clientId: client.id, notes: prefix } });
+    if (client) {
+      await prisma.notification.deleteMany({ where: { clientId: client.id } });
+      await prisma.surveyResponse.deleteMany({ where: { clientId: client.id } });
+      await prisma.order.deleteMany({ where: { clientId: client.id, notes: prefix } });
+    }
     if (product?.id) await prisma.product.deleteMany({ where: { id: product.id, name: prefix } });
     if (category) await prisma.category.deleteMany({ where: { id: category.id, products: { none: {} } } });
     if (client) await prisma.client.deleteMany({ where: { id: client.id, email: client.email, orders: { none: {} } } });

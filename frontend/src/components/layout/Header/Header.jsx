@@ -96,7 +96,15 @@ export default function Header() {
                   Đơn hàng
                 </Link>
                 <Link to="/profile" className="flex items-center gap-2 text-[#1A3A2C] dark:text-dark-text hover:text-primary transition-colors p-2">
-                  <User className="w-5 h-5" strokeWidth={2.5} />
+                  {user?.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.fullName || 'Avatar'}
+                      className="w-6 h-6 rounded-full object-cover border border-light-border dark:border-dark-border"
+                    />
+                  ) : (
+                    <User className="w-5 h-5" strokeWidth={2.5} />
+                  )}
                   <span className="text-sm font-medium hidden sm:block truncate max-w-[120px]">{user?.fullName?.split(' ').pop()}</span>
                 </Link>
               </div>

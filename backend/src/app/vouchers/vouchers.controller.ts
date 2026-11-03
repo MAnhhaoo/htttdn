@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   Body,
   Controller,
@@ -10,7 +9,6 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-
 
 import { User as CurrentUser } from 'src/common/decorators/user.decorator';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
@@ -24,9 +22,16 @@ import { SkipAuth } from '../auth/auth.decorator';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-class CatalogOffersDto extends createZodDto(z.object({
-  productIds: z.string().transform(value => value.split(',')).pipe(z.array(z.uuid()).min(1).max(100)),
-}).strict()) {}
+class CatalogOffersDto extends createZodDto(
+  z
+    .object({
+      productIds: z
+        .string()
+        .transform((value) => value.split(','))
+        .pipe(z.array(z.uuid()).min(1).max(100)),
+    })
+    .strict(),
+) {}
 
 @Controller('vouchers')
 export class VouchersController {

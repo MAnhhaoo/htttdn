@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Minus, Plus, ShoppingCart, Heart, ChevronRight, ChevronLeft, Package, Store, ShieldCheck } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, Heart, ChevronRight, ChevronLeft, Package, Store, ShieldCheck, Star, MessageSquare } from 'lucide-react';
 import { useProductById, useProducts } from '../../hooks/useProducts';
 import { useCart } from '../../hooks/useCart';
 import { useAuth } from '../../hooks/useAuth';
@@ -11,6 +11,7 @@ import EmptyState from '../../components/common/EmptyState/EmptyState';
 import ProductCard from '../../components/product/ProductCard/ProductCard';
 import ProductCardSkeleton from '../../components/product/ProductCard/ProductCardSkeleton';
 import { vendorService } from '../../services/vendorService';
+import { reviewService } from '../../services/reviewService';
 import { bestVoucherPrice } from '../../utils/voucherPrice';
 
 export default function ProductDetail() {
@@ -28,6 +29,9 @@ export default function ProductDetail() {
   const [mainImgError, setMainImgError] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [vendorProfile, setVendorProfile] = useState(null);
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [selectedStarFilter, setSelectedStarFilter] = useState(0);
 
   // Fetch vendor public statistics
   useEffect(() => {
@@ -37,6 +41,20 @@ export default function ProductDetail() {
         .catch(console.error);
     }
   }, [product?.vendor?.id]);
+
+  // Fetch product reviews
+  useEffect(() => {
+    if (!product?.id) return;
+    setReviewsLoading(true);
+    setSelectedStarFilter(0);
+    reviewService.getByProduct(product.id)
+      .then((res) => {
+        const list = Array.isArray(res) ? res : (res?.data || []);
+        setReviews(list);
+      })
+      .catch(console.error)
+      .finally(() => setReviewsLoading(false));
+  }, [product?.id]);
 
   // Derived image state from selected color
   const images = selectedColor?.imageUrls || [];
@@ -159,6 +177,18 @@ export default function ProductDetail() {
   const voucherPrice = bestVoucherPrice(currentPrice, quantity, offers, product.id);
   const isOutOfStock = !selectedVariant || selectedVariant.stock === 0;
 
+  const totalReviews = reviews.length;
+  const avgRating = totalReviews > 0
+    ? Number((reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / totalReviews).toFixed(1))
+    : 0;
+  const starCounts = [5, 4, 3, 2, 1].reduce((acc, star) => {
+    acc[star] = reviews.filter((r) => Number(r.rating) === star).length;
+    return acc;
+  }, {});
+  const filteredReviews = selectedStarFilter === 0
+    ? reviews
+    : reviews.filter((r) => Number(r.rating) === selectedStarFilter);
+
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
@@ -254,9 +284,40 @@ export default function ProductDetail() {
               </span>
             </div>
           )}
-          <h1 className="text-3xl sm:text-4xl font-black text-light-text dark:text-dark-text mb-4 leading-tight">
+          <h1 className="text-3xl sm:text-4xl font-black text-light-text dark:text-dark-text mb-3 leading-tight">
             {product.name}
           </h1>
+
+          {/* Quick Rating Summary under Title */}
+          <div className="flex items-center gap-3 mb-4 text-sm">
+            <a
+              href="#product-reviews-section"
+              className="inline-flex items-center gap-1.5 text-amber-500 font-bold hover:opacity-80 transition-opacity"
+            >
+              <span className="underline underline-offset-4">
+                {totalReviews > 0 ? avgRating.toFixed(1) : 'Chưa có'}
+              </span>
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star
+                    key={star}
+                    className={`w-4 h-4 ${
+                      totalReviews > 0 && star <= Math.round(avgRating)
+                        ? 'fill-amber-400 text-amber-400'
+                        : 'text-gray-300 dark:text-gray-600'
+                    }`}
+                  />
+                ))}
+              </div>
+            </a>
+            <span className="text-light-border dark:text-dark-border">|</span>
+            <a
+              href="#product-reviews-section"
+              className="text-light-muted dark:text-dark-muted hover:text-primary transition-colors"
+            >
+              <strong className="text-light-text dark:text-dark-text">{totalReviews}</strong> Đánh giá
+            </a>
+          </div>
 
           <div className="text-3xl font-bold text-primary mb-6">
             {formatPrice(currentPrice)}
@@ -469,6 +530,165 @@ export default function ProductDetail() {
           </div>
         </div>
       )}
+
+      {/* ── Product Reviews Section ── */}
+      <section
+        id="product-reviews-section"
+        className="mt-8 bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl p-6 sm:p-8 shadow-sm"
+      >
+        <div className="flex items-center gap-2.5 mb-6">
+          <MessageSquare className="w-6 h-6 text-primary" />
+          <h2 className="text-xl sm:text-2xl font-bold text-light-text dark:text-dark-text">
+            Đánh Giá Sản Phẩm
+          </h2>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary">
+            {totalReviews}
+          </span>
+        </div>
+
+        {/* Rating Overview & Filter Bar */}
+        <div className="flex flex-col md:flex-row md:items-center gap-6 p-5 sm:p-6 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40 mb-6">
+          <div className="flex flex-col items-center justify-center min-w-[160px] md:border-r border-amber-200/80 dark:border-amber-800/50 md:pr-6">
+            <div className="text-3xl sm:text-4xl font-black text-amber-500">
+              {totalReviews > 0 ? avgRating.toFixed(1) : '0.0'}
+              <span className="text-lg font-semibold text-light-muted dark:text-dark-muted"> / 5</span>
+            </div>
+            <div className="flex items-center gap-1 my-1.5">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star
+                  key={star}
+                  className={`w-5 h-5 ${
+                    totalReviews > 0 && star <= Math.round(avgRating)
+                      ? 'fill-amber-400 text-amber-400'
+                      : 'text-gray-300 dark:text-gray-600'
+                  }`}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-light-muted dark:text-dark-muted">
+              ({totalReviews} lượt đánh giá)
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 flex-1">
+            <button
+              type="button"
+              onClick={() => setSelectedStarFilter(0)}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all ${
+                selectedStarFilter === 0
+                  ? 'border-primary bg-primary text-white shadow-sm'
+                  : 'border-light-border dark:border-dark-border bg-white dark:bg-dark-surface text-light-text dark:text-dark-text hover:border-primary/50'
+              }`}
+            >
+              Tất cả ({totalReviews})
+            </button>
+            {[5, 4, 3, 2, 1].map((star) => (
+              <button
+                key={star}
+                type="button"
+                onClick={() => setSelectedStarFilter(star)}
+                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition-all inline-flex items-center gap-1 ${
+                  selectedStarFilter === star
+                    ? 'border-primary bg-primary text-white shadow-sm'
+                    : 'border-light-border dark:border-dark-border bg-white dark:bg-dark-surface text-light-text dark:text-dark-text hover:border-primary/50'
+                }`}
+              >
+                <span>{star} Sao</span>
+                <span className="opacity-75">({starCounts[star] || 0})</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Review Items */}
+        {reviewsLoading ? (
+          <div className="py-12 text-center text-sm text-light-muted dark:text-dark-muted">
+            Đang tải đánh giá sản phẩm...
+          </div>
+        ) : filteredReviews.length === 0 ? (
+          <div className="py-12 text-center">
+            <Star className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2 stroke-1" />
+            <p className="text-sm font-medium text-light-muted dark:text-dark-muted">
+              {totalReviews === 0
+                ? 'Chưa có đánh giá nào cho sản phẩm này.'
+                : `Không có đánh giá ${selectedStarFilter} sao nào.`}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-light-border dark:divide-dark-border">
+            {filteredReviews.map((rev) => {
+              const clientName = rev.client?.fullName || 'Khách hàng MIVA';
+              const clientAvatar = rev.client?.avatarUrl;
+              const variantColor = rev.orderDetail?.productVariant?.productColor?.color;
+              const variantSize = rev.orderDetail?.productVariant?.size;
+              const reviewDate = rev.createdAt
+                ? new Date(rev.createdAt).toLocaleDateString('vi-VN', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : '';
+
+              return (
+                <div key={rev.id} className="py-5 first:pt-2 last:pb-2 flex gap-4">
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-primary/10 border border-primary/20 text-primary font-bold text-sm flex items-center justify-center shrink-0 overflow-hidden">
+                    {clientAvatar ? (
+                      <img
+                        src={clientAvatar}
+                        alt={clientName}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      clientName.charAt(0).toUpperCase()
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-light-text dark:text-dark-text">
+                        {clientName}
+                      </span>
+                      {reviewDate && (
+                        <span className="text-xs text-light-muted dark:text-dark-muted">
+                          {reviewDate}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 mt-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={`w-3.5 h-3.5 ${
+                            star <= Number(rev.rating)
+                              ? 'fill-amber-400 text-amber-400'
+                              : 'text-gray-300 dark:text-gray-600'
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    {(variantColor || variantSize) && (
+                      <p className="text-xs text-light-muted dark:text-dark-muted mt-1">
+                        Phân loại hàng: {[variantColor && `Màu ${variantColor}`, variantSize && `Size ${variantSize}`].filter(Boolean).join(', ')}
+                      </p>
+                    )}
+
+                    <p className="mt-2.5 text-sm text-light-text dark:text-dark-text leading-relaxed whitespace-pre-line">
+                      {rev.content || 'Sản phẩm chất lượng tốt, đóng gói cẩn thận.'}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* ── Recommended Products ── */}
       {product?.category?.slug && (

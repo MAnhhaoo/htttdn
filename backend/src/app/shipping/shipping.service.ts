@@ -8,8 +8,12 @@ import {
 import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, ShipmentStatus } from '@prisma/client';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
+import {
+  formatPaginatedList,
+  normalizePagination,
+} from 'src/common/utils/paginaton-util/pagintion-util.service';
 import { RealtimeService } from '../realtime/realtime.service';
-import { OrdersService } from '../orders/orders.service';
+import { DEPARTMENT_KEYWORDS, OrdersService } from '../orders/orders.service';
 import {
   AssignCarrierDto,
   GetShipmentsQueryDto,
@@ -18,31 +22,18 @@ import {
 
 @Injectable()
 export class ShippingService {
-  constructor(private readonly prisma: PrismaService, private readonly realtime: RealtimeService, private readonly orders: OrdersService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
+    private readonly orders: OrdersService,
+  ) {}
 
   async listShipments(query: GetShipmentsQueryDto, user?: UserInfo) {
-    const { page = 1, itemPerPage = 10, q, status, carrierId } = query;
-    const skip = (page - 1) * itemPerPage;
-
-    const where: Prisma.ShipmentWhereInput = {
-      ...(status ? { status: status as ShipmentStatus } : {}),
-      ...(user?.role === 'employee' ? { carrierId: user.userID } : carrierId ? { carrierId } : {}),
-      ...(q
-        ? {
-            OR: [
-              { trackingNumber: { contains: q, mode: 'insensitive' } },
-              { receiverName: { contains: q, mode: 'insensitive' } },
-              { receiverPhone: { contains: q, mode: 'insensitive' } },
-              { order: { orderCode: { contains: q, mode: 'insensitive' } } },
-              {
-                vendorOrder: {
-                  vendorOrderCode: { contains: q, mode: 'insensitive' },
-                },
-              },
-            ],
-          }
-        : {}),
-    };
+    const { q, status, carrierId } = query;
+    const { page, itemPerPage, skip } = normalizePagination({
+      page: query.page,
+      itemPerPage: query.itemPerPage,
+    });
 
     const baseWhere: Prisma.ShipmentWhereInput = {
       ...(user?.role === 'employee' ? { carrierId: user.userID } : carrierId ? { carrierId } : {}),
@@ -63,10 +54,15 @@ export class ShippingService {
         : {}),
     };
 
+    const where: Prisma.ShipmentWhereInput = {
+      ...baseWhere,
+      ...(status ? { status: status as ShipmentStatus } : {}),
+    };
+
     const [countPending, countInTransit, countDelivered, countTotal, totalItems, list] =
       await Promise.all([
-        this.prisma.shipment.count({ where: { ...baseWhere, status: ShipmentStatus.pending } }),
-        this.prisma.shipment.count({
+        this.prisma.extended.shipment.count({ where: { ...baseWhere, status: ShipmentStatus.pending } }),
+        this.prisma.extended.shipment.count({
           where: {
             ...baseWhere,
             status: {
@@ -79,12 +75,12 @@ export class ShippingService {
             },
           },
         }),
-        this.prisma.shipment.count({
+        this.prisma.extended.shipment.count({
           where: { ...baseWhere, status: ShipmentStatus.delivered },
         }),
-        this.prisma.shipment.count({ where: baseWhere }),
-        this.prisma.shipment.count({ where }),
-        this.prisma.shipment.findMany({
+        this.prisma.extended.shipment.count({ where: baseWhere }),
+        this.prisma.extended.shipment.count({ where }),
+        this.prisma.extended.shipment.findMany({
           where,
           skip,
           take: itemPerPage,
@@ -139,16 +135,13 @@ export class ShippingService {
     };
 
     return {
-      list,
-      totalItems,
-      totalPages: Math.ceil(totalItems / itemPerPage) || 1,
-      currentPage: page,
+      ...formatPaginatedList(list, totalItems, { page, itemPerPage }),
       summary,
     };
   }
 
   async getShipmentById(id: string, user?: UserInfo) {
-    const shipment = await this.prisma.shipment.findUnique({
+    const shipment = await this.prisma.extended.shipment.findUnique({
       where: { id },
       include: {
         carrier: {
@@ -199,7 +192,7 @@ export class ShippingService {
     if (!shipment) {
       throw new NotFoundException('Không tìm thấy vận đơn');
     }
-    this.assertAssigned(shipment, user);
+    await this.assertAssigned(shipment, user);
 
     return shipment;
   }
@@ -209,9 +202,9 @@ export class ShippingService {
     dto: UpdateShipmentStatusDto,
     user: UserInfo,
   ) {
-    const shipment = await this.prisma.shipment.findUnique({
+    const shipment = await this.prisma.extended.shipment.findUnique({
       where: { id },
-      include: { 
+      include: {
         order: { include: { payment: true } },
         carrier: true,
       },
@@ -232,13 +225,22 @@ export class ShippingService {
       in_transit: ['out_for_delivery', 'delivered', 'failed', 'returned'],
       out_for_delivery: ['delivered', 'failed', 'returned'],
       failed: ['assigned', 'picking_up', 'out_for_delivery', 'returned'],
-      delivered: [], returned: [],
+      delivered: [],
+      returned: [],
     };
-    if (!transitions[shipment.status].includes(dto.status)) throw new BadRequestException(`Không thể chuyển vận đơn từ ${shipment.status} sang ${dto.status}`);
-    if (shipment.order.status === OrderStatus.pending && !['failed', 'returned'].includes(dto.status)) throw new BadRequestException('Chờ xác nhận đơn hàng trước khi vận chuyển');
+    if (!transitions[shipment.status].includes(dto.status)) {
+      throw new BadRequestException(`Không thể chuyển vận đơn từ ${shipment.status} sang ${dto.status}`);
+    }
+    if (shipment.order.status === OrderStatus.pending && !['failed', 'returned'].includes(dto.status)) {
+      throw new BadRequestException('Chờ xác nhận đơn hàng trước khi vận chuyển');
+    }
     if (dto.status === ShipmentStatus.returned) {
-      await this.orders.updateStatus(shipment.orderId, { status: OrderStatus.cancelled, note: dto.description || dto.failedReason || 'Hoàn hàng về kho' }, user);
-      const returned = await this.prisma.shipment.findUniqueOrThrow({ where: { id } });
+      await this.orders.updateStatus(
+        shipment.orderId,
+        { status: OrderStatus.cancelled, note: dto.description || dto.failedReason || 'Hoàn hàng về kho' },
+        user,
+      );
+      const returned = await this.prisma.extended.shipment.findUniqueOrThrow({ where: { id } });
       await this.emitShipment(returned);
       return returned;
     }
@@ -256,7 +258,7 @@ export class ShippingService {
 
     const isDelivered = dto.status === 'delivered';
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.extendedTransaction(async (tx) => {
       const updatedShipment = await tx.shipment.update({
         where: { id, status: shipment.status },
         data: {
@@ -279,6 +281,9 @@ export class ShippingService {
       });
 
       // Update parent Order if all shipments delivered
+      let surveyNotifications: Awaited<
+        ReturnType<OrdersService['deliverOrderCompletedSurveys']>
+      > = [];
       if (isDelivered) {
         if (shipment.vendorOrderId) {
           await tx.vendorOrder.update({
@@ -335,6 +340,11 @@ export class ShippingService {
               ...(user.role === 'employee' ? { employeeId: user.userID } : {}),
             },
           });
+
+          surveyNotifications = await this.orders.deliverOrderCompletedSurveys(
+            tx,
+            shipment.orderId,
+          );
         }
       } else if (dto.status === 'out_for_delivery' || dto.status === 'in_transit') {
         if (shipment.vendorOrderId) {
@@ -362,11 +372,7 @@ export class ShippingService {
       // Tự động chuyển giao hồ sơ tới Bộ phận Xử lý Sự cố & Ngoại lệ Đơn
       let exceptionEmp: { id: string; fullName: string; employeeCode: string; department: string } | null = null;
       if (dto.status === 'failed' || dto.status === 'returned') {
-        try {
-          exceptionEmp = await this.orders.findBestExceptionEmployee(tx);
-        } catch {
-          // ignore in mock environments
-        }
+        exceptionEmp = await this.orders.findBestExceptionEmployee(tx);
 
         if (exceptionEmp) {
           await tx.orderStatusHistory.create({
@@ -381,7 +387,7 @@ export class ShippingService {
         }
       }
 
-      return { updatedShipment, exceptionEmp };
+      return { updatedShipment, exceptionEmp, surveyNotifications };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch(error => {
       if (error instanceof Prisma.PrismaClientKnownRequestError && ['P2034', 'P2025'].includes(error.code)) {
         throw new ConflictException('Vận đơn vừa thay đổi, vui lòng tải lại và thử lại');
@@ -390,6 +396,7 @@ export class ShippingService {
     });
 
     await this.emitShipment(result.updatedShipment);
+    this.orders.emitSurveyNotifications(result.surveyNotifications);
     if (result.exceptionEmp) {
       this.realtime.emitToUser(result.exceptionEmp.id, 'order:exception', {
         orderId: shipment.orderId,
@@ -406,14 +413,14 @@ export class ShippingService {
   }
 
   async assignCarrier(id: string, dto: AssignCarrierDto, user: UserInfo) {
-    const shipment = await this.prisma.shipment.findUnique({
+    const shipment = await this.prisma.extended.shipment.findUnique({
       where: { id },
     });
     if (!shipment) {
       throw new NotFoundException('Không tìm thấy vận đơn');
     }
 
-    const carrier = await this.prisma.employee.findUnique({
+    const carrier = await this.prisma.extended.employee.findUnique({
       where: { id: dto.carrierId },
       select: { id: true, fullName: true, employeeCode: true, phone: true, department: true },
     });
@@ -425,10 +432,10 @@ export class ShippingService {
     if (['in_transit', 'out_for_delivery', 'delivered', 'returned'].includes(shipment.status)) {
       throw new BadRequestException('Không thể phân công lại vận đơn đang giao hoặc đã kết thúc');
     }
-    const activeCarrier = await this.prisma.employee.count({ where: { id: carrier.id, status: 'active', deletedAt: null } });
+    const activeCarrier = await this.prisma.extended.employee.count({ where: { id: carrier.id, status: 'active', deletedAt: null } });
     if (!activeCarrier) throw new BadRequestException('Nhân viên không còn hoạt động');
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.extendedTransaction(async (tx) => {
       const s = await tx.shipment.update({
         where: { id },
         data: {
@@ -479,7 +486,7 @@ export class ShippingService {
   async randomAssignCarrier(id: string, user: UserInfo) {
     if (user.role !== 'admin') throw new ForbiddenException('Chỉ Admin được phân công vận chuyển');
 
-    const shipment = await this.prisma.shipment.findUnique({
+    const shipment = await this.prisma.extended.shipment.findUnique({
       where: { id },
     });
     if (!shipment) {
@@ -489,27 +496,12 @@ export class ShippingService {
       throw new BadRequestException('Không thể phân công lại vận đơn đang giao hoặc đã kết thúc');
     }
 
-    // Ưu tiên nhân viên thuộc phòng ban vận chuyển
-    let shippingEmployees = await this.prisma.employee.findMany({
-      where: {
-        status: 'active',
-        deletedAt: null,
-        department: { contains: 'Vận chuyển', mode: 'insensitive' },
-      },
-      select: { id: true, fullName: true, employeeCode: true, phone: true },
-    });
-
-    if (!shippingEmployees.length) {
-      shippingEmployees = await this.prisma.employee.findMany({
-        where: { status: 'active', deletedAt: null },
-        select: { id: true, fullName: true, employeeCode: true, phone: true },
-      });
+    const bestCarrier = await this.orders.findBestShipperEmployee();
+    if (bestCarrier) {
+      return this.assignCarrier(id, { carrierId: bestCarrier.id, carrierType: 'employee' }, user);
     }
 
-    if (!shippingEmployees.length) {
-      throw new NotFoundException('Không tìm thấy nhân viên vận chuyển nào đang hoạt động');
-    }
-
+    const shippingEmployees = await this.listShippingEmployees();
     const randomCarrier = shippingEmployees[Math.floor(Math.random() * shippingEmployees.length)];
     return this.assignCarrier(id, { carrierId: randomCarrier.id, carrierType: 'employee' }, user);
   }
@@ -517,7 +509,7 @@ export class ShippingService {
   async randomAssignAll(user: UserInfo) {
     if (user.role !== 'admin') throw new ForbiddenException('Chỉ Admin được phân công vận chuyển');
 
-    const unassignedShipments = await this.prisma.shipment.findMany({
+    const unassignedShipments = await this.prisma.extended.shipment.findMany({
       where: {
         carrierId: null,
         status: { in: [ShipmentStatus.pending, ShipmentStatus.assigned] },
@@ -528,17 +520,38 @@ export class ShippingService {
       return { success: true, count: 0, message: 'Tất cả các vận đơn hợp lệ đã được phân công' };
     }
 
-    let shippingEmployees = await this.prisma.employee.findMany({
+    let fallbackEmployees: Array<{ id: string }> | null = null;
+    let count = 0;
+    for (const ship of unassignedShipments) {
+      let carrier = await this.orders.findBestShipperEmployee();
+      if (!carrier) {
+        if (!fallbackEmployees) {
+          fallbackEmployees = await this.listShippingEmployees();
+        }
+        carrier = fallbackEmployees[Math.floor(Math.random() * fallbackEmployees.length)] as any;
+      }
+      await this.assignCarrier(ship.id, { carrierId: carrier!.id, carrierType: 'employee' }, user);
+      count++;
+    }
+
+    return { success: true, count, message: `Đã phân công ngẫu nhiên cho ${count} vận đơn` };
+  }
+
+  /**
+   * Nhân viên đang hoạt động thuộc phòng ban vận chuyển, nếu không có thì dùng mọi nhân viên đang hoạt động.
+   */
+  private async listShippingEmployees() {
+    let shippingEmployees = await this.prisma.extended.employee.findMany({
       where: {
         status: 'active',
         deletedAt: null,
-        department: { contains: 'Vận chuyển', mode: 'insensitive' },
+        department: { contains: DEPARTMENT_KEYWORDS.SHIPPING, mode: 'insensitive' },
       },
       select: { id: true, fullName: true, employeeCode: true, phone: true },
     });
 
     if (!shippingEmployees.length) {
-      shippingEmployees = await this.prisma.employee.findMany({
+      shippingEmployees = await this.prisma.extended.employee.findMany({
         where: { status: 'active', deletedAt: null },
         select: { id: true, fullName: true, employeeCode: true, phone: true },
       });
@@ -548,14 +561,7 @@ export class ShippingService {
       throw new NotFoundException('Không tìm thấy nhân viên vận chuyển nào đang hoạt động');
     }
 
-    let count = 0;
-    for (const ship of unassignedShipments) {
-      const randomCarrier = shippingEmployees[Math.floor(Math.random() * shippingEmployees.length)];
-      await this.assignCarrier(ship.id, { carrierId: randomCarrier.id, carrierType: 'employee' }, user);
-      count++;
-    }
-
-    return { success: true, count, message: `Đã phân công ngẫu nhiên cho ${count} vận đơn` };
+    return shippingEmployees;
   }
 
   private async emitShipment(shipment: { id: string; orderId: string; status: ShipmentStatus; carrierId: string | null }) {
@@ -563,7 +569,7 @@ export class ShippingService {
     this.realtime.emitToAdmins('shipment:updated', payload);
     this.realtime.emitToEmployees('shipment:updated', payload);
     if (shipment.carrierId) this.realtime.emitToUser(shipment.carrierId, 'shipment:updated', payload);
-    const order = await this.prisma.order.findUnique({
+    const order = await this.prisma.extended.order.findUnique({
       where: { id: shipment.orderId },
       select: { clientId: true, vendorOrders: { select: { vendorId: true } } },
     });
@@ -577,11 +583,11 @@ export class ShippingService {
 
   private async assertAssigned(shipment: { carrierId: string | null }, user?: UserInfo) {
     if (user?.role === 'employee') {
-      const emp = await this.prisma.employee.findUnique({
+      const emp = await this.prisma.extended.employee.findUnique({
         where: { id: user.userID },
         select: { department: true },
       });
-      if (!emp?.department?.includes('Vận chuyển')) {
+      if (!emp?.department?.includes(DEPARTMENT_KEYWORDS.SHIPPING)) {
         throw new ForbiddenException(
           'Chỉ nhân viên thuộc Phòng Vận chuyển & Giao nhận mới có quyền tiếp nhận và cập nhật vận đơn',
         );

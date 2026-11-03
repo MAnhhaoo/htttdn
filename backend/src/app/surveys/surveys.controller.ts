@@ -56,7 +56,7 @@ export class SurveysController {
   @Get('inbox')
   @Roles('client', 'vendor')
   listInbox(@Query() query: GetSurveyInboxQueryDto, @User() user: UserInfo) {
-    return this.surveysService.listInbox(user.userID, query);
+    return this.surveysService.listInbox(user, query);
   }
 
   @Get('inbox/:responseId')
@@ -65,7 +65,7 @@ export class SurveysController {
     @Param('responseId', ParseUUIDPipe) responseId: string,
     @User() user: UserInfo,
   ) {
-    return this.surveysService.getInboxDetail(responseId, user.userID);
+    return this.surveysService.getInboxDetail(responseId, user);
   }
 
   @Patch('inbox/:responseId/open')
@@ -74,7 +74,7 @@ export class SurveysController {
     @Param('responseId', ParseUUIDPipe) responseId: string,
     @User() user: UserInfo,
   ) {
-    return this.surveysService.openResponse(responseId, user.userID);
+    return this.surveysService.openResponse(responseId, user);
   }
 
   @Post('inbox/:responseId/responses')
@@ -84,7 +84,7 @@ export class SurveysController {
     @Body() dto: SubmitSurveyDto,
     @User() user: UserInfo,
   ) {
-    return this.surveysService.submitResponse(responseId, user.userID, dto);
+    return this.surveysService.submitResponse(responseId, user, dto);
   }
 
   @Patch('inbox/:responseId/skip')
@@ -93,7 +93,7 @@ export class SurveysController {
     @Param('responseId', ParseUUIDPipe) responseId: string,
     @User() user: UserInfo,
   ) {
-    return this.surveysService.skipResponse(responseId, user.userID);
+    return this.surveysService.skipResponse(responseId, user);
   }
 
   @Get('orders/:orderId/pending')

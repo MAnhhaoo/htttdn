@@ -5,10 +5,8 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@prisma/client';
-import { omit } from 'es-toolkit';
 
 import { StringUtilService } from '../utils/string-util/string-util.service';
-import { DateUtilService } from '../utils/date-util/date-util.service';
 
 @Injectable()
 export class PrismaService
@@ -17,10 +15,7 @@ export class PrismaService
 {
   private _extended: ReturnType<typeof this.initExtended>;
 
-  constructor(
-    private _dateUtilService: DateUtilService,
-    private stringUtilService: StringUtilService,
-  ) {
+  constructor(private stringUtilService: StringUtilService) {
     super({
       transactionOptions: {
         // This feature is not available on MongoDB, because MongoDB does not support isolation levels.
@@ -32,33 +27,18 @@ export class PrismaService
     this.initExtended();
   }
 
-  private omitData(value: any, excludeFields: string[] = []) {
-    const isArray = Array.isArray(value);
-    if (isArray) {
-      const result = value.map((value: Record<string, any>) =>
-        omit(value, excludeFields),
-      );
-      return result;
-    }
-    return omit(value, excludeFields);
-  }
-
-  private transferDataCreate(value) {
-    const data: any = this.omitData(value, ['user', 'id', 'createdBy']);
-    return data;
-  }
-
   private generateData<T>(data: T, model: string) {
-    // const modelsGenSlug = [Vendor.name];
     const modelsGenSlug = ['Product', 'Category'];
     if (modelsGenSlug.includes(model)) {
       if (Array.isArray(data)) {
         const result = data.map((item) => ({
           ...item,
-          slug: this.stringUtilService.toSlug(item['name']),
+          ...(typeof item['name'] === 'string'
+            ? { slug: this.stringUtilService.toSlug(item['name']) }
+            : {}),
         })) as T;
         data = result;
-      } else {
+      } else if (typeof data['name'] === 'string') {
         const slug = this.stringUtilService.toSlug(data['name']);
         return { ...data, slug };
       }
@@ -66,39 +46,55 @@ export class PrismaService
     return data;
   }
 
-  // private readonly JUNCTION_TABLES = [RolePermission.name, UserVendorRole.name];
-  private readonly JUNCTION_TABLES = ['RolePermission', 'UserVendorRole'];
+  private readonly ACCOUNT_MODELS = ['Admin', 'Client', 'Vendor', 'Employee'];
+  private readonly MODEL_FIELDS = new Map(
+    Prisma.dmmf.datamodel.models.map((model) => [
+      model.name,
+      new Set(model.fields.map((field) => field.name)),
+    ]),
+  );
+
+  private hasField(model: string, field: string) {
+    return this.MODEL_FIELDS.get(model)?.has(field) ?? false;
+  }
+
+  private isSoftDeletable(model: string) {
+    return !this.ACCOUNT_MODELS.includes(model) && this.hasField(model, 'deletedAt');
+  }
+
   initExtended() {
+    const hasDeletedAt = (model: string) => this.hasField(model, 'deletedAt');
     const extended = this.$extends({
       query: {
         $allModels: {
-          findFirst: ({ args, query }) => {
-            args.where = { ...args.where, deletedAt: null };
+          findFirst: ({ args, query, model }) => {
+            if (this.isSoftDeletable(model)) {
+              args.where = { ...args.where, deletedAt: null };
+            }
             return query(args);
           },
           findMany: ({ args, query, model }) => {
-            if (!this.JUNCTION_TABLES.includes(model)) {
+            if (this.isSoftDeletable(model)) {
               args.where = { ...args.where, deletedAt: null };
-              args.orderBy ??= [{ updatedAt: 'desc' }, { createdAt: 'desc' }];
+            }
+            if (!args.orderBy) {
+              const orderBy = ['updatedAt', 'createdAt']
+                .filter((field) => this.hasField(model, field))
+                .map((field) => ({ [field]: 'desc' as const }));
+              if (orderBy.length) args.orderBy = orderBy;
             }
             return query(args);
           },
           create: ({ args, query, model }) => {
-            const generateData = this.generateData(args.data, model);
-            const transferData = this.transferDataCreate(generateData);
-            args.data = transferData;
+            args.data = this.generateData(args.data, model);
             return query(args);
           },
           createMany: ({ args, query, model }) => {
-            const generateData = this.generateData(args.data, model);
-            const transferData = this.transferDataCreate(generateData);
-            args.data = transferData;
+            args.data = this.generateData(args.data, model);
             return query(args);
           },
           createManyAndReturn: ({ args, query, model }) => {
-            const generateData = this.generateData(args.data, model);
-            const transferData = this.transferDataCreate(generateData);
-            args.data = transferData;
+            args.data = this.generateData(args.data, model);
             return query(args);
           },
           update: ({ args, query }) => {
@@ -107,20 +103,15 @@ export class PrismaService
           updateMany: ({ args, query }) => {
             return query(args);
           },
-          count: ({ args, query }) => {
-            args.where = { ...args.where, deletedAt: null };
+          count: ({ args, query, model }) => {
+            if (this.isSoftDeletable(model)) {
+              args.where = { ...args.where, deletedAt: null };
+            }
             return query(args);
           },
           upsert: ({ args, query, model }) => {
-            const generateCreateData = this.generateData(args.create, model);
-            const transferCreateData =
-              this.transferDataCreate(generateCreateData);
-            args.create = transferCreateData;
-
-            const generateUpdateData = this.generateData(args.update, model);
-            const transferUpdateData =
-              this.transferDataCreate(generateUpdateData);
-            args.update = transferUpdateData;
+            args.create = this.generateData(args.create, model);
+            args.update = this.generateData(args.update, model);
             return query(args);
           },
           delete: async ({ args, query, model }) => {
@@ -136,30 +127,24 @@ export class PrismaService
       },
       model: {
         $allModels: {
-          async export<T>(
-            this: T,
-            args: Prisma.Args<T, 'findMany'> = {} as any,
-          ) {
-            const context: any = Prisma.getExtensionContext(this);
-            const FIELDS_EXCLUDE = ['id'];
-            args.select ??= Object.keys(context.fields).reduce(
-              (acc, field) => ({
-                ...acc,
-                [field]: FIELDS_EXCLUDE.includes(field) ? false : true,
-              }),
-              {},
-            );
-
-            const result = await context.findMany(args);
-            return result;
-          },
           async softDelete<T>(
             this: T,
             where: Prisma.Args<T, 'deleteMany'>['where'],
           ) {
             const context: any = Prisma.getExtensionContext(this);
+            if (!hasDeletedAt(context.$name)) {
+              throw new Error(`${context.$name} does not support soft delete`);
+            }
+            const isAccount = [
+              'Admin',
+              'Client',
+              'Vendor',
+              'Employee',
+            ].includes(context.$name);
             const result = await context.updateMany({
-              data: { deletedAt: new Date() },
+              data: isAccount
+                ? { status: 'inactive', deletedAt: null }
+                : { deletedAt: new Date() },
               where,
             });
             return result;
@@ -169,26 +154,25 @@ export class PrismaService
             where: Prisma.Args<T, 'updateMany'>['where'],
           ) {
             const context: any = Prisma.getExtensionContext(this);
+            if (!hasDeletedAt(context.$name)) {
+              throw new Error(`${context.$name} does not support restore`);
+            }
+            const isAccount = [
+              'Admin',
+              'Client',
+              'Vendor',
+              'Employee',
+            ].includes(context.$name);
             const result = await context.updateMany({
-              data: { deletedAt: null },
+              data: isAccount
+                ? { status: 'active', deletedAt: null }
+                : { deletedAt: null },
               where,
             });
             return result;
           },
         },
       },
-      // result: {
-      //   $allModels: {
-      //     createdAt: {
-      //       compute: ({ createdAt }) =>
-      //         this.dateUtilService.formatDate(createdAt),
-      //     },
-      //     updatedAt: {
-      //       compute: ({ updatedAt }) =>
-      //         this.dateUtilService.formatDate(updatedAt),
-      //     },
-      //   },
-      // },
     });
     this._extended = extended;
     return extended;
@@ -196,6 +180,21 @@ export class PrismaService
 
   get extended() {
     return this._extended;
+  }
+
+  /** Run an interactive transaction through the extended client. */
+  async extendedTransaction<T>(
+    callback: (tx: Prisma.TransactionClient) => Promise<T>,
+    options?: {
+      maxWait?: number;
+      timeout?: number;
+      isolationLevel?: Prisma.TransactionIsolationLevel;
+    },
+  ): Promise<T> {
+    return this.extended.$transaction(
+      (tx) => callback(tx as unknown as Prisma.TransactionClient),
+      options,
+    );
   }
 
   async onModuleInit() {

@@ -4,11 +4,10 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Query,
-  UsePipes} from '@nestjs/common';
-
-
+} from '@nestjs/common';
 
 import { Roles } from '../../common/guards/access-control/roles.decorator';
 
@@ -16,17 +15,11 @@ import { User } from '../../common/decorators/user.decorator';
 
 import type { UserInfo as ClientInfo } from '../../common/decorators/user.decorator';
 
-import { ParseParamsOptionPipe } from '../../common/pipes/parse-params-option.pipe';
-
-import type { GetOptionsParams } from '../../common/query/options.interface';
-
 import { ClientsService } from './clients.service';
 
-import { UpdateProfileDto, UpdateClientDto } from './dto/update-client.dto';
+import { UpdateClientProfileDto, UpdateClientDto } from './dto/update-client.dto';
 
 import { GetClientsPaginationDto } from './dto/get-client.dto';
-
-import type { Client as ClientEntity } from './entities/client.entity';
 
 @Controller('clients')
 export class ClientsController {
@@ -37,7 +30,6 @@ export class ClientsController {
    * - phân trang
    * - tìm kiếm
    * - lọc status
-   * - lọc role
    */
   @Get()
   @Roles('admin')
@@ -46,32 +38,18 @@ export class ClientsController {
   }
 
   /**
-   * Danh sách client rút gọn.
-   * Dùng cho dropdown/select.
-   *
-   * Phải đặt trước @Get(':id').
-   */
-  @Get('options')
-  @Roles('admin')
-  @UsePipes(ParseParamsOptionPipe)
-  getClientOptions(
-    @Query()
-    query: GetOptionsParams<ClientEntity>,
-  ) {
-    return this.clientsService.getOptions(query);
-  }
-
-  /**
    * Lấy thông tin người dùng
    * đang đăng nhập.
    */
   @Get('profile')
+  @Roles('client')
   getProfile(
     @User()
     client: ClientInfo,
   ) {
     return this.clientsService.getClient({
-      id: client.userID});
+      id: client.userID,
+    });
   }
 
   /**
@@ -79,19 +57,21 @@ export class ClientsController {
    * đang đăng nhập.
    */
   @Patch('profile')
-  @Roles('client', 'vendor', 'admin')
+  @Roles('client')
   updateProfile(
     @User()
     client: ClientInfo,
 
     @Body()
-    updateClientDto: UpdateProfileDto,
+    updateClientDto: UpdateClientProfileDto,
   ) {
     return this.clientsService.updateClient({
       where: {
-        id: client.userID},
+        id: client.userID,
+      },
 
-      data: updateClientDto});
+      data: updateClientDto,
+    });
   }
 
   /**
@@ -100,11 +80,12 @@ export class ClientsController {
   @Get(':id')
   @Roles('admin')
   getClient(
-    @Param('id')
+    @Param('id', ParseUUIDPipe)
     id: string,
   ) {
     return this.clientsService.getClient({
-      id});
+      id,
+    });
   }
 
   /**
@@ -113,7 +94,7 @@ export class ClientsController {
   @Patch(':id')
   @Roles('admin')
   updateClient(
-    @Param('id')
+    @Param('id', ParseUUIDPipe)
     id: string,
 
     @Body()
@@ -121,21 +102,24 @@ export class ClientsController {
   ) {
     return this.clientsService.updateClient({
       where: {
-        id},
+        id,
+      },
 
-      data: updateClientDto});
+      data: updateClientDto,
+    });
   }
 
   /**
-   * Admin vô hiệu hóa client.
+   * Admin khóa tài khoản client.
    */
   @Delete(':id')
   @Roles('admin')
   deleteClient(
-    @Param('id')
+    @Param('id', ParseUUIDPipe)
     id: string,
   ) {
     return this.clientsService.deleteClient({
-      id});
+      id,
+    });
   }
 }

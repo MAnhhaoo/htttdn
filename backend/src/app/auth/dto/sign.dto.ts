@@ -1,3 +1,4 @@
+import { Gender } from '@prisma/client';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import { withResponse } from '../../../common/interceptors/format-response/format-response.util';
@@ -47,6 +48,17 @@ const SignUpSchema = z
       .max(500, 'Địa chỉ không được vượt quá 500 ký tự')
       .nullable()
       .optional(),
+    dateOfBirth: z.preprocess(
+      (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+      z.iso
+        .date('Ngày sinh không đúng định dạng (YYYY-MM-DD)')
+        .nullable()
+        .optional(),
+    ),
+    gender: z.preprocess(
+      (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+      z.enum(Gender, { error: 'Giới tính không hợp lệ' }).nullable().optional(),
+    ),
     storeName: z
       .string({ error: 'Tên cửa hàng phải là chuỗi' })
       .trim()

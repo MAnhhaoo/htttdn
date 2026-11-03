@@ -8,9 +8,9 @@ import {
   Loader2,
   Building2,
   User,
-  FileText,
   ShieldCheck,
   Check,
+  Sparkles,
 } from 'lucide-react';
 import { Button, Input, Select } from '../../components/ui';
 import { useNavigate, Link } from 'react-router-dom';
@@ -113,8 +113,34 @@ export default function VendorRegister() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 transition-colors font-sans py-12">
-      <div className="max-w-2xl w-full bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-100 dark:border-slate-800 p-8 sm:p-10">
+    <div className="min-h-screen relative overflow-hidden bg-[#0b0820] flex items-center justify-center p-4 transition-colors font-sans py-12">
+      {/* Cohesive Partner Ecosystem Aurora Mesh Background */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
+        <div className="absolute -top-36 -left-36 w-[560px] h-[560px] rounded-full bg-indigo-600/35 blur-[140px]" />
+        <div className="absolute top-1/4 -right-36 w-[540px] h-[540px] rounded-full bg-purple-600/30 blur-[140px]" />
+        <div className="absolute -bottom-40 left-1/3 w-[540px] h-[540px] rounded-full bg-fuchsia-500/20 blur-[150px]" />
+        <div className="absolute top-20 right-1/3 w-[320px] h-[320px] rounded-full bg-amber-500/15 blur-[120px]" />
+
+        <div
+          className="absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, #a78bfa 1px, transparent 1px), linear-gradient(to bottom, #a78bfa 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+          }}
+        />
+      </div>
+
+      <div className="hidden lg:flex items-center gap-2.5 fixed top-8 left-8 px-4 py-2 rounded-full bg-white/[0.06] backdrop-blur-xl border border-white/15 text-xs text-indigo-100 shadow-lg z-10">
+        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+        <span className="font-semibold">MIVA Partner Ecosystem</span>
+        <span className="text-indigo-300/60">•</span>
+        <span className="text-indigo-200">Đăng ký Mở Gian Hàng</span>
+      </div>
+
+      <div className="max-w-2xl w-full bg-white/95 dark:bg-slate-900/90 backdrop-blur-2xl rounded-3xl shadow-[0_25px_70px_-15px_rgba(99,102,241,0.45)] border border-white/30 dark:border-slate-700/80 ring-1 ring-indigo-500/20 p-8 sm:p-10 relative z-10 overflow-hidden">
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-indigo-600 via-purple-500 to-amber-400" />
+
         <Link
           to="/login"
           className="inline-flex items-center text-sm text-slate-500 dark:text-slate-400 hover:text-indigo-600 mb-6 transition-colors"
@@ -125,7 +151,7 @@ export default function VendorRegister() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-purple-500 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30">
               <Store className="w-6 h-6" />
             </div>
             <div>

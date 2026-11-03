@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Modal, Button, Input, Select } from '../../components/ui';
+import { Modal, Button, Input, Select, AvatarUploadField } from '../../components/ui';
 import { employeesApi } from '../../api';
 import { 
   User, Mail, Phone, Lock, DollarSign, Clock, ShieldCheck, 
@@ -38,6 +38,7 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
         email: employeeToEdit.email || '',
         password: '',
         phone: employeeToEdit.phone || '',
+        avatarUrl: employeeToEdit.avatarUrl || '',
         citizenId: employeeToEdit.citizenId || '',
         address: employeeToEdit.address || '',
         department: employeeToEdit.department || (departments[0] || 'Phòng Quản lý & Vận hành Đơn hàng'),
@@ -68,6 +69,7 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
       email: '',
       password: '',
       phone: '',
+      avatarUrl: '',
       citizenId: '',
       address: '',
       department: departments[0] || 'Phòng Quản lý & Vận hành Đơn hàng',
@@ -134,6 +136,7 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
         fullName: formData.fullName,
         email: formData.email,
         phone: formData.phone || null,
+        avatarUrl: formData.avatarUrl?.trim() || null,
         citizenId: formData.citizenId || null,
         address: formData.address || null,
         department: formData.department,
@@ -268,6 +271,17 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
                 value={formData.address}
                 onChange={(e) => handleTextChange('address', e.target.value)}
                 placeholder="Số nhà, đường, quận/huyện..."
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <AvatarUploadField
+                label="Ảnh Đại Diện"
+                labelClassName="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
+                avatarUrl={formData.avatarUrl}
+                altName={formData.fullName || 'Avatar'}
+                onChange={(url) => handleTextChange('avatarUrl', url)}
+                onError={(msg) => setErrorMsg(msg)}
               />
             </div>
           </div>

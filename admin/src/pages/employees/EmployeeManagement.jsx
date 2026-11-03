@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { 
-  Users, UserPlus, Search, Filter, Shield, MoreHorizontal, 
-  Lock, Unlock, Edit, Trash2, TrendingUp, CheckCircle, XCircle, 
-  Clock, DollarSign, Briefcase, RefreshCw, Loader2, ChevronLeft, ChevronRight,
-  ShieldCheck, AlertCircle, Bell, Calendar
+  Users, UserPlus, Search,
+  Lock, Unlock, Edit, TrendingUp, CheckCircle,
+  Clock, Briefcase, RefreshCw, Loader2, ChevronLeft, ChevronRight,
+  ShieldCheck, Bell
 } from 'lucide-react';
 import { employeesApi } from '../../api';
 import { Button, Input, Badge } from '../../components/ui';
@@ -98,19 +98,6 @@ export default function EmployeeManagement() {
     } catch (err) {
       console.error('Error updating status:', err);
       alert('Không thể cập nhật trạng thái nhân viên');
-    }
-  };
-
-  // Delete
-  const handleDelete = async (emp) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa nhân viên ${emp.fullName} (${emp.employeeCode})?`)) {
-      try {
-        await employeesApi.deleteEmployee(emp.id);
-        fetchEmployees();
-      } catch (err) {
-        console.error('Error deleting employee:', err);
-        alert('Không thể xóa nhân viên');
-      }
     }
   };
 
@@ -450,14 +437,6 @@ export default function EmployeeManagement() {
                             className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-slate-800 transition-colors"
                           >
                             {emp.status === 'active' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                          </button>
-
-                          <button
-                            onClick={() => handleDelete(emp)}
-                            title="Xóa nhân viên"
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
