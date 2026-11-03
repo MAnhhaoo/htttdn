@@ -17,6 +17,8 @@ import {
   CookiesToken,
 } from '../../common/decorators/cookie/cookie.const';
 
+//  /api/auth/sign-up
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

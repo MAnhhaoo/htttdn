@@ -267,7 +267,7 @@ export class ProductService extends PrismaBaseService<'product'> {
   ) {
     return this.findProducts(query, {
       vendorId,
-      ...(status ? { status } : {})});
+      ...(status && status !== 'all' ? { status } : {})});
   }
 
   async getProductById(id: string) {

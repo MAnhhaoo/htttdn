@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { OrderStatus, Prisma} from '@prisma/client';
+import { OrderStatus, Prisma } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -18,7 +18,7 @@ export interface FinanceConfigTier {
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   private getFinanceConfigFile(): string {
     return path.join(process.cwd(), 'data', 'finance-config.json');
@@ -91,6 +91,7 @@ export class ReportsService {
     };
 
     history.push(newTier);
+    // Hàm dirname có nhiệm vụ bóc tách và lấy phần tên thư mục, bỏ đi phần tên file ở đuôi.
     const dir = path.dirname(this.getFinanceConfigFile());
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -99,6 +100,7 @@ export class ReportsService {
       this.getFinanceConfigFile(),
       JSON.stringify({ history }, null, 2),
       'utf-8',
+      // Ghi toàn bộ dữ liệu mới đó xuống file finance-config.json bằng hàm fs.writeFileSync
     );
 
     return {
@@ -111,48 +113,65 @@ export class ReportsService {
     const vendorId = user.role === 'vendor' ? user.userID : undefined;
     const dateWhere = {
       ...(query.from ? { gte: new Date(query.from) } : {}),
-      ...(query.to ? { lte: new Date(query.to) } : {})};
+      ...(query.to ? { lte: new Date(query.to) } : {})
+    };
     const orderScope: Prisma.OrderWhereInput = {
       status: OrderStatus.completed,
       ...(Object.keys(dateWhere).length ? { createdAt: dateWhere } : {}),
       ...(vendorId
         ? {
-            details: {
-              some: {
-                productVariant: {
-                  productColor: { product: { vendorId } }}}}}
-        : {})};
+          details: {
+            some: {
+              productVariant: {
+                productColor: { product: { vendorId } }
+              }
+            }
+          }
+        }
+        : {})
+    };
     const buyers = await this.prisma.order.findMany({
       where: orderScope,
       select: { clientId: true },
-      distinct: ['clientId']});
+      distinct: ['clientId']
+    });
     const customerIds = buyers.map((buyer) => buyer.clientId);
     const customers = await this.prisma.client.findMany({
       where: {
-        
+
         deletedAt: null,
-        ...(vendorId ? { id: { in: customerIds } } : {})},
-      select: { id: true, dateOfBirth: true, gender: true }});
+        ...(vendorId ? { id: { in: customerIds } } : {})
+      },
+      select: { id: true, dateOfBirth: true, gender: true }
+    });
     const reportCustomerIds = customers.map((customer) => customer.id);
     const favorites = await this.prisma.productFavorite.findMany({
       where: {
         clientId: { in: reportCustomerIds },
         ...(Object.keys(dateWhere).length ? { createdAt: dateWhere } : {}),
-        ...(vendorId ? { product: { vendorId } } : {})},
+        ...(vendorId ? { product: { vendorId } } : {})
+      },
       select: {
         product: {
           select: {
             id: true,
             name: true,
-            category: { select: { id: true, name: true } }}}}});
+            category: { select: { id: true, name: true } }
+          }
+        }
+      }
+    });
     const details = await this.prisma.orderDetail.findMany({
       where: {
         order: orderScope,
         ...(vendorId
           ? {
-              productVariant: {
-                productColor: { product: { vendorId } }}}
-          : {})},
+            productVariant: {
+              productColor: { product: { vendorId } }
+            }
+          }
+          : {})
+      },
       select: {
         quantity: true,
         price: true,
@@ -165,7 +184,15 @@ export class ReportsService {
                   select: {
                     id: true,
                     name: true,
-                    category: { select: { id: true, name: true } }}}}}}}}});
+                    category: { select: { id: true, name: true } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
 
     const favoriteProducts = new Map<string, { name: string; count: number }>();
     const favoriteCategories = new Map<
@@ -221,18 +248,22 @@ export class ReportsService {
             result[key] = (result[key] ?? 0) + 1;
             return result;
           }, {}),
-        ).map(([gender, count]) => ({ gender, count }))},
+        ).map(([gender, count]) => ({ gender, count }))
+      },
       interests: {
         favoriteProducts: this.top(favoriteProducts, query.limit),
         favoriteCategories: this.top(favoriteCategories, query.limit),
         purchasedProducts: this.top(purchasedProducts, query.limit),
-        purchasedCategories: this.top(purchasedCategories, query.limit)},
+        purchasedCategories: this.top(purchasedCategories, query.limit)
+      },
       commerce: {
         completedOrderCount: orderCount,
         revenue: revenue.toString(),
         averageOrderValue: orderCount
           ? revenue.div(orderCount).toDecimalPlaces(2).toString()
-          : '0'}};
+          : '0'
+      }
+    };
   }
 
   async analyticsOverview(query: AnalyticsReportQueryDto) {
@@ -331,8 +362,8 @@ export class ReportsService {
         ? Number(query.month)
         : orderDateRange._max.createdAt &&
           new Date(orderDateRange._max.createdAt).getFullYear() === targetYear
-        ? new Date(orderDateRange._max.createdAt).getMonth() + 1
-        : 9;
+          ? new Date(orderDateRange._max.createdAt).getMonth() + 1
+          : 9;
       startDate = new Date(Date.UTC(targetYear, month - 1, 1, 0, 0, 0, 0));
       const lastDay = new Date(Date.UTC(targetYear, month, 0)).getUTCDate();
       endDate = new Date(Date.UTC(targetYear, month - 1, lastDay, 23, 59, 59, 999));
@@ -354,7 +385,7 @@ export class ReportsService {
     } else if (period === 'week') {
       const refDate =
         orderDateRange._max.createdAt &&
-        new Date(orderDateRange._max.createdAt).getFullYear() === targetYear
+          new Date(orderDateRange._max.createdAt).getFullYear() === targetYear
           ? new Date(orderDateRange._max.createdAt)
           : new Date(Date.UTC(targetYear, 8, 20));
 

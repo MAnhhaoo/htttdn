@@ -23,8 +23,15 @@ export default function ProductDetailModal({ isOpen, onClose, product }) {
               <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{product.name}</h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Product ID: #{product.id}</p>
             </div>
-            <Badge variant={product.status === 'active' ? 'success' : 'default'} className={product.status === 'active' ? 'bg-green-100 text-green-700' : ''}>
-              {product.status.toUpperCase()}
+            <Badge 
+              variant={product.status === 'active' ? 'success' : 'error'} 
+              className={
+                product.status === 'active' 
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium' 
+                  : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-medium'
+              }
+            >
+              {product.status?.toUpperCase()}
             </Badge>
           </div>
           <div className="grid grid-cols-2 gap-4 mt-6">

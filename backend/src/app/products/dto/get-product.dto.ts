@@ -18,7 +18,7 @@ const GetAdminProductsPaginationSchema = GetProductsPaginationSchema.extend({
 }).strict();
 
 const GetVendorProductsPaginationSchema = PaginationQuerySchema.extend({
-  status: z.enum(ProductStatus).optional(),
+  status: z.union([z.enum(ProductStatus), z.literal('all')]).optional(),
   createdAfter: z.string().datetime().optional()}).strict();
 
 class GetProductsPaginationDto extends createZodDto(
