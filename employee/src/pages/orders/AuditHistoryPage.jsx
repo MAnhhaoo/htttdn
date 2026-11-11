@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { History, Filter, Search, User, ShieldCheck, Store, ShieldAlert } from 'lucide-react';
+import { formatShortOrderCode } from '../../utils/orderFormat';
 
 export const AuditHistoryPage = ({ orders, onOpenDetail }) => {
   const [filterActor, setFilterActor] = useState('all');
@@ -111,8 +112,8 @@ export const AuditHistoryPage = ({ orders, onOpenDetail }) => {
             <div key={item.id || idx} className="p-4 hover:bg-slate-50/60 transition flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
               <div className="space-y-1">
                 <div className="flex items-center space-x-2">
-                  <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    {item.orderCode}
+                  <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200" title={item.orderCode}>
+                    #{formatShortOrderCode(item.orderCode || item.orderId)}
                   </span>
                   <span className="text-slate-400">•</span>
                   <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] border ${

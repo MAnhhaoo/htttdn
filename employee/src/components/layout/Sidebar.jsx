@@ -34,7 +34,7 @@ export const Sidebar = ({ pendingCount = 2, confirmedCount = 1, exceptionCount =
     {
       to: '/orders?status=pending',
       icon: Clock,
-      label: 'Chờ xác nhận',
+      label: 'Chờ duyệt đơn',
       badge: pendingCount,
       badgeColor: 'bg-amber-100 text-amber-800',
       roles: ['vendor_link', 'all'],
@@ -56,7 +56,7 @@ export const Sidebar = ({ pendingCount = 2, confirmedCount = 1, exceptionCount =
     {
       to: '/shipping',
       icon: Truck,
-      label: 'Tiếp nhận & Giao hàng (Bưu tá)',
+      label: 'Quản lý giao hàng (Bưu tá)',
       roles: ['shipping', 'all'],
     },
     {
@@ -141,7 +141,10 @@ export const Sidebar = ({ pendingCount = 2, confirmedCount = 1, exceptionCount =
             <span>Phạm vi phân quyền</span>
           </div>
           <p className="text-[11px] text-amber-700 leading-relaxed">
-            Nhân viên chỉ có quyền xác nhận, điều phối vendor và xử lý sự cố đơn hàng. Không có quyền sửa đổi User, Vendor, Sản phẩm hoặc Voucher.
+            {isVendorLink && 'Nhiệm vụ Điều phối: Kiểm tra, duyệt đơn hàng và chuyển đơn cho đối tác Vendor chuẩn bị hàng.'}
+            {isShipping && 'Nhiệm vụ Bưu tá: Tiếp nhận kiện hàng từ kho Vendor/Hub và trực tiếp giao đến tay khách hàng.'}
+            {isExceptions && 'Nhiệm vụ Sự cố: Tiếp nhận và xử lý các sự cố đơn hàng trong phạm vi phân quyền.'}
+            {!isVendorLink && !isShipping && !isExceptions && 'Thực hiện công việc theo đúng phạm vi phân công của bộ phận.'}
           </p>
         </div>
       </div>

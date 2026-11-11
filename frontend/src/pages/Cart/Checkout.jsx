@@ -19,7 +19,7 @@ import { formatPrice } from '../../utils/formatPrice';
 import Input from '../../components/common/Input/Input';
 import Button from '../../components/common/Button/Button';
 import { useCheckoutPricing } from '../../hooks/useCheckoutPricing';
-import VoucherPricing from '../../components/cart/VoucherPricing';
+import VoucherPricing, { PlatformVoucherPricing } from '../../components/cart/VoucherPricing';
 import Loading from '../../components/common/Loading/Loading';
 
 export default function Checkout() {
@@ -105,7 +105,7 @@ export default function Checkout() {
       0,
     );
   }, [checkoutItems]);
-  const pricing = useCheckoutPricing(checkoutItems, location.state?.voucherSelections || [], !isSubmitting && !checkoutCompletedRef.current);
+  const pricing = useCheckoutPricing(checkoutItems, location.state?.voucherSelections || [], !isSubmitting && !checkoutCompletedRef.current, location.state?.platformVoucherCode || null);
 
   if (isLoadingCart) {
     return <Loading text="Đang tải giỏ hàng..." />;
@@ -240,7 +240,7 @@ export default function Checkout() {
         receiverPhone: receiverPhone.trim(),
         shippingAddress: shippingAddress.trim(),
         paymentMethod: paymentMethod,
-        voucherCodes: [],
+        voucherCodes: pricing.platformCode ? [pricing.platformCode] : [],
         voucherSelections: pricing.selections,
         expectedTotalAmount: Number(pricing.data.totalAmount),
         cartItemIds: checkoutItems.map((i) => i.id),
@@ -533,7 +533,9 @@ export default function Checkout() {
                 <div className="space-y-2.5">
                   {vendorPackages.map((pkg, idx) => {
                     const pack = pricing.data?.packages?.find((p) => p.vendorId === pkg.vendorId);
-                    const packDiscount = pack ? Number(pack.discountAmount) : 0;
+                    const packShopDiscount = pack?.applications?.filter(a => a.scope === 'vendor').reduce((s, a) => s + Number(a.discountAmount), 0) || 0;
+                    const packPlatformDiscount = pack?.applications?.filter(a => a.scope === 'platform').reduce((s, a) => s + Number(a.discountAmount), 0) || 0;
+                    const packDiscount = packShopDiscount + packPlatformDiscount;
                     const packTotal = pack ? Number(pack.totalAmount) : pkg.subtotal - packDiscount;
 
                     return (
@@ -556,10 +558,16 @@ export default function Checkout() {
                             <span>Tạm tính tiền hàng:</span>
                             <span className="font-medium text-light-text dark:text-dark-text">{formatPrice(pkg.subtotal)}</span>
                           </div>
-                          {packDiscount > 0 ? (
+                          {packShopDiscount > 0 ? (
                             <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
                               <span>Giảm voucher shop:</span>
-                              <span className="font-semibold">-{formatPrice(packDiscount)}</span>
+                              <span className="font-semibold">-{formatPrice(packShopDiscount)}</span>
+                            </div>
+                          ) : null}
+                          {packPlatformDiscount > 0 ? (
+                            <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                              <span>Giảm voucher toàn sàn:</span>
+                              <span className="font-semibold">-{formatPrice(packPlatformDiscount)}</span>
                             </div>
                           ) : null}
                           <div className="flex justify-between">
@@ -584,6 +592,10 @@ export default function Checkout() {
               <div className="flex items-center justify-between text-xs font-bold text-light-muted dark:text-dark-muted uppercase tracking-wider">
                 <span>{vendorPackages.length > 1 ? 'Tổng thanh toán tất cả các kiện' : 'Chi tiết thanh toán'}</span>
               </div>
+
+              {/* Mã giảm giá toàn sàn (Admin) */}
+              <PlatformVoucherPricing items={checkoutItems} pricing={pricing} />
+
               <div className="flex justify-between text-sm">
                 <span className="text-light-muted dark:text-dark-muted">Tạm tính ({checkoutItems.length} sản phẩm)</span>
                 <span className="font-medium text-light-text dark:text-dark-text">{formatPrice(checkoutSubtotal)}</span>
@@ -592,7 +604,7 @@ export default function Checkout() {
                 <span className="text-light-muted dark:text-dark-muted">Phí giao hàng</span>
                 <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Miễn phí</span>
               </div>
-              {pricing.data && (
+              {pricing.data && Number(pricing.data.discountAmount) > 0 && (
                 <div className="flex justify-between text-sm text-emerald-700 dark:text-emerald-400">
                   <span>Tổng giảm giá voucher</span>
                   <strong className="font-bold">-{formatPrice(pricing.data.discountAmount)}</strong>

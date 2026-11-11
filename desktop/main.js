@@ -50,6 +50,14 @@ const MIME = {
 // Local server (production): phục vụ file tĩnh của frontend + proxy API/realtime
 // -> Giữ nguyên BrowserRouter và baseURL '/api' của frontend, không cần sửa code web.
 // ---------------------------------------------------------------------------
+function buildProxyHeaders(reqHeaders) {
+  const headers = { ...reqHeaders, host: BACKEND_URL.host }
+  if (typeof headers.origin === 'string' && /^http:\/\/127\.0\.0\.1:\d+$/i.test(headers.origin)) {
+    delete headers.origin
+  }
+  return headers
+}
+
 function proxyToBackend(req, res) {
   const options = {
     protocol: BACKEND_URL.protocol,
@@ -57,7 +65,7 @@ function proxyToBackend(req, res) {
     port: BACKEND_URL.port || (BACKEND_URL.protocol === 'https:' ? 443 : 80),
     path: req.url,
     method: req.method,
-    headers: { ...req.headers, host: BACKEND_URL.host },
+    headers: buildProxyHeaders(req.headers),
   }
   const client = BACKEND_URL.protocol === 'https:' ? require('https') : http
   const proxyReq = client.request(options, (proxyRes) => {
@@ -91,8 +99,10 @@ function serveStatic(req, res) {
       res.writeHead(500)
       return res.end('Không đọc được file: ' + err.message)
     }
+    const ext = path.extname(filePath).toLowerCase()
     res.writeHead(200, {
-      'Content-Type': MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
+      'Content-Type': MIME[ext] || 'application/octet-stream',
+      ...(ext === '.html' ? { 'Cache-Control': 'no-cache, no-store, must-revalidate' } : {}),
     })
     res.end(data)
   })
@@ -116,7 +126,7 @@ function startLocalServer() {
         port: BACKEND_URL.port || (BACKEND_URL.protocol === 'https:' ? 443 : 80),
         path: req.url,
         method: req.method,
-        headers: { ...req.headers, host: BACKEND_URL.host },
+        headers: buildProxyHeaders(req.headers),
       })
       proxyReq.on('upgrade', (response, upstream, upstreamHead) => {
         socket.write(`HTTP/1.1 ${response.statusCode} ${response.statusMessage}\r\n`)

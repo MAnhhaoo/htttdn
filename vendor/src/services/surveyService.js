@@ -29,6 +29,10 @@ export const surveyService = {
     return apiClient.get(`/surveys/${id}/results`, { params });
   },
 
+  extendSurvey: async (id, endDate) => {
+    return apiClient.patch(/surveys//extend, { endDate });
+  },
+
   deleteSurvey: async (id) => {
     return apiClient.delete(`/surveys/${id}`);
   },

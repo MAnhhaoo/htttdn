@@ -24,6 +24,16 @@ import { GetSurveyInboxQueryDto } from './dto/survey-campaign.dto';
 import { SurveyStatusDto } from './dto/survey-status.dto';
 import { UpdateSurveyDto } from './dto/update-survey.dto';
 import { SurveysService } from './surveys.service';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+
+class ExtendSurveyDto extends createZodDto(
+  z
+    .object({
+      endDate: z.string().min(1),
+    })
+    .strict(),
+) {}
 
 @Controller('surveys')
 export class SurveysController {
@@ -153,6 +163,16 @@ export class SurveysController {
     @User() user: UserInfo,
   ) {
     return this.surveysService.skip(id, orderId, user.userID);
+  }
+
+  @Patch(':id/extend')
+  @Roles('admin', 'vendor')
+  extend(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ExtendSurveyDto,
+    @User() user: UserInfo,
+  ) {
+    return this.surveysService.extend(id, dto.endDate, user);
   }
 
   @Patch(':id/status')

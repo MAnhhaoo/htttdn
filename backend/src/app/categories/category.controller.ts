@@ -47,6 +47,7 @@ export class CategoryController {
   ) {
     return this.categoryService.createCategory(createCategoryDto);
   }
+
   @Patch(':id')
   @Roles('admin')
   updateCategory(
@@ -60,6 +61,13 @@ export class CategoryController {
       data: updateCategoryDto,
     });
   }
+
+  @Patch(':id/toggle-lock')
+  @Roles('admin')
+  toggleLock(@Param('id', ParseUUIDPipe) id: string) {
+    return this.categoryService.toggleLock({ id });
+  }
+
   @Delete(':id')
   @Roles('admin')
   deleteCategory(@Param('id', ParseUUIDPipe) id: string) {

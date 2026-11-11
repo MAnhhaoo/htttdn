@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { REJECTION_RULES } from '../../constants/rules';
 import { AlertOctagon, X, AlertTriangle } from 'lucide-react';
+import { formatShortOrderCode } from '../../utils/orderFormat';
 
 export const RejectOrderModal = ({ order, isOpen, onClose, onReject }) => {
   const [selectedRule, setSelectedRule] = useState(REJECTION_RULES[0].code);
@@ -71,7 +72,7 @@ export const RejectOrderModal = ({ order, isOpen, onClose, onReject }) => {
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs text-rose-900">
               <p>
-                <span className="font-bold">Mã đơn hàng:</span> <span className="font-mono font-bold">{order.orderCode}</span>
+                <span className="font-bold">Mã đơn hàng:</span> <span className="font-mono font-bold" title={order.orderCode}>#{formatShortOrderCode(order.orderCode || order.id)}</span>
               </p>
               <p className="mt-0.5">Khách hàng: {order.receiverName} - {order.receiverPhone}</p>
               <p className="text-[11px] text-rose-700 mt-1">

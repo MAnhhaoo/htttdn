@@ -35,24 +35,58 @@ export class ShippingService {
       itemPerPage: query.itemPerPage,
     });
 
-    const baseWhere: Prisma.ShipmentWhereInput = {
-      ...(user?.role === 'employee' ? { carrierId: user.userID } : carrierId ? { carrierId } : {}),
-      ...(q
-        ? {
-            OR: [
-              { trackingNumber: { contains: q, mode: 'insensitive' } },
-              { receiverName: { contains: q, mode: 'insensitive' } },
-              { receiverPhone: { contains: q, mode: 'insensitive' } },
-              { order: { orderCode: { contains: q, mode: 'insensitive' } } },
-              {
-                vendorOrder: {
-                  vendorOrderCode: { contains: q, mode: 'insensitive' },
-                },
-              },
-            ],
-          }
-        : {}),
-    };
+    const andConditions: Prisma.ShipmentWhereInput[] = [];
+
+    if (user?.role === 'employee') {
+      const emp = await this.prisma.extended.employee.findUnique({
+        where: { id: user.userID },
+        select: { id: true, department: true, assignedOrderScope: true },
+      });
+
+      if (!emp) {
+        throw new ForbiddenException('Không tìm thấy thông tin nhân viên');
+      }
+
+      if (
+        !emp.department?.includes(DEPARTMENT_KEYWORDS.SHIPPING) &&
+        !emp.department?.includes(DEPARTMENT_KEYWORDS.DELIVERY) &&
+        emp.assignedOrderScope !== 'all_orders'
+      ) {
+        throw new ForbiddenException(
+          'Chỉ nhân viên thuộc Phòng Vận chuyển & Giao nhận (Bưu tá) mới quản lý phần giao hàng',
+        );
+      }
+
+      if (emp.assignedOrderScope === 'all_orders') {
+        if (carrierId) {
+          andConditions.push({ carrierId });
+        }
+      } else {
+        // [QUY TẮC BƯU TÁ]: Bưu tá chỉ quản lý phần giao hàng của các kiện hàng được phân công cho mình (carrierId)
+        andConditions.push({ carrierId: emp.id });
+      }
+    } else if (carrierId) {
+      andConditions.push({ carrierId });
+    }
+
+    if (q) {
+      andConditions.push({
+        OR: [
+          { trackingNumber: { contains: q, mode: 'insensitive' } },
+          { receiverName: { contains: q, mode: 'insensitive' } },
+          { receiverPhone: { contains: q, mode: 'insensitive' } },
+          { order: { orderCode: { contains: q, mode: 'insensitive' } } },
+          {
+            vendorOrder: {
+              vendorOrderCode: { contains: q, mode: 'insensitive' },
+            },
+          },
+        ],
+      });
+    }
+
+    const baseWhere: Prisma.ShipmentWhereInput =
+      andConditions.length > 0 ? { AND: andConditions } : {};
 
     const where: Prisma.ShipmentWhereInput = {
       ...baseWhere,
@@ -156,13 +190,25 @@ export class ShippingService {
         order: {
           include: {
             payment: true,
+            statusHistory: true,
             details: {
               include: {
                 productVariant: {
                   include: {
                     productColor: {
                       include: {
-                        product: true,
+                        product: {
+                          include: {
+                            vendor: {
+                              select: {
+                                id: true,
+                                storeName: true,
+                                fullName: true,
+                                phone: true,
+                              },
+                            },
+                          },
+                        },
                       },
                     },
                   },
@@ -194,6 +240,28 @@ export class ShippingService {
     }
     await this.assertAssigned(shipment, user);
 
+    if (
+      user?.role === 'employee' &&
+      shipment.vendorOrderId &&
+      Array.isArray(shipment.order?.details)
+    ) {
+      const hasTaggedDetails = shipment.order.details.some((d: any) =>
+        Boolean(d.vendorOrderId),
+      );
+      if (hasTaggedDetails) {
+        return {
+          ...shipment,
+          order: {
+            ...shipment.order,
+            details: shipment.order.details.filter(
+              (d: any) =>
+                !d.vendorOrderId || d.vendorOrderId === shipment.vendorOrderId,
+            ),
+          },
+        };
+      }
+    }
+
     return shipment;
   }
 
@@ -205,7 +273,8 @@ export class ShippingService {
     const shipment = await this.prisma.extended.shipment.findUnique({
       where: { id },
       include: {
-        order: { include: { payment: true } },
+        order: { include: { payment: true, statusHistory: true } },
+        vendorOrder: true,
         carrier: true,
       },
     });
@@ -233,6 +302,22 @@ export class ShippingService {
     }
     if (shipment.order.status === OrderStatus.pending && !['failed', 'returned'].includes(dto.status)) {
       throw new BadRequestException('Chờ xác nhận đơn hàng trước khi vận chuyển');
+    }
+
+    // [QUY TẮC BÀN GIAO VENDOR]: Vendor phải xác nhận đóng gói xong (ready_for_pickup) thì bưu tá mới có thể tiếp nhận và lấy đơn
+    if (
+      dto.status === ShipmentStatus.picking_up ||
+      dto.status === ShipmentStatus.in_transit ||
+      dto.status === ShipmentStatus.out_for_delivery
+    ) {
+      if (
+        shipment.vendorOrder &&
+        !['ready_for_pickup', 'shipping', 'delivered'].includes(shipment.vendorOrder.status)
+      ) {
+        throw new BadRequestException(
+          'Vendor chưa xác nhận đóng gói xong kiện hàng. Bưu tá chỉ có thể tiếp nhận sau khi Vendor hoàn tất đóng gói và sẵn sàng bàn giao.',
+        );
+      }
     }
     if (dto.status === ShipmentStatus.returned) {
       await this.orders.updateStatus(
@@ -346,7 +431,7 @@ export class ShippingService {
             shipment.orderId,
           );
         }
-      } else if (dto.status === 'out_for_delivery' || dto.status === 'in_transit') {
+      } else if (dto.status === 'out_for_delivery' || dto.status === 'in_transit' || dto.status === 'picking_up') {
         if (shipment.vendorOrderId) {
           await tx.vendorOrder.update({
             where: { id: shipment.vendorOrderId },
@@ -581,17 +666,41 @@ export class ShippingService {
     }
   }
 
-  private async assertAssigned(shipment: { carrierId: string | null }, user?: UserInfo) {
-    if (user?.role === 'employee') {
+  private async assertAssigned(
+    shipment: {
+      carrierId: string | null;
+      orderId?: string;
+    },
+    user?: UserInfo,
+  ) {
+    if (!user || user.role === 'admin') return;
+
+    if (user.role === 'employee') {
       const emp = await this.prisma.extended.employee.findUnique({
         where: { id: user.userID },
-        select: { department: true },
+        select: { id: true, department: true, assignedOrderScope: true },
       });
-      if (!emp?.department?.includes(DEPARTMENT_KEYWORDS.SHIPPING)) {
+
+      if (!emp) {
+        throw new ForbiddenException('Không tìm thấy thông tin nhân viên');
+      }
+
+      // Quản lý được xem và xử lý toàn bộ
+      if (emp.assignedOrderScope === 'all_orders') {
+        return;
+      }
+
+      // Chỉ nhân viên thuộc Phòng Vận chuyển & Giao nhận (Bưu tá) mới quản lý phần giao hàng
+      if (
+        !emp.department?.includes(DEPARTMENT_KEYWORDS.SHIPPING) &&
+        !emp.department?.includes(DEPARTMENT_KEYWORDS.DELIVERY)
+      ) {
         throw new ForbiddenException(
-          'Chỉ nhân viên thuộc Phòng Vận chuyển & Giao nhận mới có quyền tiếp nhận và cập nhật vận đơn',
+          'Chỉ nhân viên thuộc Phòng Vận chuyển & Giao nhận (Bưu tá) mới quản lý phần giao hàng',
         );
       }
+
+      // Bưu tá chỉ được xem và cập nhật kiện hàng phân công cho mình
       if (shipment.carrierId !== user.userID) {
         throw new ForbiddenException('Bạn chỉ được xem và xử lý vận đơn được phân công cho mình');
       }

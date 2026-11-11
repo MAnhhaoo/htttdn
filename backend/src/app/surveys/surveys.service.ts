@@ -234,6 +234,30 @@ export class SurveysService {
     });
   }
 
+  async extend(id: string, newEndDateStr: string, user: UserInfo) {
+    const survey = await this.getSurveyForManagement(id);
+    this.assertOwnerOrAdmin(survey, user);
+
+    const newEndDate = new Date(newEndDateStr);
+    if (isNaN(newEndDate.getTime()) || newEndDate <= new Date()) {
+      throw new BadRequestException('Thời hạn mới phải ở thời điểm tương lai');
+    }
+    if (survey.startDate && newEndDate <= new Date(survey.startDate)) {
+      throw new BadRequestException('Ngày kết thúc phải sau ngày bắt đầu');
+    }
+
+    const updated = await this.prisma.extended.survey.update({
+      where: { id },
+      data: {
+        endDate: newEndDate,
+        status: SurveyStatus.active,
+      },
+      include: this.managementInclude(),
+    });
+
+    return updated;
+  }
+
   async remove(id: string, user: UserInfo) {
     const survey = await this.getSurveyForManagement(id);
     this.assertOwnerOrAdmin(survey, user);

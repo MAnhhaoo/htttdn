@@ -21,6 +21,10 @@ export const voucherService = {
     return apiClient.patch(`/vouchers/${id}/status`, { status });
   },
   
+  extendVoucher: async (id, endDate) => {
+    return apiClient.patch(/vouchers//extend, { endDate });
+  },
+  
   deleteVoucher: async (id) => {
     return apiClient.delete(`/vouchers/${id}`);
   }

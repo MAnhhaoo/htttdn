@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Send, Store, Clock, X, Check, ShieldCheck, AlertCircle, Package } from 'lucide-react';
+import { formatShortOrderCode, formatVendorCode } from '../../utils/orderFormat';
 
 export const TransferVendorModal = ({ order, isOpen, onClose, onTransfer }) => {
   const orderVendors = useMemo(() => {
@@ -15,7 +16,7 @@ export const TransferVendorModal = ({ order, isOpen, onClose, onTransfer }) => {
           id: vId,
           name: d.vendorName || `Gian hàng đối tác (${vId.slice(0, 8)})`,
           storeName: d.vendorName || `Gian hàng đối tác`,
-          code: `VND-${vId.slice(0, 6).toUpperCase()}`,
+          code: formatVendorCode(vId),
           phone: '0900000000',
           region: 'Kho hàng đối tác MIVA',
           slaHours: 12,
@@ -66,7 +67,7 @@ export const TransferVendorModal = ({ order, isOpen, onClose, onTransfer }) => {
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900">
             <p>
-              <span className="font-bold">Đơn hàng:</span> <span className="font-mono font-bold">{order.orderCode}</span>
+              <span className="font-bold">Đơn hàng:</span> <span className="font-mono font-bold" title={order.orderCode}>#{formatShortOrderCode(order.orderCode || order.id)}</span>
             </p>
             <p className="mt-0.5">
               Sản phẩm: {order.details?.length || 1} mặt hàng - Tổng tiền: {order.totalAmount?.toLocaleString()} đ

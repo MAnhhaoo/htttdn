@@ -5,6 +5,7 @@ import {
   Calendar, FileText, ArrowRight, User, Phone, Package, Send, Shuffle
 } from 'lucide-react';
 import { shippingApi, employeesApi } from '../../api';
+import { formatShortOrderCode } from '../../utils/orderHelpers';
 import { Button, Input, Modal, Badge } from '../../components/ui';
 
 const STATUS_CONFIG = {
@@ -349,8 +350,8 @@ export default function ShippingManagement() {
                         <div className="font-semibold text-blue-600 dark:text-blue-400 font-mono text-xs">
                           {s.trackingNumber}
                         </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          Đơn: <span className="font-medium text-slate-700 dark:text-slate-300">{s.order?.orderCode}</span>
+                        <div className="text-xs text-slate-500 mt-0.5" title={s.order?.orderCode}>
+                          Đơn: <span className="font-mono font-medium text-slate-700 dark:text-slate-300">#{formatShortOrderCode(s.order?.orderCode || s.orderId)}</span>
                         </div>
                         {s.vendorOrder && (
                           <div className="text-[11px] text-slate-400">
@@ -647,7 +648,7 @@ export default function ShippingManagement() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-100 dark:border-slate-800 text-xs">
               <div>
                 <p className="text-slate-400 uppercase font-semibold text-[10px] tracking-wider">Thông tin đơn hàng</p>
-                <p className="font-semibold text-slate-800 dark:text-white mt-1">Mã đơn: {selectedShipment.order?.orderCode}</p>
+                <p className="font-semibold text-slate-800 dark:text-white mt-1" title={selectedShipment.order?.orderCode}>Mã đơn: #{formatShortOrderCode(selectedShipment.order?.orderCode || selectedShipment.orderId)}</p>
                 <p className="text-slate-500 mt-0.5">Kiện hàng Vendor: {selectedShipment.vendorOrder?.vendorOrderCode || 'Chưa tách kiện'}</p>
                 <p className="text-slate-500 mt-0.5">Kho Vendor: {selectedShipment.vendorOrder?.vendor?.storeName || 'Miva Central'}</p>
               </div>

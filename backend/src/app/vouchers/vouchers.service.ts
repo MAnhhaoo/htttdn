@@ -214,7 +214,7 @@ export class VouchersService {
 
   async update(id: string, dto: UpdateVoucherDto, user: UserInfo) {
     const current = await this.getById(id, user);
-    if (current.vendorId !== user.userID && current.adminId !== user.userID) {
+    if (user.role !== 'admin' && current.vendorId !== user.userID && current.adminId !== user.userID) {
       throw new ForbiddenException(
         'Admin chỉ được vô hiệu hóa voucher của vendor',
       );
@@ -316,6 +316,37 @@ export class VouchersService {
     });
     this.emitUpdated(updated);
     return updated;
+  }
+
+  async extend(id: string, newEndDateStr: string, user: UserInfo) {
+    const voucher = await this.getById(id, user);
+    if (
+      user.role !== 'admin' &&
+      voucher.vendorId !== user.userID &&
+      voucher.adminId !== user.userID
+    ) {
+      throw new ForbiddenException('Bạn không có quyền gia hạn voucher này');
+    }
+
+    const newEndDate = new Date(newEndDateStr);
+    if (isNaN(newEndDate.getTime()) || newEndDate <= new Date()) {
+      throw new BadRequestException('Hạn kết thúc mới phải ở tương lai');
+    }
+    if (new Date(voucher.startDate) >= newEndDate) {
+      throw new BadRequestException('Ngày kết thúc phải sau ngày bắt đầu');
+    }
+
+    const updated = await this.prisma.extended.voucher.update({
+      where: { id },
+      data: {
+        endDate: newEndDate,
+        status: VoucherStatus.active,
+      },
+      include: this.detailsInclude(),
+    });
+
+    this.emitUpdated(updated);
+    return this.enrichVoucher(updated);
   }
 
   async remove(id: string, user: UserInfo) {

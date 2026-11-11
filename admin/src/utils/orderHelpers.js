@@ -259,3 +259,149 @@ export function getShipmentStatusText(status) {
       return status;
   }
 }
+
+/**
+ * Kiểm tra xem một đơn hàng có được phân công cho nhân viên cụ thể hay không
+ * (theo ID nhân viên hoặc mã nhân viên).
+ */
+export function isOrderAssignedToEmployee(order, empIdentifier, isCourierOnly = false) {
+  if (!order || !empIdentifier || empIdentifier === 'all') return true;
+
+  const target = String(empIdentifier).trim().toLowerCase();
+
+  if (isCourierOnly) {
+    return (order.shipments || []).some(
+      (s) =>
+        String(s.carrierId || '').toLowerCase() === target ||
+        String(s.carrier?.id || '').toLowerCase() === target ||
+        String(s.carrier?.employeeCode || '').toLowerCase() === target
+    );
+  }
+
+  // 1. Kiểm tra qua extractOrderEmployees
+  const emps = extractOrderEmployees(order);
+  const matchedDisplay =
+    emps.displayEmp &&
+    (String(emps.displayEmp.id).toLowerCase() === target ||
+      String(emps.displayEmp.employeeCode || '').toLowerCase() === target);
+  const matchedHandling =
+    emps.handlingEmp &&
+    (String(emps.handlingEmp.id).toLowerCase() === target ||
+      String(emps.handlingEmp.employeeCode || '').toLowerCase() === target);
+  const matchedShipping =
+    emps.shippingEmp &&
+    (String(emps.shippingEmp.id).toLowerCase() === target ||
+      String(emps.shippingEmp.employeeCode || '').toLowerCase() === target);
+  const matchedException =
+    emps.exceptionEmp &&
+    (String(emps.exceptionEmp.id).toLowerCase() === target ||
+      String(emps.exceptionEmp.employeeCode || '').toLowerCase() === target);
+
+  if (matchedDisplay || matchedHandling || matchedShipping || matchedException) {
+    return true;
+  }
+
+  // 2. Kiểm tra trực tiếp qua shipments
+  const matchedShipment = (order.shipments || []).some(
+    (s) =>
+      String(s.carrierId || '').toLowerCase() === target ||
+      String(s.carrier?.id || '').toLowerCase() === target ||
+      String(s.carrier?.employeeCode || '').toLowerCase() === target
+  );
+  if (matchedShipment) return true;
+
+  // 3. Kiểm tra trực tiếp qua statusHistory
+  const matchedHistory = (order.statusHistory || []).some(
+    (h) =>
+      String(h.employeeId || '').toLowerCase() === target ||
+      String(h.employee?.id || '').toLowerCase() === target ||
+      String(h.employee?.employeeCode || '').toLowerCase() === target
+  );
+  if (matchedHistory) return true;
+
+  return false;
+}
+
+/**
+ * Rút gọn mã đơn hàng / mã chi tiết hóa đơn dài (cuid/uuid) chỉ lấy 6 ký tự cuối.
+ */
+export function formatShortOrderCode(codeOrId, length = 6) {
+  const raw = String(codeOrId || '').replace(/^#/, '').trim();
+  if (!raw) return '—';
+  return raw.length > length ? raw.slice(-length) : raw;
+}
+
+/**
+ * Chuẩn hóa mã Vendor hiển thị (VND-XXXXXXXX).
+ */
+export function formatVendorCode(vendorId, existingCode) {
+  if (existingCode) return existingCode;
+  if (!vendorId) return 'VND-SYSTEM';
+  return `VND-${String(vendorId).slice(0, 8).toUpperCase()}`;
+}
+
+/**
+ * Trích xuất danh sách Vendor & mã Vendor từ đơn hàng (qua vendorOrders hoặc details).
+ */
+export function extractOrderVendors(order) {
+  if (!order) return [];
+  const vendorMap = new Map();
+
+  (order.vendorOrders || []).forEach((vo) => {
+    const v = vo.vendor;
+    const vId = v?.id || vo.vendorId;
+    if (!vId) return;
+    vendorMap.set(vId, {
+      id: vId,
+      name: v?.storeName || v?.fullName || 'Gian hàng đối tác',
+      fullName: v?.fullName || '',
+      storeName: v?.storeName || '',
+      vendorCode: formatVendorCode(vId, v?.vendorCode || v?.storeCode),
+      phone: v?.phone || '',
+      vendorOrderCode: vo.vendorOrderCode || null,
+    });
+  });
+
+  (order.details || []).forEach((d) => {
+    const v = d.productVariant?.productColor?.product?.vendor;
+    const vId = v?.id || d.productVariant?.productColor?.product?.vendorId;
+    if (!vId) return;
+    if (!vendorMap.has(vId)) {
+      vendorMap.set(vId, {
+        id: vId,
+        name: v?.storeName || v?.fullName || 'Gian hàng đối tác',
+        fullName: v?.fullName || '',
+        storeName: v?.storeName || '',
+        vendorCode: formatVendorCode(vId, v?.vendorCode || v?.storeCode),
+        phone: v?.phone || '',
+        vendorOrderCode: null,
+      });
+    }
+  });
+
+  return Array.from(vendorMap.values());
+}
+
+/**
+ * Tổng hợp danh sách điều phối viên và bưu tá trên toàn bộ cụm đơn con.
+ */
+export function extractBatchEmployeesSummary(subOrders = []) {
+  const list = Array.isArray(subOrders) ? subOrders : [];
+  const handlingMap = new Map();
+  const shippingMap = new Map();
+
+  for (const so of list) {
+    const emps = extractOrderEmployees(so);
+    if (emps.handlingEmp?.id) {
+      handlingMap.set(emps.handlingEmp.id, emps.handlingEmp);
+    }
+    if (emps.shippingEmp?.id) {
+      shippingMap.set(emps.shippingEmp.id, emps.shippingEmp);
+    }
+  }
+
+  return {
+    handlingEmps: Array.from(handlingMap.values()),
+    shippingEmps: Array.from(shippingMap.values()),
+  };
+}

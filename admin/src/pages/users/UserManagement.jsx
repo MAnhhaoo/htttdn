@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, Eye, Edit, Lock, Unlock, Trash2, Loader2, ChevronLeft, ChevronRight, Plus, RotateCcw } from 'lucide-react';
+import { Search, Eye, Edit, Lock, Unlock, Loader2, ChevronLeft, ChevronRight, Plus, RotateCcw } from 'lucide-react';
 import { usersApi } from '../../api';
 import { formatDate } from '../../utils/formatHelpers';
 import { Button, Input, Select } from '../../components/ui';
@@ -81,17 +81,6 @@ export default function UserManagement() {
         fetchUsers(true);
       } catch (err) {
         alert(err.response?.data?.message || `Không thể ${actionLabel} tài khoản`);
-      }
-    }
-  };
-
-  const handleDeleteUser = async (user) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa khách hàng "${user.fullName || user.email}"?`)) {
-      try {
-        await usersApi.deleteUser(user.id);
-        fetchUsers(true);
-      } catch (err) {
-        alert(err.response?.data?.message || 'Không thể xóa tài khoản');
       }
     }
   };
@@ -248,14 +237,6 @@ export default function UserManagement() {
                           className={isLocked ? 'text-slate-400 hover:text-emerald-600' : 'text-slate-400 hover:text-amber-600'}
                           onClick={() => handleToggleStatus(user)}
                           title={isLocked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={Trash2}
-                          className="text-slate-400 hover:text-rose-600"
-                          onClick={() => handleDeleteUser(user)}
-                          title="Xóa khách hàng"
                         />
                       </div>
                     </td>

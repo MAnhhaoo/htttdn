@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AlertTriangle, ArrowUpRight, CheckCircle2, X, ShieldAlert } from 'lucide-react';
+import { formatShortOrderCode } from '../../utils/orderFormat';
 
 export const ExceptionModal = ({ order, isOpen, onClose, onResolve, onEscalate }) => {
   const [activeTab, setActiveTab] = useState('resolve'); // 'resolve' | 'escalate'
@@ -77,7 +78,7 @@ export const ExceptionModal = ({ order, isOpen, onClose, onResolve, onEscalate }
         <div className="p-6">
           <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs">
             <p className="font-semibold text-slate-800">
-              Đơn hàng: <span className="font-mono text-blue-700 font-bold">{order.orderCode}</span>
+              Đơn hàng: <span className="font-mono text-blue-700 font-bold" title={order.orderCode}>#{formatShortOrderCode(order.orderCode || order.id)}</span>
             </p>
             <p className="text-slate-600 mt-0.5">Khách hàng: {order.receiverName} • {order.receiverPhone}</p>
             {order.exception && (

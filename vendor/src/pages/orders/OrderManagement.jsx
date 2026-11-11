@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Eye, Loader2 } from 'lucide-react';
 import { orderService } from '../../services/orderService';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatCurrency, formatDate } from '../../utils/formatHelpers';
+import { formatCurrency, formatDate, formatShortOrderCode } from '../../utils/formatHelpers';
 import { Button, Select, Badge } from '../../components/ui';
 import OrderDetailModal from './OrderDetailModal';
 
@@ -135,8 +135,8 @@ export default function OrderManagement() {
                   return (
                     <tr key={order.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 transition-colors">
                       <td className="px-4 py-3">
-                        <div className="font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400">
-                          #{order.orderCode}
+                        <div className="font-mono font-bold text-xs text-indigo-600 dark:text-indigo-400" title={order.orderCode}>
+                          #{formatShortOrderCode(order.orderCode || order.id)}
                         </div>
                         <div className="text-[11px] text-slate-400 font-mono mt-0.5">
                           Kiện: <span className="text-slate-600 dark:text-slate-300">{voCode}</span>

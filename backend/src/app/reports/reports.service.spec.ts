@@ -96,6 +96,8 @@ describe('ReportsService', () => {
     const result = await service.analyticsOverview({
       period: 'year',
       year: 2026,
+      vendorRegistrationFee: 2000000,
+      commissionTaxRate: 8,
     });
 
     expect(queryRawMock).toHaveBeenCalledTimes(4);

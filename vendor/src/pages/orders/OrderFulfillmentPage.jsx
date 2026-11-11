@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { orderService } from '../../services/orderService';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatCurrency, formatDate } from '../../utils/formatHelpers';
+import { formatCurrency, formatDate, formatShortOrderCode } from '../../utils/formatHelpers';
 import { Badge, Button, Input, Modal } from '../../components/ui';
 
 export default function OrderFulfillmentPage() {
@@ -360,8 +360,8 @@ export default function OrderFulfillmentPage() {
                   <div className="flex flex-wrap items-center gap-2.5">
                     <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-md border border-indigo-200 dark:border-indigo-800">
                       <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 uppercase">Mã đơn hàng:</span>
-                      <span className="font-mono font-bold text-sm text-indigo-700 dark:text-indigo-300">
-                        #{vo.order?.orderCode}
+                      <span className="font-mono font-bold text-sm text-indigo-700 dark:text-indigo-300" title={vo.order?.orderCode}>
+                        #{formatShortOrderCode(vo.order?.orderCode || vo.orderId)}
                       </span>
                     </div>
                     <div className="flex items-center gap-1 text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
@@ -718,7 +718,7 @@ export default function OrderFulfillmentPage() {
               </div>
               <div className="text-right">
                 <p className="font-mono font-bold text-sm text-indigo-700">{packingSlipModal.vendorOrderCode}</p>
-                <p className="text-[11px] text-slate-400">Đơn gốc: #{packingSlipModal.order?.orderCode}</p>
+                <p className="text-[11px] text-slate-400" title={packingSlipModal.order?.orderCode}>Đơn gốc: #{formatShortOrderCode(packingSlipModal.order?.orderCode || packingSlipModal.orderId)}</p>
               </div>
             </div>
 
