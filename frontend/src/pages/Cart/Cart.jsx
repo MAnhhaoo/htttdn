@@ -13,7 +13,7 @@ import { formatPrice } from '../../utils/formatPrice';
 import Loading from '../../components/common/Loading/Loading';
 import EmptyState from '../../components/common/EmptyState/EmptyState';
 import { useCheckoutPricing } from '../../hooks/useCheckoutPricing';
-import VoucherPricing from '../../components/cart/VoucherPricing';
+import VoucherPricing, { PlatformVoucherPricing } from '../../components/cart/VoucherPricing';
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -147,7 +147,8 @@ export default function Cart() {
 
   const handleCheckoutShopOnly = (vendorItems) => {
     const ids = vendorItems.map((i) => i.id);
-    navigate('/checkout', { state: { cartItemIds: ids, voucherSelections: pricing.selections.filter(selection => selection.vendorId === (vendorItems[0]?.productVariant?.productColor?.product?.vendorId || 'platform')) } });
+    const targetVendorId = vendorItems[0]?.productVariant?.productColor?.product?.vendorId || 'platform';
+    navigate('/checkout', { state: { cartItemIds: ids, voucherSelections: pricing.selections.filter(selection => selection.vendorId === targetVendorId), platformVoucherCode: pricing.platformCode } });
   };
 
   const handleProceedCheckout = () => {
@@ -155,7 +156,7 @@ export default function Cart() {
       alert('Vui lòng chọn ít nhất 1 sản phẩm để tiến hành thanh toán');
       return;
     }
-    navigate('/checkout', { state: { cartItemIds: Array.from(selectedItemIds), voucherSelections: pricing.selections } });
+    navigate('/checkout', { state: { cartItemIds: Array.from(selectedItemIds), voucherSelections: pricing.selections, platformVoucherCode: pricing.platformCode } });
   };
 
   if (isLoadingCart) return <Loading text="Đang tải giỏ hàng..." />;
@@ -368,7 +369,9 @@ export default function Cart() {
                 <div className="space-y-2.5">
                   {selectedVendorGroups.map((group, idx) => {
                     const pack = pricing.data?.packages?.find((p) => p.vendorId === group.vendorId);
-                    const packDiscount = pack ? Number(pack.discountAmount) : 0;
+                    const packShopDiscount = pack?.applications?.filter(a => a.scope === 'vendor').reduce((s, a) => s + Number(a.discountAmount), 0) || 0;
+                    const packPlatformDiscount = pack?.applications?.filter(a => a.scope === 'platform').reduce((s, a) => s + Number(a.discountAmount), 0) || 0;
+                    const packDiscount = packShopDiscount + packPlatformDiscount;
                     const packTotal = pack ? Number(pack.totalAmount) : group.subtotal - packDiscount;
 
                     return (
@@ -391,10 +394,16 @@ export default function Cart() {
                             <span>Tạm tính tiền hàng:</span>
                             <span className="font-medium text-light-text dark:text-dark-text">{formatPrice(group.subtotal)}</span>
                           </div>
-                          {packDiscount > 0 ? (
+                          {packShopDiscount > 0 ? (
                             <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
                               <span>Giảm voucher shop:</span>
-                              <span className="font-semibold">-{formatPrice(packDiscount)}</span>
+                              <span className="font-semibold">-{formatPrice(packShopDiscount)}</span>
+                            </div>
+                          ) : null}
+                          {packPlatformDiscount > 0 ? (
+                            <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                              <span>Giảm voucher toàn sàn:</span>
+                              <span className="font-semibold">-{formatPrice(packPlatformDiscount)}</span>
                             </div>
                           ) : null}
                           <div className="flex justify-between">
@@ -420,6 +429,9 @@ export default function Cart() {
                 <span>{selectedVendorGroups.length > 1 ? 'Tổng thanh toán tất cả các đơn' : 'Chi tiết thanh toán'}</span>
               </div>
 
+              {/* Mã giảm giá toàn sàn (Admin) */}
+              <PlatformVoucherPricing items={selectedItems} pricing={pricing} />
+
               <div className="flex justify-between text-light-muted dark:text-dark-muted">
                 <span>Số sản phẩm chọn:</span>
                 <span className="font-bold text-light-text dark:text-dark-text">
@@ -438,7 +450,7 @@ export default function Cart() {
                   {formatPrice(selectedSubtotal)}
                 </span>
               </div>
-              {pricing.data && (
+              {pricing.data && Number(pricing.data.discountAmount) > 0 && (
                 <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
                   <span>Tổng giảm voucher:</span>
                   <strong className="font-bold">-{formatPrice(pricing.data.discountAmount)}</strong>

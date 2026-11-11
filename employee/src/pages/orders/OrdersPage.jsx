@@ -21,15 +21,15 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { ordersApi } from '../../api/axiosClient';
-import { formatOrder } from '../../utils/orderFormat';
+import { formatOrder, formatShortOrderCode } from '../../utils/orderFormat';
 
 const STATUS_TABS = [
   { key: 'all', label: 'Tất cả đơn' },
-  { key: 'pending', label: 'Chờ xác nhận', color: 'text-amber-700 bg-amber-50' },
-  { key: 'confirmed', label: 'Đã xác nhận', color: 'text-blue-700 bg-blue-50' },
+  { key: 'pending', label: 'Chờ duyệt đơn', color: 'text-amber-700 bg-amber-50' },
+  { key: 'confirmed', label: 'Chờ chuyển Vendor', color: 'text-blue-700 bg-blue-50' },
   { key: 'processing', label: 'Vendor đang xử lý', color: 'text-indigo-700 bg-indigo-50' },
-  { key: 'shipping', label: 'Đang vận chuyển', color: 'text-purple-700 bg-purple-50' },
-  { key: 'completed', label: 'Hoàn thành', color: 'text-emerald-700 bg-emerald-50' },
+  { key: 'shipping', label: 'Bưu tá đang giao', color: 'text-purple-700 bg-purple-50' },
+  { key: 'completed', label: 'Giao hoàn tất', color: 'text-emerald-700 bg-emerald-50' },
   { key: 'cancelled', label: 'Đã từ chối/hủy', color: 'text-rose-700 bg-rose-50' },
 ];
 
@@ -65,7 +65,7 @@ export const OrdersPage = ({
   const [pageSize, setPageSize] = useState(20);
   const [onlyExceptions, setOnlyExceptions] = useState(initialException);
   const [onlyMyScope, setOnlyMyScope] = useState(true);
-  const [onlyMyAssigned, setOnlyMyAssigned] = useState(false);
+  const [onlyMyAssigned, setOnlyMyAssigned] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Server-side orders & counts state
@@ -159,7 +159,10 @@ export const OrdersPage = ({
           order.assignedCarrier?.id === user.id ||
           order.assignedCarrier?.employeeCode === user.employeeCode ||
           order.assignedCarrier?.email === user.email ||
-          order.shipments?.some((s) => s.carrierId === user.id || s.carrier?.email === user.email);
+          order.shipments?.some((s) => s.carrierId === user.id || s.carrier?.email === user.email) ||
+          order.handlingEmployee?.id === user.id ||
+          order.handlingEmployee?.employeeCode === user.employeeCode ||
+          order.statusHistory?.some((h) => h.employeeId === user.id || h.employee?.employeeCode === user.employeeCode);
         if (!isMine) {
           return false;
         }
@@ -364,10 +367,10 @@ export const OrdersPage = ({
                         <button
                           onClick={() => onOpenDetail(order)}
                           className="font-mono font-bold text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-0.5 group"
-                          title="Mã đơn hàng MIVA - Nhấp để xem chi tiết"
+                          title={`Mã đầy đủ: ${order.orderCode || order.id} - Nhấp để xem chi tiết`}
                         >
                           <span className="text-slate-400 group-hover:text-blue-600">#</span>
-                          <span>{order.orderCode}</span>
+                          <span>{formatShortOrderCode(order.orderCode || order.id)}</span>
                         </button>
                         <span className="text-[11px] text-slate-400 block mt-0.5">
                           {new Date(order.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} •{' '}
@@ -488,14 +491,15 @@ export const OrdersPage = ({
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {/* Chỉ ban Điều phối & Liên kết Vendor được xác nhận & chuyển đơn */}
+                          {/* Chỉ ban Điều phối & Liên kết Vendor được duyệt đơn */}
                           {order.status === 'pending' && (user?.department?.includes('Điều phối') || user?.role === 'admin') && (
                             <button
                               onClick={() => onOpenConfirm(order)}
-                              title="Xác nhận đơn & Chuẩn bị chuyển Vendor"
-                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                              title="Duyệt đơn hàng hợp lệ"
+                              className="px-2.5 py-1 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition flex items-center space-x-1"
                             >
-                              <CheckCircle2 className="w-4 h-4" />
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Duyệt đơn</span>
                             </button>
                           )}
 
@@ -514,11 +518,11 @@ export const OrdersPage = ({
                           {order.status === 'confirmed' && (user?.department?.includes('Điều phối') || user?.role === 'admin') && (
                             <button
                               onClick={() => onOpenTransfer(order)}
-                              title="Chuyển đơn cho Vendor"
-                              className="px-2 py-1 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition flex items-center space-x-1"
+                              title="Chuyển đơn cho đối tác Vendor chuẩn bị hàng"
+                              className="px-2.5 py-1 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition flex items-center space-x-1"
                             >
-                              <Send className="w-3 h-3" />
-                              <span>Chuyển</span>
+                              <Send className="w-3.5 h-3.5" />
+                              <span>Chuyển Vendor</span>
                             </button>
                           )}
 

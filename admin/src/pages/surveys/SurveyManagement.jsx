@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
+  CalendarPlus,
   ClipboardList, Plus, Search, Filter, Eye, BarChart3, CheckCircle2, Clock, 
   AlertCircle, X, Trash2, Send, Store, ShieldCheck, Star, Calendar, Users, 
   ChevronRight, Building2, User
 } from 'lucide-react';
 import { surveysApi } from '../../api';
+import { Button, Modal } from '../../components/ui';
 import {
   CLIENT_TOPICS,
   VENDOR_TOPICS,
@@ -27,6 +29,39 @@ export default function SurveyManagement() {
   const [selectedSurveyId, setSelectedSurveyId] = useState(null);
   const [surveyResults, setSurveyResults] = useState(null);
   const [resultsLoading, setResultsLoading] = useState(false);
+  // Extend Survey Modal State
+  const [extendModalOpen, setExtendModalOpen] = useState(false);
+  const [surveyToExtend, setSurveyToExtend] = useState(null);
+  const [extendEndDate, setExtendEndDate] = useState('');
+  const [loadingExtend, setLoadingExtend] = useState(false);
+
+  const addDaysToNow = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+  };
+
+  const handleOpenExtendModal = (survey) => {
+    setSurveyToExtend(survey);
+    setExtendEndDate(addDaysToNow(14));
+    setExtendModalOpen(true);
+  };
+
+  const handleConfirmExtend = async () => {
+    if (!surveyToExtend || !extendEndDate) return;
+    try {
+      setLoadingExtend(true);
+      await surveysApi.extendSurvey(surveyToExtend.id, new Date(extendEndDate).toISOString());
+      setExtendModalOpen(false);
+      await fetchSurveys();
+      alert(`Đã gia hạn thành công khảo sát "${surveyToExtend.title}" đến ${new Date(extendEndDate).toLocaleDateString('vi-VN')}!`);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gia hạn khảo sát thất bại');
+    } finally {
+      setLoadingExtend(false);
+    }
+  };
+
 
   // Preview State
   const [previewSurvey, setPreviewSurvey] = useState(null);
@@ -501,6 +536,16 @@ export default function SurveyManagement() {
                                   title="Đóng khảo sát"
                                 >
                                   Đóng
+                                </button>
+                              )}
+                              {(survey.status === 'closed' || (survey.endDate && new Date(survey.endDate) < new Date())) && (
+                                <button
+                                  onClick={() => handleOpenExtendModal(survey)}
+                                  className="px-2.5 py-1 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-sm flex items-center gap-1 transition-colors"
+                                  title="Khảo sát đã hết hạn / đã đóng - Bấm để gia hạn"
+                                >
+                                  <CalendarPlus className="w-3.5 h-3.5" />
+                                  Gia hạn
                                 </button>
                               )}
                             </div>
@@ -1057,6 +1102,69 @@ export default function SurveyManagement() {
             </div>
           </div>
         </div>
+      )}
+      {/* Modal Gia Hạn Khảo Sát */}
+      {extendModalOpen && surveyToExtend && (
+        <Modal
+          isOpen={extendModalOpen}
+          onClose={() => setExtendModalOpen(false)}
+          title={`Gia hạn thời hạn khảo sát: ${surveyToExtend.title}`}
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4 text-sm">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs space-y-1">
+              <div>Tiêu đề: <strong>{surveyToExtend.title}</strong></div>
+              <div>Hạn chót hiện tại: <span className="text-slate-500 font-semibold">{surveyToExtend.endDate ? new Date(surveyToExtend.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}</span></div>
+              {surveyToExtend.status === 'closed' && (
+                <div className="text-amber-600 dark:text-amber-400 font-medium">* Khảo sát đang ở trạng thái đã đóng. Khi gia hạn, khảo sát sẽ tự động mở lại trạng thái hoạt động.</div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Chọn nhanh thời hạn gia hạn:
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {[7, 14, 30, 60].map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => setExtendEndDate(addDaysToNow(days))}
+                    className="py-1.5 px-2 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 text-slate-700 dark:text-slate-200 transition-colors"
+                  >
+                    +{days} ngày
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Ngày kết thúc mới:
+              </label>
+              <input
+                type="date"
+                min={new Date().toISOString().split('T')[0]}
+                value={extendEndDate}
+                onChange={(e) => setExtendEndDate(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <Button variant="outline" onClick={() => setExtendModalOpen(false)}>
+                Hủy
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleConfirmExtend}
+                disabled={!extendEndDate || loadingExtend}
+              >
+                {loadingExtend ? 'Đang gia hạn...' : 'Xác nhận gia hạn'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

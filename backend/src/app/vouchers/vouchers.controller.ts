@@ -22,6 +22,14 @@ import { SkipAuth } from '../auth/auth.decorator';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+class ExtendVoucherDto extends createZodDto(
+  z
+    .object({
+      endDate: z.string().min(1),
+    })
+    .strict(),
+) {}
+
 class CatalogOffersDto extends createZodDto(
   z
     .object({
@@ -90,6 +98,16 @@ export class VouchersController {
     @CurrentUser() user: UserInfo,
   ) {
     return this.vouchersService.update(id, dto, user);
+  }
+
+  @Patch(':id/extend')
+  @Roles('admin', 'vendor')
+  extend(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ExtendVoucherDto,
+    @CurrentUser() user: UserInfo,
+  ) {
+    return this.vouchersService.extend(id, dto.endDate, user);
   }
 
   @Patch(':id/status')

@@ -42,7 +42,8 @@ export const vendorsApi = {
 // ==================== CATEGORIES ====================
 
 export const categoriesApi = {
-  getCategories: (params = {}) => axiosClient.get('/categories', { params }),
+  getCategories: (params = {}) => axiosClient.get('/categories', { params: { includeAll: true, ...params } }),
+  toggleLock: (id) => axiosClient.patch(`/categories/${id}/toggle-lock`),
   createCategory: (data) => axiosClient.post('/categories', data),
   updateCategory: (id, data) => axiosClient.patch(`/categories/${id}`, data),
   deleteCategory: (id) => axiosClient.delete(`/categories/${id}`),

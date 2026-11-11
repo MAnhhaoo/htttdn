@@ -15,3 +15,9 @@ export const formatDate = (dateString) => {
     minute: '2-digit'
   }).format(date);
 };
+
+export const formatShortOrderCode = (codeOrId, length = 6) => {
+  const raw = String(codeOrId || '').replace(/^#/, '').trim();
+  if (!raw) return '—';
+  return raw.length > length ? raw.slice(-length) : raw;
+};

@@ -17,6 +17,7 @@ import {
   Package,
   UserCheck
 } from 'lucide-react';
+import { formatShortOrderCode } from '../../utils/orderFormat';
 
 const STATUS_CONFIG = {
   pending: { label: 'Chờ xác nhận', color: 'bg-amber-100 text-amber-800 border-amber-200' },
@@ -68,8 +69,11 @@ export const OrderDetailModal = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h3 className="font-bold text-slate-800 text-base">Chi Tiết Đơn Hàng</h3>
-                <span className="font-mono font-bold text-sm text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded">
-                  {order.orderCode}
+                <span
+                  className="font-mono font-bold text-sm text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded"
+                  title={order.orderCode || order.id}
+                >
+                  #{formatShortOrderCode(order.orderCode || order.id)}
                 </span>
                 <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold border ${statusInfo.color}`}>
                   {statusInfo.label}
@@ -345,7 +349,14 @@ export const OrderDetailModal = ({
                           />
                           <div>
                             <p className="font-bold text-slate-800 line-clamp-1">{item.productName}</p>
-                            <p className="text-[11px] text-slate-400">{item.vendorName || 'Kho trung tâm'}</p>
+                            <p className="text-[11px] text-slate-500">
+                              {item.vendorName || 'Kho trung tâm'}
+                              {item.vendorCode ? (
+                                <span className="ml-1.5 font-mono font-semibold text-indigo-600 bg-indigo-50 px-1 rounded">
+                                  {item.vendorCode}
+                                </span>
+                              ) : null}
+                            </p>
                           </div>
                         </div>
                       </td>

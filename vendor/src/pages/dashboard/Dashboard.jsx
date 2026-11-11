@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { dashboardService } from '../../services/dashboardService';
 import { reviewService } from '../../services/reviewService';
 import { Link } from 'react-router-dom';
+import { formatShortOrderCode } from '../../utils/formatHelpers';
 
 function StatCard({ title, value, icon: Icon, color, subtitle }) {
   return (
@@ -215,7 +216,7 @@ export default function Dashboard() {
                 ) : (
                   recentOrderDetails.map(od => (
                     <tr key={od.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
-                      <td className="py-3 text-sm font-medium text-slate-800 dark:text-slate-100">#{od.order.orderCode}</td>
+                      <td className="py-3 text-sm font-mono font-medium text-slate-800 dark:text-slate-100" title={od.order.orderCode}>#{formatShortOrderCode(od.order.orderCode || od.orderId)}</td>
                       <td className="py-3 text-sm text-slate-600 dark:text-slate-400 line-clamp-1">{od.productName} - {od.colorName}</td>
                       <td className="py-3 text-sm text-slate-600 dark:text-slate-400">{od.quantity}</td>
                       <td className="py-3 text-sm">

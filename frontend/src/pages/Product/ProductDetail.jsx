@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Minus, Plus, ShoppingCart, Heart, ChevronRight, ChevronLeft, Package, Store, ShieldCheck, Star, MessageSquare } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, Heart, ChevronRight, ChevronLeft, Package, Store, ShieldCheck, Star, MessageSquare, Zap, Loader2 } from 'lucide-react';
 import { useProductById, useProducts } from '../../hooks/useProducts';
 import { useCart } from '../../hooks/useCart';
 import { useAuth } from '../../hooks/useAuth';
@@ -25,6 +25,7 @@ export default function ProductDetail() {
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [isBuyingNow, setIsBuyingNow] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [mainImgError, setMainImgError] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -167,6 +168,45 @@ export default function ProductDetail() {
       } else {
         toast.error(message || 'Không thể thêm vào giỏ hàng');
       }
+    }
+  };
+
+  const handleBuyNow = async () => {
+    if (!isAuthenticated) {
+      toast.info('Vui lòng đăng nhập để tiến hành mua hàng');
+      navigate('/login');
+      return;
+    }
+    if (!selectedVariant || selectedVariant.stock <= 0) {
+      toast.error('Sản phẩm đã hết hàng hoặc chưa chọn phân loại');
+      return;
+    }
+
+    setIsBuyingNow(true);
+    try {
+      const res = await addToCart({
+        productVariantId: selectedVariant.id,
+        quantity,
+      });
+      const cartItems = res?.items || (res?.data && res.data.items) || [];
+      const targetItem = cartItems.find((i) => i.productVariantId === selectedVariant.id) || cartItems[cartItems.length - 1];
+
+      if (targetItem?.id) {
+        navigate('/checkout', { state: { cartItemIds: [targetItem.id] } });
+      } else {
+        navigate('/checkout');
+      }
+    } catch (error) {
+      const status = error.response?.status;
+      const message = error.response?.data?.message;
+      if (status === 401) {
+        toast.info('Phiên đăng nhập đã hết hạn');
+        navigate('/login');
+      } else {
+        toast.error(message || 'Không thể tiến hành mua ngay');
+      }
+    } finally {
+      setIsBuyingNow(false);
     }
   };
 
@@ -409,22 +449,22 @@ export default function ProductDetail() {
           )}
 
           {/* Actions */}
-          <div className="mt-auto pt-4 flex flex-col sm:flex-row gap-4">
+          <div className="mt-auto pt-4 flex flex-col sm:flex-row gap-3">
             <div className="flex items-center border border-light-border dark:border-dark-border rounded-xl h-14 bg-white dark:bg-dark-card shrink-0">
               <button
                 onClick={() => handleQuantityChange(-1)}
                 disabled={isOutOfStock || quantity <= 1}
-                className="w-12 h-full flex items-center justify-center text-light-muted hover:text-primary disabled:opacity-50 transition-colors"
+                className="w-12 h-full flex items-center justify-center text-light-muted hover:text-primary disabled:opacity-50 transition-colors cursor-pointer"
               >
                 <Minus className="w-5 h-5" />
               </button>
-              <div className="w-12 text-center font-bold text-light-text dark:text-dark-text">
+              <div className="w-12 text-center font-bold text-light-text dark:text-dark-text select-none">
                 {quantity}
               </div>
               <button
                 onClick={() => handleQuantityChange(1)}
                 disabled={isOutOfStock || quantity >= selectedVariant?.stock}
-                className="w-12 h-full flex items-center justify-center text-light-muted hover:text-primary disabled:opacity-50 transition-colors"
+                className="w-12 h-full flex items-center justify-center text-light-muted hover:text-primary disabled:opacity-50 transition-colors cursor-pointer"
               >
                 <Plus className="w-5 h-5" />
               </button>
@@ -432,27 +472,38 @@ export default function ProductDetail() {
 
             <button
               onClick={handleAddToCart}
-              disabled={isOutOfStock || isAdding}
-              className="flex-1 h-14 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/30"
+              disabled={isOutOfStock || isAdding || isBuyingNow}
+              className="flex-1 h-14 border-2 border-primary text-primary hover:bg-primary/10 font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {isAdding ? (
-                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <ShoppingCart className="w-5 h-5" />
               )}
-              {isOutOfStock ? 'Hết hàng' : isAdding ? 'Đang thêm...' : 'Thêm vào giỏ hàng'}
+              <span>{isAdding ? 'Đang thêm...' : 'Thêm vào giỏ'}</span>
+            </button>
+
+            <button
+              onClick={handleBuyNow}
+              disabled={isOutOfStock || isAdding || isBuyingNow}
+              className="flex-1 h-14 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/30 active:scale-98 cursor-pointer"
+            >
+              {isBuyingNow ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Zap className="w-5 h-5" />
+              )}
+              <span>{isOutOfStock ? 'Hết hàng' : isBuyingNow ? 'Đang xử lý...' : 'Mua ngay'}</span>
             </button>
 
             <button 
               onClick={toggleFavorite}
-              className={`w-14 h-14 border rounded-xl flex items-center justify-center transition-all shrink-0 ${
+              className={`w-14 h-14 border rounded-xl flex items-center justify-center transition-all shrink-0 cursor-pointer ${
                 isFavorite 
                   ? 'border-red-500 bg-red-50 dark:bg-red-500/10 text-red-500' 
                   : 'border-light-border dark:border-dark-border text-light-muted hover:text-red-500 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-500/10'
               }`}
+              title="Yêu thích"
             >
               <Heart className={`w-6 h-6 ${isFavorite ? 'fill-current' : ''}`} />
             </button>

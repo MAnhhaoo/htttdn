@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { formatShortOrderCode } from '../../utils/orderFormat';
 
 export const ConfirmOrderModal = ({ order, isOpen, onClose, onConfirm }) => {
   const [note, setNote] = useState('Đã kiểm tra tồn kho và liên hệ khách hàng xác nhận hợp lệ.');
@@ -33,7 +34,7 @@ export const ConfirmOrderModal = ({ order, isOpen, onClose, onConfirm }) => {
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800">
-            <span className="font-bold">Mã đơn:</span> <span className="font-mono font-semibold">{order.orderCode}</span>
+            <span className="font-bold">Mã đơn:</span> <span className="font-mono font-semibold" title={order.orderCode}>#{formatShortOrderCode(order.orderCode || order.id)}</span>
             <div className="mt-1">
               Khách hàng: <span className="font-medium">{order.receiverName}</span> - {order.receiverPhone}
             </div>

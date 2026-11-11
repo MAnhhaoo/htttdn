@@ -6,6 +6,7 @@ import {
   HelpCircle, Star, Sparkles, Calendar, Users, ShieldCheck
 } from 'lucide-react';
 import { surveyService } from '../../services/surveyService';
+import { Button, Modal } from '../../components/ui';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie
 } from 'recharts';
@@ -29,6 +30,39 @@ export default function SurveyManagement() {
   const [selectedSurveyId, setSelectedSurveyId] = useState(null);
   const [surveyResults, setSurveyResults] = useState(null);
   const [resultsLoading, setResultsLoading] = useState(false);
+  // Extend Survey Modal State
+  const [extendModalOpen, setExtendModalOpen] = useState(false);
+  const [surveyToExtend, setSurveyToExtend] = useState(null);
+  const [extendEndDate, setExtendEndDate] = useState('');
+  const [loadingExtend, setLoadingExtend] = useState(false);
+
+  const addDaysToNow = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split('T')[0];
+  };
+
+  const handleOpenExtendModal = (survey) => {
+    setSurveyToExtend(survey);
+    setExtendEndDate(addDaysToNow(14));
+    setExtendModalOpen(true);
+  };
+
+  const handleConfirmExtend = async () => {
+    if (!surveyToExtend || !extendEndDate) return;
+    try {
+      setLoadingExtend(true);
+      await surveyService.extendSurvey(surveyToExtend.id, new Date(extendEndDate).toISOString());
+      setExtendModalOpen(false);
+      await fetchSurveys();
+      alert(`Đã gia hạn thành công khảo sát "${surveyToExtend.title}" đến ${new Date(extendEndDate).toLocaleDateString('vi-VN')}!`);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gia hạn khảo sát thất bại');
+    } finally {
+      setLoadingExtend(false);
+    }
+  };
+
 
   // Admin Surveys Inbox state (for Vendor responding to Admin surveys)
   const [adminInbox, setAdminInbox] = useState([]);

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from 'src/common/prisma/prisma.service';
@@ -28,16 +28,46 @@ export class CategoryService extends PrismaBaseService<'category'> {
    * Danh sách category:
    * - phân trang
    * - tìm kiếm
+   * - lọc trạng thái (all, active, inactive)
    */
-  async getCategories({
-    page = 1,
-    itemPerPage = 10,
-    search,
-  }: GetCategoriesPaginationDto) {
+  async getCategories(dto: GetCategoriesPaginationDto) {
+    const { page = 1, itemPerPage = 10, search, includeAll, status } = dto as any;
     const searchCondition = this.queryUtil.createStringSearchCondition(search, [
       'name',
       'slug',
     ]) as Prisma.CategoryWhereInput;
+
+    if (includeAll || status === 'all' || status === 'inactive' || status === 'active') {
+      const where: Prisma.CategoryWhereInput = { ...searchCondition };
+      if (status === 'active') {
+        where.deletedAt = null;
+      } else if (status === 'inactive') {
+        where.deletedAt = { not: null };
+      }
+
+      const totalItems = await this.prismaService.category.count({ where });
+      const paging = this.paginationUtilService.paging({
+        page,
+        itemPerPage,
+        totalItems,
+      });
+
+      const list = await this.prismaService.category.findMany({
+        where,
+        skip: paging.skip,
+        take: itemPerPage,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      const formattedList = list.map((cat) => ({
+        ...cat,
+        status: cat.deletedAt ? 'inactive' : 'active',
+      }));
+
+      return paging.format(formattedList);
+    }
 
     const where: Prisma.CategoryWhereInput = {
       deletedAt: null,
@@ -63,7 +93,12 @@ export class CategoryService extends PrismaBaseService<'category'> {
       },
     });
 
-    return paging.format(list);
+    const formattedList = list.map((cat: any) => ({
+      ...cat,
+      status: 'active',
+    }));
+
+    return paging.format(formattedList);
   }
 
   async createCategory(createCategoryDto: CreateCategoryDto) {
@@ -99,12 +134,37 @@ export class CategoryService extends PrismaBaseService<'category'> {
     data: UpdateCategoryDto;
   }) {
     const { where, data: dataUpdate } = params;
-    const data = await this.extended.update({
+    const data = await this.prismaService.category.update({
       data: { name: dataUpdate.name },
       where,
     });
     this.realtime.emitCategoryUpdated(data.id);
     return data;
+  }
+
+  async toggleLock(where: Prisma.CategoryWhereUniqueInput) {
+    const existing = await this.prismaService.category.findUnique({
+      where: { id: where.id },
+    });
+    if (!existing) {
+      throw new NotFoundException('Không tìm thấy danh mục');
+    }
+
+    let isLockedNow = false;
+    if (existing.deletedAt) {
+      await this.extended.restore({ id: where.id });
+      isLockedNow = false;
+    } else {
+      await this.extended.softDelete({ id: where.id });
+      isLockedNow = true;
+    }
+
+    this.realtime.emitCategoryUpdated(where.id!);
+    return {
+      id: where.id,
+      status: isLockedNow ? 'inactive' : 'active',
+      isLocked: isLockedNow,
+    };
   }
 
   async deleteCategory(where: Prisma.CategoryWhereUniqueInput) {

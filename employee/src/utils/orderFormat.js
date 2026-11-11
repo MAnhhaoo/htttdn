@@ -1,3 +1,15 @@
+export const formatShortOrderCode = (codeOrId, length = 6) => {
+  const raw = String(codeOrId || '').replace(/^#/, '').trim();
+  if (!raw) return '—';
+  return raw.length > length ? raw.slice(-length) : raw;
+};
+
+export const formatVendorCode = (vendorId, existingCode) => {
+  if (existingCode) return existingCode;
+  if (!vendorId) return 'VND-SYSTEM';
+  return `VND-${String(vendorId).slice(0, 8).toUpperCase()}`;
+};
+
 // Map real backend order to employee UI representation
 export const formatOrder = (item) => {
   if (!item) return null;
@@ -13,7 +25,7 @@ export const formatOrder = (item) => {
         id: vId,
         name: v?.storeName || v?.fullName || `Gian hàng đối tác (${vId.slice(0, 8)})`,
         storeName: v?.storeName || v?.fullName || `Gian hàng đối tác`,
-        code: `VND-${vId.slice(0, 6).toUpperCase()}`,
+        code: formatVendorCode(vId, v?.vendorCode),
         phone: v?.phone || '0900000000',
         region: v?.address || 'Kho hàng đối tác MIVA',
         slaHours: 12,
@@ -30,7 +42,8 @@ export const formatOrder = (item) => {
         id: vId,
         name: v?.storeName || v?.fullName || `Gian hàng đối tác (${vId.slice(0, 8)})`,
         storeName: v?.storeName || v?.fullName || `Gian hàng đối tác`,
-        code: vo.vendorOrderCode || `VND-${vId.slice(0, 6).toUpperCase()}`,
+        code: formatVendorCode(vId, v?.vendorCode),
+        vendorOrderCode: vo.vendorOrderCode || null,
         phone: v?.phone || '0900000000',
         region: v?.address || 'Kho hàng đối tác MIVA',
         slaHours: 12,
@@ -68,6 +81,7 @@ export const formatOrder = (item) => {
   return {
     id: item.id,
     orderCode: item.orderCode,
+    shortOrderCode: formatShortOrderCode(item.orderCode || item.id),
     clientId: item.clientId,
     receiverName: item.receiverName || 'Khách hàng',
     receiverPhone: item.receiverPhone || '0900000000',
@@ -150,10 +164,12 @@ export const formatOrder = (item) => {
       item.details?.map((d) => {
         const prod = d.productVariant?.productColor?.product;
         const vend = prod?.vendor;
+        const vId = vend?.id || prod?.vendorId || null;
         return {
           id: d.id,
           productName: d.productName || prod?.name || 'Sản phẩm',
-          vendorId: vend?.id || prod?.vendorId || null,
+          vendorId: vId,
+          vendorCode: vId ? formatVendorCode(vId, vend?.vendorCode) : null,
           vendorName: vend?.storeName || vend?.fullName || 'Gian hàng đối tác',
           colorName: d.colorName || d.productVariant?.productColor?.color || 'Màu tiêu chuẩn',
           sizeName: d.sizeName || d.productVariant?.size || 'Freesize',

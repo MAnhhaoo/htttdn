@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { shippingApi, ordersApi } from '../../api/axiosClient';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatShortOrderCode, formatVendorCode } from '../../utils/orderFormat';
 
 const STATUS_CONFIG = {
   pending: { label: 'Chờ tiếp nhận', badge: 'bg-amber-100 text-amber-800 border-amber-200' },
@@ -54,7 +55,12 @@ export const InternalShippingPage = () => {
       };
 
       const res = await shippingApi.getShipments(params);
-      const list = res.list || res.data?.list || (Array.isArray(res) ? res : []);
+      const rawList = res.list || res.data?.list || (Array.isArray(res) ? res : []);
+      // Lớp bảo vệ kép: bưu tá chỉ thấy đúng kiện hàng được phân công cho chính mình
+      const list =
+        user && user.assignedOrderScope !== 'all_orders'
+          ? rawList.filter((item) => item.carrierId === user.id || item.carrier?.id === user.id)
+          : rawList;
       setShipments(list);
       if (res?.summary) {
         setSummary(res.summary);
@@ -64,7 +70,7 @@ export const InternalShippingPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, activeTab]);
+  }, [search, activeTab, user]);
 
   useEffect(() => {
     fetchShipments();
@@ -192,10 +198,10 @@ export const InternalShippingPage = () => {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Truck className="w-7 h-7 text-blue-600" />
-            Điều Phối & Vận Chuyển Nội Bộ (MIVA Logistics)
+            Quản Lý Giao Hàng Bưu Tá (MIVA Logistics)
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            Tiếp nhận kiện hàng từ Vendor, luân chuyển qua Hub phân loại và giao tận tay khách hàng
+            Tiếp nhận kiện hàng từ kho Vendor, luân chuyển qua Hub phân loại và trực tiếp giao tận tay khách hàng
           </p>
         </div>
 
@@ -305,8 +311,8 @@ export const InternalShippingPage = () => {
                     <span className="font-mono font-bold text-sm text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
                       {s.trackingNumber}
                     </span>
-                    <span className="text-xs text-slate-500">
-                      Đơn hàng: <span className="font-semibold text-slate-800">{s.order?.orderCode}</span>
+                    <span className="text-xs text-slate-500" title={s.order?.orderCode}>
+                      Đơn hàng: <span className="font-mono font-semibold text-slate-800">#{formatShortOrderCode(s.order?.orderCode || s.orderId)}</span>
                     </span>
                     {s.vendorOrder && (
                       <span className="text-xs text-slate-400">
@@ -332,10 +338,49 @@ export const InternalShippingPage = () => {
                   {/* Vendor / Pickup info */}
                   <div className="space-y-1">
                     <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">1. Điểm lấy hàng (Vendor)</p>
-                    <p className="font-semibold text-slate-800">
-                      {s.vendorOrder?.vendor?.storeName || 'Kho Tổng Miva'}
+                    <p className="font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                      <span>{s.vendorOrder?.vendor?.storeName || 'Kho Tổng Miva'}</span>
+                      {s.vendorOrder?.vendor?.id && (
+                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          {formatVendorCode(s.vendorOrder.vendor.id)}
+                        </span>
+                      )}
                     </p>
                     <p className="text-slate-500">{s.vendorOrder?.vendor?.fullName || 'Nhà cung cấp đối tác'}</p>
+                    {s.vendorOrder && (
+                      <div className="pt-0.5">
+                        {s.vendorOrder.status === 'ready_for_pickup' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            Đã đóng gói - Sẵn sàng bàn giao
+                          </span>
+                        )}
+                        {s.vendorOrder.status === 'processing' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
+                            <Clock className="w-3 h-3 text-blue-600" />
+                            Vendor đang đóng gói hàng
+                          </span>
+                        )}
+                        {s.vendorOrder.status === 'confirmed' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            Vendor đã nhận đơn (Chờ đóng gói)
+                          </span>
+                        )}
+                        {s.vendorOrder.status === 'pending' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                            <Clock className="w-3 h-3 text-slate-500" />
+                            Chờ Vendor tiếp nhận
+                          </span>
+                        )}
+                        {s.vendorOrder.status === 'shipping' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                            <Truck className="w-3 h-3 text-purple-600" />
+                            Đã bàn giao bưu tá
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Customer / Delivery info */}
@@ -376,12 +421,41 @@ export const InternalShippingPage = () => {
 
                   <div className="flex items-center gap-2">
                     {(s.status === 'pending' || s.status === 'assigned') && (
-                      <button
-                        onClick={() => handleOpenUpdate(s, 'picking_up')}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition"
-                      >
-                        Tiếp nhận &amp; Bắt đầu lấy hàng (Vendor)
-                      </button>
+                      (() => {
+                        const isVendorReady =
+                          !s.vendorOrder ||
+                          s.vendorOrder.status === 'ready_for_pickup' ||
+                          s.vendorOrder.status === 'shipping' ||
+                          s.vendorOrder.status === 'delivered';
+
+                        if (isVendorReady) {
+                          return (
+                            <button
+                              onClick={() => handleOpenUpdate(s, 'picking_up')}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-1.5"
+                            >
+                              <Truck className="w-3.5 h-3.5" />
+                              Tiếp nhận &amp; Bắt đầu lấy hàng (Vendor)
+                            </button>
+                          );
+                        }
+
+                        return (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
+                              Chờ Vendor xác nhận đóng gói
+                            </span>
+                            <button
+                              disabled
+                              className="px-3 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-xl cursor-not-allowed border border-slate-200"
+                              title="Vendor chưa xác nhận đóng gói xong (Sẵn sàng bàn giao). Bưu tá chỉ có thể tiếp nhận sau khi Vendor hoàn tất."
+                            >
+                              Chưa thể tiếp nhận
+                            </button>
+                          </div>
+                        );
+                      })()
                     )}
 
                     {s.status === 'picking_up' && (
@@ -551,8 +625,15 @@ export const InternalShippingPage = () => {
             <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl text-xs">
               <div>
                 <p className="text-slate-400 font-semibold uppercase text-[10px]">Đơn hàng &amp; Vendor</p>
-                <p className="font-semibold text-slate-800 mt-0.5">{selectedShipment.order?.orderCode}</p>
-                <p className="text-slate-500">{selectedShipment.vendorOrder?.vendor?.storeName || 'Miva Direct'}</p>
+                <p className="font-mono font-semibold text-slate-800 mt-0.5" title={selectedShipment.order?.orderCode}>
+                  #{formatShortOrderCode(selectedShipment.order?.orderCode || selectedShipment.orderId)}
+                </p>
+                <p className="text-slate-500">
+                  {selectedShipment.vendorOrder?.vendor?.storeName || 'Miva Direct'}
+                  {selectedShipment.vendorOrder?.vendor?.id
+                    ? ` (${formatVendorCode(selectedShipment.vendorOrder.vendor.id)})`
+                    : ''}
+                </p>
               </div>
               <div>
                 <p className="text-slate-400 font-semibold uppercase text-[10px]">Người nhận &amp; Địa chỉ</p>
@@ -616,8 +697,8 @@ export const InternalShippingPage = () => {
 
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
               <p className="font-semibold">Kiện hàng: {escalateShipment.trackingNumber || escalateShipment.id}</p>
-              <p className="text-[11px] text-amber-700 mt-0.5">
-                Đơn hàng gốc: #{escalateShipment.order?.orderCode || escalateShipment.orderId}
+              <p className="text-[11px] text-amber-700 mt-0.5" title={escalateShipment.order?.orderCode || escalateShipment.orderId}>
+                Đơn hàng gốc: #{formatShortOrderCode(escalateShipment.order?.orderCode || escalateShipment.orderId)}
               </p>
               <p className="text-[11px] text-amber-600 mt-1">
                 * Báo cáo này sẽ được chuyển trực tiếp vào hồ sơ đơn hàng để Admin phê duyệt hủy đơn, tự động hoàn kho và hoàn trả tiền cho khách hàng.

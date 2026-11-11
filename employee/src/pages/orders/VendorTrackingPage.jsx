@@ -13,6 +13,7 @@ import {
   Check
 } from 'lucide-react';
 import { ordersApi } from '../../api/axiosClient';
+import { formatShortOrderCode } from '../../utils/orderFormat';
 
 export const VendorTrackingPage = ({ orders, onOpenDetail, onOpenException }) => {
   const [searchVendor, setSearchVendor] = useState('');
@@ -144,7 +145,7 @@ export const VendorTrackingPage = ({ orders, onOpenDetail, onOpenException }) =>
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center space-x-2">
-                    <span className="font-mono font-bold text-blue-700 text-sm">{order.orderCode}</span>
+                    <span className="font-mono font-bold text-blue-700 text-sm" title={order.orderCode}>#{formatShortOrderCode(order.orderCode || order.id)}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${sla.color}`}>
                       {sla.label}
                     </span>

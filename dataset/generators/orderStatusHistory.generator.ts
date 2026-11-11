@@ -57,14 +57,29 @@ export function generateOrderStatusHistory(
     (e) => e.status === 'active' && e.department === 'Bộ phận Xử lý Sự cố & Ngoại lệ Đơn',
   ) || [];
 
+  // Đảm bảo các đơn hàng nhỏ thuộc cùng 1 lượt checkout dùng chung 1 điều phối viên
+  const batchVendorLinkEmp = new Map<string, GeneratedEmployee | null>();
+  const resolveBatchVendorLinkEmp = (order: GeneratedOrder) => {
+    const addrKey = (order.shippingAddress || '').trim().toLowerCase();
+    const bucket = Math.floor(order.createdAt.getTime() / 60000);
+    const key = `${order.clientId}|${addrKey}|${bucket}`;
+    if (!batchVendorLinkEmp.has(key)) {
+      batchVendorLinkEmp.set(
+        key,
+        vendorLinkEmployees.length > 0
+          ? faker.helpers.arrayElement(vendorLinkEmployees)
+          : null,
+      );
+    }
+    return batchVendorLinkEmp.get(key) ?? null;
+  };
+
   for (const order of orders) {
     const path = STATUS_PATHS[order.status] ?? ['pending'];
     let lastTime = order.createdAt.getTime();
 
-    // Mỗi đơn hàng phân định rạch ròi nhân sự của 3 ban:
-    const vendorLinkEmp = vendorLinkEmployees.length > 0
-      ? faker.helpers.arrayElement(vendorLinkEmployees)
-      : null;
+    // Mỗi đơn hàng phân định rạch ròi nhân sự của 3 ban (điều phối viên dùng chung cho cả cụm):
+    const vendorLinkEmp = resolveBatchVendorLinkEmp(order);
 
     const deliveryEmp = shippingEmployees.length > 0
       ? faker.helpers.arrayElement(shippingEmployees)

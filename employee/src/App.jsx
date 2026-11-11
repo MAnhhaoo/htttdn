@@ -209,15 +209,28 @@ const AppContent = () => {
           <Route
             path="/vendor-tracking"
             element={
-              <VendorTrackingPage
-                orders={orders}
-                onOpenDetail={(o) => setDetailOrder(o)}
-                onOpenException={(o) => setExceptionOrder(o)}
-              />
+              isShippingUser ? (
+                <Navigate to="/shipping" replace />
+              ) : (
+                <VendorTrackingPage
+                  orders={orders}
+                  onOpenDetail={(o) => setDetailOrder(o)}
+                  onOpenException={(o) => setExceptionOrder(o)}
+                />
+              )
             }
           />
           <Route path="/vendor-approvals" element={<VendorApprovalPage />} />
-          <Route path="/shipping" element={<InternalShippingPage />} />
+          <Route
+            path="/shipping"
+            element={
+              isShippingUser ? (
+                <InternalShippingPage />
+              ) : (
+                <Navigate to="/orders" replace />
+              )
+            }
+          />
           <Route
             path="/audit-history"
             element={

@@ -1,6 +1,6 @@
 import { Modal, Button, Badge } from '../../components/ui';
 import { Link } from 'react-router-dom';
-import { formatCurrency, formatDate } from '../../utils/formatHelpers';
+import { formatCurrency, formatDate, formatShortOrderCode } from '../../utils/formatHelpers';
 
 export default function OrderDetailModal({ isOpen, onClose, order, vendorId }) {
   if (!order) return null;
@@ -27,7 +27,7 @@ export default function OrderDetailModal({ isOpen, onClose, order, vendorId }) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Order Details #${order.orderCode}`}
+      title={`Order Details #${formatShortOrderCode(order.orderCode || order.id)}`}
       maxWidth="max-w-4xl"
       footer={
         <>

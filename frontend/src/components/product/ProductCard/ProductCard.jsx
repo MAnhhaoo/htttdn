@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Package, ShoppingCart, Loader2, Heart } from 'lucide-react';
+import { Package, ShoppingCart, Loader2, Heart, Zap } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { formatPrice } from '../../../utils/formatPrice';
 import { useCart } from '../../../hooks/useCart';
@@ -14,6 +14,8 @@ export default function ProductCard({ product }) {
   const [imgError, setImgError] = useState(false);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [isBuyingNow, setIsBuyingNow] = useState(false);
+  const [quickAddInitialMode, setQuickAddInitialMode] = useState('add_to_cart');
 
   const navigate = useNavigate();
   const isAuthenticated = useSelector(state => state.auth.isAuthenticated);
@@ -104,7 +106,51 @@ export default function ProductCard({ product }) {
         setIsAddingToCart(false);
       }
     } else if (hasMultipleVariants) {
+      setQuickAddInitialMode('add_to_cart');
       setShowQuickAdd(true);
+    }
+  };
+
+  const handleBuyNowClick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isAuthenticated) {
+      toast.info('Vui lòng đăng nhập để tiến hành mua hàng');
+      navigate('/login');
+      return;
+    }
+
+    if (hasSingleVariant) {
+      setIsBuyingNow(true);
+      try {
+        const res = await addToCart({ productVariantId: purchasableVariants[0].id, quantity: 1 });
+        const cartItems = res?.items || (res?.data && res.data.items) || [];
+        const targetItem = cartItems.find((i) => i.productVariantId === purchasableVariants[0].id) || cartItems[cartItems.length - 1];
+        if (targetItem?.id) {
+          navigate('/checkout', { state: { cartItemIds: [targetItem.id] } });
+        } else {
+          navigate('/checkout');
+        }
+      } catch (error) {
+        const status = error.response?.status;
+        const message = error.response?.data?.message;
+        if (status === 401) {
+          toast.info('Phiên đăng nhập đã hết hạn');
+          navigate('/login');
+        } else if (message) {
+          toast.error(message);
+        } else {
+          toast.error('Lỗi kết nối, vui lòng thử lại');
+        }
+      } finally {
+        setIsBuyingNow(false);
+      }
+    } else if (hasMultipleVariants) {
+      setQuickAddInitialMode('buy_now');
+      setShowQuickAdd(true);
+    } else {
+      navigate(`/products/${product.id}`);
     }
   };
 
@@ -168,43 +214,65 @@ export default function ProductCard({ product }) {
             {product.name}
           </h3>
 
-          {/* Price + Cart Button */}
-          <div className="mt-auto flex items-end justify-between gap-2">
-            <div className="min-w-0">
-              {price ? (
-                <div>
-                  {showPriceRange && (
-                    <p className="text-[10px] sm:text-xs text-light-muted dark:text-dark-muted mb-0.5">Từ</p>
-                  )}
-                  <p className="font-bold text-sm sm:text-base text-primary leading-tight">
-                    {formatPrice(price)}
-                  </p>
-                  {voucherPrice && <div className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
-                    <strong>{formatPrice(voucherPrice.totalAmount)}</strong> với mã <span className="font-semibold">{voucherPrice.code}</span>
-                  </div>}
-                </div>
-              ) : (
-                <p className="text-sm text-light-muted dark:text-dark-muted italic">Liên hệ</p>
-              )}
-            </div>
-
-            {/* Cart button */}
-            {totalStock > 0 && (
-              <button
-                onClick={handleCartClick}
-                disabled={isAddingToCart}
-                className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center bg-primary/10 text-primary hover:bg-primary hover:text-white active:scale-95 disabled:opacity-60 transition-all duration-200"
-                aria-label="Thêm vào giỏ"
-                title="Thêm vào giỏ"
-              >
-                {isAddingToCart ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <ShoppingCart className="w-4 h-4" />
+          {/* Price */}
+          <div className="mt-auto">
+            {price ? (
+              <div>
+                {showPriceRange && (
+                  <p className="text-[10px] sm:text-xs text-light-muted dark:text-dark-muted mb-0.5">Từ</p>
                 )}
-              </button>
+                <p className="font-bold text-sm sm:text-base text-primary leading-tight">
+                  {formatPrice(price)}
+                </p>
+                {voucherPrice && <div className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+                  <strong>{formatPrice(voucherPrice.totalAmount)}</strong> với mã <span className="font-semibold">{voucherPrice.code}</span>
+                </div>}
+              </div>
+            ) : (
+              <p className="text-sm text-light-muted dark:text-dark-muted italic">Liên hệ</p>
             )}
           </div>
+
+          {/* Action buttons (Mua ngay + Thêm vào giỏ) */}
+          {totalStock > 0 ? (
+            <div className="mt-3 pt-2.5 border-t border-light-border/60 dark:border-dark-border/40 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleBuyNowClick}
+                disabled={isBuyingNow || isAddingToCart}
+                className="flex-1 h-8 sm:h-8.5 px-2.5 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold flex items-center justify-center gap-1 transition-all shadow-xs active:scale-95 disabled:opacity-60 cursor-pointer"
+                title="Mua ngay"
+              >
+                {isBuyingNow ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Zap className="w-3.5 h-3.5" />
+                )}
+                <span>Mua ngay</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCartClick}
+                disabled={isAddingToCart || isBuyingNow}
+                className="shrink-0 w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-xl flex items-center justify-center bg-primary/10 text-primary hover:bg-primary hover:text-white active:scale-95 disabled:opacity-60 transition-all cursor-pointer"
+                aria-label="Thêm vào giỏ"
+                title="Thêm vào giỏ hàng"
+              >
+                {isAddingToCart ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 pt-2.5 border-t border-light-border/60 dark:border-dark-border/40">
+              <span className="block w-full py-1 text-center text-xs font-semibold text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                Hết hàng
+              </span>
+            </div>
+          )}
         </div>
       </Link>
 
@@ -212,7 +280,11 @@ export default function ProductCard({ product }) {
       {showQuickAdd && (
         <QuickAddModal
           product={product}
-          onClose={() => setShowQuickAdd(false)}
+          initialMode={quickAddInitialMode}
+          onClose={() => {
+            setShowQuickAdd(false);
+            setQuickAddInitialMode('add_to_cart');
+          }}
         />
       )}
     </>

@@ -102,6 +102,81 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
             vouchers: { where: { deletedAt: null } },
           },
         },
+        products: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            createdAt: true,
+            category: { select: { id: true, name: true } },
+            colors: {
+              where: { deletedAt: null },
+              select: {
+                color: true,
+                imageUrls: true,
+                variants: {
+                  where: { deletedAt: null },
+                  select: { id: true, size: true, price: true, stock: true },
+                },
+              },
+            },
+          },
+        },
+        vendorOrders: {
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            vendorOrderCode: true,
+            subtotalAmount: true,
+            shippingFee: true,
+            totalAmount: true,
+            status: true,
+            createdAt: true,
+            order: {
+              select: {
+                id: true,
+                orderCode: true,
+                receiverName: true,
+                receiverPhone: true,
+                shippingAddress: true,
+                client: { select: { id: true, fullName: true, email: true } },
+                payment: { select: { method: true, status: true } },
+              },
+            },
+            details: {
+              select: {
+                id: true,
+                productName: true,
+                quantity: true,
+                price: true,
+                sizeName: true,
+                colorName: true,
+                imageUrl: true,
+              },
+            },
+          },
+        },
+        vouchers: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            discountType: true,
+            discountValue: true,
+            maxDiscountAmount: true,
+            minOrderAmount: true,
+            quantity: true,
+            usedQuantity: true,
+            startDate: true,
+            endDate: true,
+            status: true,
+            scope: true,
+          },
+        },
       },
     });
 
@@ -128,6 +203,42 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
         )
       : null;
 
+    const formattedProducts = ((vendor as any).products || []).map((p: any) => {
+      const allVariants = (p.colors || []).flatMap((c: any) => c.variants || []);
+      const prices = allVariants.map((v: any) => Number(v.price) || 0);
+      const minPrice = prices.length ? Math.min(...prices) : 0;
+      const maxPrice = prices.length ? Math.max(...prices) : 0;
+      const totalStock = allVariants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0);
+      const thumbnail = p.colors?.[0]?.imageUrls?.[0] || null;
+      return {
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        createdAt: p.createdAt,
+        categoryName: p.category?.name || 'Chưa phân loại',
+        thumbnail,
+        minPrice,
+        maxPrice,
+        totalStock,
+        variantsCount: allVariants.length,
+      };
+    });
+
+    const formattedOrders = ((vendor as any).vendorOrders || []).map((vo: any) => ({
+      id: vo.id,
+      vendorOrderCode: vo.vendorOrderCode || vo.order?.orderCode || vo.id,
+      orderCode: vo.order?.orderCode,
+      createdAt: vo.createdAt,
+      status: vo.status,
+      subtotalAmount: Number(vo.subtotalAmount) || 0,
+      totalAmount: Number(vo.totalAmount) || 0,
+      customerName: vo.order?.receiverName || vo.order?.client?.fullName || 'Khách hàng',
+      customerPhone: vo.order?.receiverPhone || null,
+      paymentMethod: vo.order?.payment?.method || 'cod',
+      itemsCount: (vo.details || []).reduce((sum: number, d: any) => sum + (d.quantity || 1), 0),
+      items: vo.details || [],
+    }));
+
     return {
       ...vendor,
       totalRevenue: Number(revenueAgg._sum.totalAmount) || 0,
@@ -138,6 +249,9 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
         orderCount: vendor._count?.vendorOrders || 0,
         voucherCount: vendor._count?.vouchers || 0,
       },
+      products: formattedProducts,
+      orders: formattedOrders,
+      vouchers: (vendor as any).vouchers || [],
     };
   }
 
