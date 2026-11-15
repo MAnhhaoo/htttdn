@@ -65,6 +65,8 @@ export const vouchersApi = {
   getVouchers: (params = {}) => axiosClient.get('/vouchers/admin/all', { params }),
   createVoucher: (data) => axiosClient.post('/vouchers', data),
   updateVoucher: (id, data) => axiosClient.patch(`/vouchers/${id}`, data),
+  setStatus: (id, status) => axiosClient.patch(`/vouchers/${id}/status`, { status }),
+  extendVoucher: (id, endDate) => axiosClient.patch(`/vouchers/${id}/extend`, { endDate }),
   deleteVoucher: (id) => axiosClient.delete(`/vouchers/${id}`),
 };
 
@@ -130,6 +132,7 @@ export const surveysApi = {
   getSurveyDetail: (id) => axiosClient.get(`/surveys/${id}/manage`),
   updateSurvey: (id, data) => axiosClient.patch(`/surveys/${id}`, data),
   changeStatus: (id, status) => axiosClient.patch(`/surveys/${id}/status`, { status }),
+  extendSurvey: (id, endDate) => axiosClient.patch(`/surveys/${id}/extend`, { endDate }),
   getResults: (id, params = {}) => axiosClient.get(`/surveys/${id}/results`, { params }),
   deleteSurvey: (id) => axiosClient.delete(`/surveys/${id}`),
 };

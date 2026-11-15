@@ -89,7 +89,6 @@ export function useCheckoutPricing(items, initialSelections = [], enabled = true
     queryFn: () => voucherService.previewCheckout(payload),
     enabled: Boolean(userId) && items.length > 0 && enabled,
     retry: false,
-    refetchInterval: 30000,
   });
 
   const data = query.isError ? null : query.data;

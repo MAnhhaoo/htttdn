@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -9,9 +10,14 @@ import { ClientsService } from '../clients/clients.service';
 import { VendorsService } from '../vendors/vendors.service';
 import { StringUtilService } from '../../common/utils/string-util/string-util.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AccountDirectoryService } from '../../common/account/account-directory.service';
 import { SignInDto, SignUpDto } from './dto/sign.dto';
 import { JWTToken, TokenKeys } from './consts/jwt.const';
-import { assertVendorApproved } from '../../common/utils/vendor-approval/vendor-approval.util';
+import {
+  SUBSCRIPTION_PLAN_FEES,
+  assertVendorApproved,
+  normalizeSubscriptionPlan,
+} from '../../common/utils/vendor-approval/vendor-approval.util';
 import {
   ACCOUNT_ROLES,
   AccountRole,
@@ -30,6 +36,8 @@ export type TokenPayload = {
 
 @Injectable()
 export class AuthService {
+  private readonly fallbackDirectory: AccountDirectoryService;
+
   constructor(
     private readonly adminsService: AdminsService,
     private readonly clientsService: ClientsService,
@@ -37,7 +45,14 @@ export class AuthService {
     private readonly stringUtilService: StringUtilService,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
-  ) {}
+    @Optional() private readonly accountDirectory?: AccountDirectoryService,
+  ) {
+    this.fallbackDirectory = new AccountDirectoryService(this.prisma);
+  }
+
+  private get directory(): AccountDirectoryService {
+    return this.accountDirectory ?? this.fallbackDirectory;
+  }
 
   async createToken(payload: TokenPayload) {
     const accessToken = await this.jwtService.signAsync(
@@ -113,7 +128,8 @@ export class AuthService {
       password: passwordHashed,
     } as any); // cast to any temporarily to avoid typing issue with missing fields
 
-    const { password: _password, ...userResponse } = userCreated;
+    const { password: _password, ...userResponse } =
+      userCreated as typeof userCreated & { password?: string };
     return userResponse;
   }
 
@@ -130,8 +146,8 @@ export class AuthService {
     await assertEmailAvailable(this.prisma.extended, email);
     const passwordHashed = await this.stringUtilService.hash(password);
     const storeName = (otherInformation as any).storeName || otherInformation.fullName;
-    const plan = (otherInformation as any).subscriptionPlan === '2_years' ? '2_years' : '1_year';
-    const fee = plan === '2_years' ? 2000000 : 1200000;
+    const plan = normalizeSubscriptionPlan((otherInformation as any).subscriptionPlan);
+    const fee = SUBSCRIPTION_PLAN_FEES[plan];
 
     const userCreated = await this.vendorsService.createVendor({
       ...otherInformation,
@@ -144,7 +160,8 @@ export class AuthService {
       password: passwordHashed,
     } as any);
 
-    const { password: _password, ...userResponse } = userCreated;
+    const { password: _password, ...userResponse } =
+      userCreated as typeof userCreated & { password?: string };
     return {
       ...userResponse,
       role: 'vendor',
@@ -201,17 +218,11 @@ export class AuthService {
       throw new UnauthorizedException('Không tìm thấy refresh token');
     }
     const payload = await this.verifyToken(refreshToken, 'refresh');
-    
-    let user: any = null;
-    if (payload.role === 'client') {
-      user = await this.clientsService.getClient({ id: payload.userID }).catch(() => null);
-    } else if (payload.role === 'vendor') {
-      user = await this.vendorsService.getVendor({ id: payload.userID }).catch(() => null);
-    } else if (payload.role === 'admin') {
-      user = await this.adminsService.getAdmin({ id: payload.userID }).catch(() => null);
-    } else if (payload.role === 'employee') {
-      user = await this.prisma.extended.employee.findUnique({ where: { id: payload.userID } }).catch(() => null);
-    }
+
+    const user = await this.directory.getAccountAuthSummary(
+      payload.userID,
+      payload.role,
+    );
 
     if (!user || user.status !== 'active' || user.deletedAt) {
       throw new UnauthorizedException('Tài khoản không còn hoạt động');
@@ -234,32 +245,12 @@ export class AuthService {
   }
 
   async getMe(userInfo: { userID: string; role: string }) {
-    if (userInfo.role === 'employee') {
-      const emp = await this.prisma.extended.employee.findUnique({
-        where: { id: userInfo.userID },
-      });
-      if (emp) {
-        const { password: _p, ...safeEmp } = emp;
-        return { data: { ...userInfo, ...safeEmp } };
-      }
-    }
-    if (userInfo.role === 'admin') {
-      const admin = await this.adminsService.getAdmin({ id: userInfo.userID }).catch(() => null);
-      if (admin) {
-        return { data: { ...userInfo, ...admin } };
-      }
-    }
-    if (userInfo.role === 'vendor') {
-      const vendor = await this.vendorsService.getVendor({ id: userInfo.userID }).catch(() => null);
-      if (vendor) {
-        return { data: { ...userInfo, ...vendor } };
-      }
-    }
-    if (userInfo.role === 'client') {
-      const client = await this.clientsService.getClient({ id: userInfo.userID }).catch(() => null);
-      if (client) {
-        return { data: { ...userInfo, ...client } };
-      }
+    const profile = await this.directory.getAccountAuthSummary(
+      userInfo.userID,
+      userInfo.role,
+    );
+    if (profile) {
+      return { data: { ...userInfo, ...profile } };
     }
     return { data: userInfo };
   }

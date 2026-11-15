@@ -424,23 +424,40 @@ export class EmployeesService {
     if (!dto.employeeId || dto.employeeId === 'all') {
       const employees = await this.prisma.extended.employee.findMany({
         where: { status: 'active' },
+        select: { id: true, permissions: true },
       });
 
-      for (const emp of employees) {
-        const perms = (emp.permissions as Record<string, any>) || {};
-        const notifications = Array.isArray(perms.notifications) ? perms.notifications : [];
-        const updatedNotifs = [newNotif, ...notifications].slice(0, 50);
+      if (employees.length > 0) {
+        const updateOps = employees.map((emp) => {
+          const perms = (emp.permissions as Record<string, any>) || {};
+          const notifications = Array.isArray(perms.notifications)
+            ? perms.notifications
+            : [];
+          const updatedNotifs = [newNotif, ...notifications].slice(0, 50);
 
-        await this.prisma.extended.employee.update({
-          where: { id: emp.id },
-          data: {
-            permissions: {
-              ...perms,
-              notifications: updatedNotifs,
+          return this.prisma.extended.employee.update({
+            where: { id: emp.id },
+            select: { id: true },
+            data: {
+              permissions: {
+                ...perms,
+                notifications: updatedNotifs,
+              },
             },
-          },
+          });
         });
-        this.realtime.emitToUser(emp.id, 'notification:created', { id: newNotif.id });
+
+        if (typeof (this.prisma.extended as any).$transaction === 'function') {
+          await this.prisma.extended.$transaction(updateOps);
+        } else {
+          await Promise.all(updateOps);
+        }
+
+        for (const emp of employees) {
+          this.realtime.emitToUser(emp.id, 'notification:created', {
+            id: newNotif.id,
+          });
+        }
       }
 
       return {
@@ -451,6 +468,7 @@ export class EmployeesService {
     } else {
       const emp = await this.prisma.extended.employee.findUnique({
         where: { id: dto.employeeId },
+        select: { id: true, fullName: true, permissions: true },
       });
 
       if (!emp) {
@@ -463,6 +481,7 @@ export class EmployeesService {
 
       await this.prisma.extended.employee.update({
         where: { id: emp.id },
+        select: { id: true },
         data: {
           permissions: {
             ...perms,

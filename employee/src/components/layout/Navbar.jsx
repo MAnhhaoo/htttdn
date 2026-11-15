@@ -1,137 +1,134 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { 
-  Building2, 
-  ShieldCheck, 
-  LogOut, 
-  DollarSign, 
+import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import {
+  Building2,
+  ShieldCheck,
+  DollarSign,
   Eye,
   EyeOff,
-  Bell
+  Menu,
+  Sun,
+  Moon,
+  Clock,
 } from 'lucide-react';
+import { SharedNotificationDropdown } from '@shared/components/common/NotificationDropdown';
+import { formatCurrency } from '@shared/utils/formatHelpers';
+import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { notificationsApi } from '../../api/axiosClient';
-import { EmployeeNotificationsModal } from '../notifications/EmployeeNotificationsModal';
 
-export const Navbar = () => {
-  const { user, logout } = useAuth();
+function resolvePageTitle(pathname, search) {
+  if (pathname.startsWith('/shipping')) {
+    return 'Giao Hàng Nội Bộ (Bưu Tá)';
+  }
+  if (pathname.startsWith('/profile')) {
+    return 'Hồ Sơ & Hợp Đồng Lương';
+  }
+  const params = new URLSearchParams(search);
+  const view = params.get('view');
+  if (view === 'sla') return 'Giám Sát Tiến Độ & SLA Vendor';
+  if (view === 'audit') return 'Nhật Ký Kiểm Toán Đơn Hàng';
+  return 'Điều Phối & Giám Sát Đơn Hàng';
+}
+
+export const Navbar = ({ onOpenSidebar, onOpenCheckIn }) => {
+  const { user } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
+  const location = useLocation();
   const [showSalary, setShowSalary] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [isNotifOpen, setIsNotifOpen] = useState(false);
 
-  const fetchUnread = async () => {
-    try {
-      const res = await notificationsApi.getMyNotifications();
-      setUnreadCount(res.unreadCount || 0);
-    } catch {
-      // ignore
-    }
-  };
-
-  useEffect(() => {
-    fetchUnread();
-    const timer = setInterval(fetchUnread, 30000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener('miva:notification', fetchUnread);
-    return () => window.removeEventListener('miva:notification', fetchUnread);
-  });
-
-  const formatCurrency = (val) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
-  };
+  const pageTitle = resolvePageTitle(location.pathname, location.search);
+  const scopeLabel =
+    user?.assignedOrderScope === 'all_orders'
+      ? 'Toàn bộ đơn'
+      : user?.scopeName || user?.assignedOrderScope || 'Phân quyền';
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
-          {/* Left Brand */}
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/20">
-              <span className="text-xl">M</span>
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="font-extrabold text-slate-900 tracking-tight text-lg">MIVA</span>
-                <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700 border border-blue-200">
-                  Employee Portal :5176
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">Cổng Vận Hành & Quản Lý Đơn Hàng Dành Cho Nhân Viên</p>
-            </div>
-          </div>
+    <header className="h-16 bg-white/95 dark:bg-[#131B17]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between shrink-0 z-20 transition-colors">
+      {/* Left: Mobile Menu + Page Title + Department Scope Badge */}
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          type="button"
+          onClick={onOpenSidebar}
+          className="lg:hidden p-2 -ml-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition shrink-0"
+          aria-label="Mở thanh điều hướng"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
 
-          {/* Center Info: Department & Scope */}
-          <div className="hidden lg:flex items-center space-x-4 bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-200/80">
-            <div className="flex items-center space-x-2 text-xs">
-              <Building2 className="w-4 h-4 text-blue-600" />
-              <span className="font-medium text-slate-700">{user?.department || 'Vận hành đơn hàng'}</span>
-            </div>
-            <div className="h-4 w-px bg-slate-300"></div>
-            <div className="flex items-center space-x-1.5 text-xs text-indigo-700 font-semibold bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Phạm vi: {user?.assignedOrderScope === 'all_orders' ? 'Toàn bộ đơn (All)' : user?.assignedOrderScope || 'Phân quyền'}</span>
-            </div>
-          </div>
+        <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white tracking-tight truncate">
+          {pageTitle}
+        </h2>
 
-          {/* Right Actions */}
-          <div className="flex items-center space-x-3">
-            {/* Notification Bell */}
-            <button
-              onClick={() => setIsNotifOpen(true)}
-              title="Thông báo & Cảnh báo từ Quản Trị"
-              className="relative p-2 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition"
-            >
-              <Bell className="w-5 h-5" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-
-            {/* Salary preview toggle */}
-            <button
-              onClick={() => setShowSalary(!showSalary)}
-              title="Xem thông tin lương nhân viên"
-              className="flex items-center space-x-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition"
-            >
-              <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{showSalary ? formatCurrency(user?.salary || 0) : 'Lương: ••••••••'}</span>
-              {showSalary ? <EyeOff className="w-3 h-3 text-slate-400" /> : <Eye className="w-3 h-3 text-slate-400" />}
-            </button>
-
-            {/* Profile Pill & Logout */}
-            <div className="flex items-center pl-2 border-l border-slate-200 space-x-2">
-              <img
-                src={user?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=60'}
-                alt={user?.fullName}
-                className="w-8 h-8 rounded-full border border-slate-200 object-cover"
-              />
-              <div className="hidden md:block text-left">
-                <p className="text-xs font-bold text-slate-800 leading-tight">{user?.fullName || 'Nhân viên Miva'}</p>
-                <p className="text-[11px] font-mono text-slate-500 leading-tight">{user?.employeeCode || 'EMP'}</p>
-              </div>
-
-              <button
-                onClick={logout}
-                title="Đăng xuất khỏi hệ thống"
-                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition ml-1"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
+        <div className="hidden xl:inline-flex items-center gap-2.5 px-3 py-1 rounded-xl text-xs font-semibold bg-[#EEF5F1] text-[#1A3A2C] dark:bg-[#1A3A2C]/45 dark:text-[#8BBAA1] border border-[#B9D6C6]/50 dark:border-[#2A5C4A]/50 shrink-0">
+          <span className="inline-flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-[#2A5C4A] dark:text-[#DEC47E]" />
+            <span>{user?.department || 'Vận hành đơn hàng'}</span>
+          </span>
+          <span className="h-3.5 w-px bg-[#B9D6C6] dark:bg-[#2A5C4A]" />
+          <span className="inline-flex items-center gap-1 text-[#2A5C4A] dark:text-[#DEC47E]">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Phạm vi: {scopeLabel}</span>
+          </span>
         </div>
       </div>
 
-      {/* Notifications Modal */}
-      <EmployeeNotificationsModal
-        isOpen={isNotifOpen}
-        onClose={() => setIsNotifOpen(false)}
-        onRefreshCount={(c) => setUnreadCount(c)}
-      />
+      {/* Right: Attendance, Salary Eye Toggle, Theme Toggle, Notifications */}
+      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+        {onOpenCheckIn && (
+          <button
+            type="button"
+            onClick={onOpenCheckIn}
+            title="Chấm công / Điểm danh vào ca"
+            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white shadow-xs transition cursor-pointer"
+          >
+            <Clock className="w-3.5 h-3.5 text-[#DEC47E]" />
+            <span>Chấm công</span>
+          </button>
+        )}
+
+        {/* Quick Salary Pill + Eye Toggle */}
+        <button
+          type="button"
+          onClick={() => setShowSalary(!showSalary)}
+          title="Xem thông tin lương nhân viên"
+          className="flex items-center space-x-1.5 text-xs font-semibold bg-[#FBF7EC] dark:bg-[#C9A84C]/15 border border-[#C9A84C]/35 text-[#8C6B1F] dark:text-[#DEC47E] hover:bg-[#F5EBD0] dark:hover:bg-[#C9A84C]/25 px-2.5 py-1.5 rounded-xl transition cursor-pointer"
+        >
+          <DollarSign className="w-3.5 h-3.5 text-[#B08726] dark:text-[#DEC47E]" />
+          <span className="hidden sm:inline">
+            {showSalary ? formatCurrency(user?.salary || 0) : 'Lương: ••••••••'}
+          </span>
+          <span className="sm:hidden">
+            {showSalary ? formatCurrency(user?.salary || 0) : '••••'}
+          </span>
+          {showSalary ? (
+            <EyeOff className="w-3.5 h-3.5 opacity-80" />
+          ) : (
+            <Eye className="w-3.5 h-3.5 opacity-80" />
+          )}
+        </button>
+
+        {/* Dark Mode Toggle */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          title={isDark ? 'Chuyển sang chế độ Sáng' : 'Chuyển sang chế độ Tối'}
+          aria-label="Chuyển đổi giao diện Sáng / Tối"
+          className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-[#DEC47E] hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+        >
+          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
+
+        {/* Realtime Notification Dropdown */}
+        <SharedNotificationDropdown
+          title="Thông báo Nội bộ"
+          senderBadgeLabel="Điều hành MIVA"
+          fetchNotificationsFn={notificationsApi.getMyNotifications}
+          markAsReadFn={notificationsApi.markRead}
+          markAllAsReadFn={notificationsApi.markAllAsRead}
+          enabled={Boolean(user?.id)}
+        />
+      </div>
     </header>
   );
 };

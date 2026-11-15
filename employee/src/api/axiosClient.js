@@ -3,6 +3,7 @@ import axios from 'axios';
 export const axiosClient = axios.create({
   baseURL: '/api',
   withCredentials: true,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
     'x-app-role': 'employee',
@@ -18,12 +19,13 @@ axiosClient.interceptors.request.use((config) => {
 });
 
 axiosClient.interceptors.response.use(
-  (response) => response.data?.data !== undefined ? response.data.data : response.data,
+  (response) => (response.data?.data !== undefined ? response.data.data : response.data),
   (error) => {
     if (!error.response) {
-      error.message = error.code === 'ECONNABORTED'
-        ? 'Yêu cầu quá thời gian. Vui lòng thử lại.'
-        : 'Không thể kết nối tới máy chủ. Vui lòng kiểm tra mạng và thử lại.';
+      error.message =
+        error.code === 'ECONNABORTED'
+          ? 'Yêu cầu quá thời gian. Vui lòng thử lại.'
+          : 'Không thể kết nối tới máy chủ. Vui lòng kiểm tra mạng và thử lại.';
     }
     if (error.response?.status === 401) {
       if (!window.location.pathname.includes('/login')) {
@@ -32,7 +34,7 @@ axiosClient.interceptors.response.use(
       }
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export const authApi = {
@@ -54,8 +56,13 @@ export const ordersApi = {
   getById: async (id) => {
     return axiosClient.get(`/orders/${id}`);
   },
-  updateStatus: async (id, { status, note }) => {
-    return axiosClient.patch(`/orders/${id}/status`, { status, note });
+  updateStatus: async (id, { status, note, notifyTarget, title } = {}) => {
+    return axiosClient.patch(`/orders/${id}/status`, {
+      status,
+      ...(note !== undefined ? { note } : {}),
+      ...(notifyTarget ? { notifyTarget } : {}),
+      ...(title ? { title } : {}),
+    });
   },
 };
 
@@ -106,29 +113,20 @@ export const payrollApi = {
   },
 };
 
-export const vendorsApi = {
-  getRegistrations: async (params = {}) => {
-    return axiosClient.get('/vendors/admin/registrations', { params });
-  },
-  approveRegistration: async (id, data = {}) => {
-    return axiosClient.patch(`/vendors/admin/registrations/${id}/approve`, data);
-  },
-  rejectRegistration: async (id, data = {}) => {
-    return axiosClient.patch(`/vendors/admin/registrations/${id}/reject`, data);
-  },
-};
-
 export const notificationsApi = {
-  getMyNotifications: async () => {
-    return axiosClient.get('/employees/notifications/mine');
+  getMyNotifications: async (params = {}) => {
+    return axiosClient.get('/employees/notifications/mine', { params });
   },
   markRead: async (notifId) => {
+    return axiosClient.patch(`/employees/notifications/${notifId}/read`);
+  },
+  markAsRead: async (notifId) => {
     return axiosClient.patch(`/employees/notifications/${notifId}/read`);
   },
   markAllRead: async () => {
     return axiosClient.patch('/employees/notifications/read-all');
   },
+  markAllAsRead: async () => {
+    return axiosClient.patch('/employees/notifications/read-all');
+  },
 };
-
-
-

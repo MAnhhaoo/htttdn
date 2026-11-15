@@ -50,11 +50,26 @@ export function generateVouchers(
   for (let i = 0; i < CONFIG.counts.platformVouchers; i++) {
     const admin = faker.helpers.arrayElement(admins);
     const isPercentage = faker.datatype.boolean(0.6);
-    const startDate = faker.date.between({
-      from: new Date('2025-06-01'),
-      to: new Date('2026-06-01'),
-    });
-    const endDate = new Date(startDate.getTime() + faker.number.int({ min: 7, max: 90 }) * 86400000);
+    const status = faker.helpers.weightedArrayElement([
+      { value: 'active' as const, weight: 55 },
+      { value: 'draft' as const, weight: 15 },
+      { value: 'expired' as const, weight: 20 },
+      { value: 'inactive' as const, weight: 10 },
+    ]);
+    const startDate =
+      status === 'expired'
+        ? faker.date.between({
+            from: new Date('2025-06-01'),
+            to: new Date('2026-06-01'),
+          })
+        : faker.date.between({
+            from: new Date('2026-09-01'),
+            to: new Date('2026-11-01'),
+          });
+    const endDate =
+      status === 'expired'
+        ? new Date(startDate.getTime() + faker.number.int({ min: 7, max: 60 }) * 86400000)
+        : new Date(new Date('2027-06-30').getTime() - faker.number.int({ min: 0, max: 120 }) * 86400000);
     const quantity = faker.number.int({ min: 50, max: 500 });
     const usedQty = faker.number.int({ min: 0, max: Math.floor(quantity * 0.4) });
 
@@ -80,12 +95,7 @@ export function generateVouchers(
       perUserLimit: faker.helpers.arrayElement([1, 2, 3]),
       startDate,
       endDate,
-      status: faker.helpers.weightedArrayElement([
-        { value: 'active' as const, weight: 50 },
-        { value: 'draft' as const, weight: 20 },
-        { value: 'expired' as const, weight: 20 },
-        { value: 'inactive' as const, weight: 10 },
-      ]),
+      status,
       createdAt: startDate,
       updatedAt: startDate,
       deletedAt: null,
@@ -96,11 +106,26 @@ export function generateVouchers(
   for (let i = 0; i < CONFIG.counts.vendorVouchers; i++) {
     const vendor = faker.helpers.arrayElement(vendors);
     const isPercentage = faker.datatype.boolean(0.5);
-    const startDate = faker.date.between({
-      from: new Date('2025-06-01'),
-      to: new Date('2026-08-01'),
-    });
-    const endDate = new Date(startDate.getTime() + faker.number.int({ min: 7, max: 60 }) * 86400000);
+    const status = faker.helpers.weightedArrayElement([
+      { value: 'active' as const, weight: 55 },
+      { value: 'draft' as const, weight: 20 },
+      { value: 'expired' as const, weight: 15 },
+      { value: 'inactive' as const, weight: 10 },
+    ]);
+    const startDate =
+      status === 'expired'
+        ? faker.date.between({
+            from: new Date('2025-06-01'),
+            to: new Date('2026-07-01'),
+          })
+        : faker.date.between({
+            from: new Date('2026-09-01'),
+            to: new Date('2026-11-01'),
+          });
+    const endDate =
+      status === 'expired'
+        ? new Date(startDate.getTime() + faker.number.int({ min: 7, max: 60 }) * 86400000)
+        : new Date(new Date('2027-06-30').getTime() - faker.number.int({ min: 0, max: 120 }) * 86400000);
     const quantity = faker.number.int({ min: 20, max: 200 });
     const usedQty = faker.number.int({ min: 0, max: Math.floor(quantity * 0.3) });
 
@@ -126,12 +151,7 @@ export function generateVouchers(
       perUserLimit: faker.helpers.arrayElement([1, 2]),
       startDate,
       endDate,
-      status: faker.helpers.weightedArrayElement([
-        { value: 'active' as const, weight: 50 },
-        { value: 'draft' as const, weight: 25 },
-        { value: 'expired' as const, weight: 15 },
-        { value: 'inactive' as const, weight: 10 },
-      ]),
+      status,
       createdAt: startDate,
       updatedAt: startDate,
       deletedAt: null,

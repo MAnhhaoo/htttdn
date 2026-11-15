@@ -1,6 +1,12 @@
-export * from './Button';
-export * from './Input';
-export * from './Select';
-export * from './Modal';
-export * from './Badge';
-export * from './AvatarUploadField';
+export {
+  Badge,
+  Button,
+  Input,
+  Modal,
+  Select,
+  PaginationFooter,
+  ToastProvider,
+  useToast,
+} from '@shared/components/ui';
+export { AvatarUploadField } from './AvatarUploadField';
+export { WorkspaceTabs, useWorkspaceTab } from './WorkspaceTabs';

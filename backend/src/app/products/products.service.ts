@@ -2,11 +2,16 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaBaseService } from 'src/common/service/prisma-base.service';
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import { PaginationUtilService } from 'src/common/utils/paginaton-util/pagintion-util.service';
+import {
+  PaginationUtilService,
+  formatPaginatedList,
+  normalizePagination,
+} from 'src/common/utils/paginaton-util/pagintion-util.service';
 import { QueryUtilService } from 'src/common/utils/query-util/query-util.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { StringUtilService } from 'src/common/utils/string-util/string-util.service';
@@ -32,6 +37,7 @@ const productRelations = {
       storeName: true,
       fullName: true,
       avatarUrl: true,
+      address: true,
       createdAt: true,
     },
   },
@@ -56,6 +62,8 @@ type ProductWithRelations = Prisma.ProductGetPayload<{
 
 @Injectable()
 export class ProductService extends PrismaBaseService<'product'> {
+  private readonly logger = new Logger(ProductService.name);
+
   constructor(
     prismaService: PrismaService,
     private readonly paginationUtilService: PaginationUtilService,
@@ -275,21 +283,24 @@ export class ProductService extends PrismaBaseService<'product'> {
   }
 
   async getProductById(id: string) {
-    const product = await this.extended.findFirst({
-      where: {
-        id,
-        deletedAt: null,
-        status: ProductStatus.active,
-        category: { deletedAt: null },
-      },
-      include: productRelations,
-    });
+    const [product, soldMap] = await Promise.all([
+      this.extended.findFirst({
+        where: {
+          id,
+          deletedAt: null,
+          status: ProductStatus.active,
+          category: { deletedAt: null },
+        },
+        include: productRelations,
+      }),
+      this.getSoldQuantityMap([id]),
+    ]);
 
     if (!product) {
       throw new NotFoundException('Sản phẩm không tồn tại');
     }
 
-    return this.toCatalogProduct(product);
+    return this.toCatalogProduct(product, soldMap.get(product.id) ?? 0);
   }
 
   async addFavorite(productId: string, clientId: string) {
@@ -297,22 +308,23 @@ export class ProductService extends PrismaBaseService<'product'> {
     const favorite = await this.prismaService.extended.productFavorite.upsert({
       where: { clientId_productId: { clientId, productId } },
       create: { clientId, productId },
-      update: {},
+      update: { deletedAt: null },
       include: { product: { include: productRelations } },
     });
     return { ...favorite, favorited: true };
   }
 
   async removeFavorite(productId: string, clientId: string) {
-    await this.prismaService.extended.productFavorite.deleteMany({
-      where: { clientId, productId },
+    await this.prismaService.extended.productFavorite.updateMany({
+      where: { clientId, productId, deletedAt: null },
+      data: { deletedAt: new Date() },
     });
     return { productId, favorited: false };
   }
 
   async favoriteStatus(productId: string, clientId: string) {
-    const favorite = await this.prismaService.extended.productFavorite.findUnique({
-      where: { clientId_productId: { clientId, productId } },
+    const favorite = await this.prismaService.extended.productFavorite.findFirst({
+      where: { clientId, productId, deletedAt: null },
       select: { id: true },
     });
     return { productId, favorited: Boolean(favorite) };
@@ -322,6 +334,7 @@ export class ProductService extends PrismaBaseService<'product'> {
     const favorites = await this.prismaService.extended.productFavorite.findMany({
       where: {
         clientId,
+        deletedAt: null,
         product: {
           deletedAt: null,
           status: ProductStatus.active,
@@ -331,10 +344,16 @@ export class ProductService extends PrismaBaseService<'product'> {
       include: { product: { include: productRelations } },
       orderBy: { createdAt: 'desc' },
     });
+    const soldMap = await this.getSoldQuantityMap(
+      favorites.map((favorite) => favorite.product.id),
+    );
     return favorites.map((favorite) => ({
       id: favorite.id,
       createdAt: favorite.createdAt,
-      product: this.toCatalogProduct(favorite.product),
+      product: this.toCatalogProduct(
+        favorite.product,
+        soldMap.get(favorite.product.id) ?? 0,
+      ),
     }));
   }
 
@@ -391,31 +410,70 @@ export class ProductService extends PrismaBaseService<'product'> {
       ...(hasPriceFilter ? { colors: priceCondition } : {}),
     };
 
-    const totalItems = await this.extended.count({
-      where,
-    });
+    const normalized = normalizePagination({ page, itemPerPage });
+    const [totalItems, list] = await Promise.all([
+      this.extended.count({ where }),
+      this.extended.findMany({
+        where,
+        skip: normalized.skip,
+        take: normalized.itemPerPage,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: productRelations,
+      }),
+    ]);
 
-    const paging = this.paginationUtilService.paging({
-      page,
-      itemPerPage,
+    const soldMap = await this.getSoldQuantityMap(list.map((p) => p.id));
+
+    return formatPaginatedList(
+      list.map((product) =>
+        this.toCatalogProduct(product, soldMap.get(product.id) ?? 0),
+      ),
       totalItems,
-    });
-
-    const list = await this.extended.findMany({
-      where,
-      skip: paging.skip,
-      take: itemPerPage,
-      orderBy: {
-        createdAt: 'desc',
-      },
-
-      include: productRelations,
-    });
-
-    return paging.format(list.map((product) => this.toCatalogProduct(product)));
+      { page: normalized.page, itemPerPage: normalized.itemPerPage },
+    );
   }
 
-  private toCatalogProduct(product: ProductWithRelations) {
+  private async getSoldQuantityMap(
+    productIds: string[],
+  ): Promise<Map<string, number>> {
+    const validIds = [
+      ...new Set(productIds.filter((id) => UUID_PATTERN.test(id))),
+    ];
+    if (
+      !validIds.length ||
+      typeof this.prismaService?.extended?.$queryRaw !== 'function'
+    ) {
+      return new Map();
+    }
+
+    try {
+      const rows = await this.prismaService.extended.$queryRaw<
+        Array<{ productId: string; soldQuantity: bigint | number | string }>
+      >(Prisma.sql`
+        SELECT color."productId" AS "productId", COALESCE(SUM(od.quantity), 0) AS "soldQuantity"
+        FROM "OrderDetail" AS od
+        JOIN "Order" AS o ON o.id = od."orderId"
+        JOIN "ProductVariant" AS variant ON variant.id = od."productVariantId"
+        JOIN "ProductColor" AS color ON color.id = variant."productColorId"
+        WHERE color."productId" IN (${Prisma.join(validIds.map((id) => Prisma.sql`${id}::uuid`))})
+          AND o.status <> 'cancelled'::"OrderStatus"
+        GROUP BY color."productId"
+      `);
+
+      return new Map(
+        rows.map((row) => [row.productId, Number(row.soldQuantity) || 0]),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Không thể tính soldQuantity qua truy vấn gộp: ${(error as Error).message}`,
+      );
+      return new Map();
+    }
+  }
+
+  private toCatalogProduct(product: ProductWithRelations, soldQuantity = 0) {
     const variants = product.colors.flatMap((color) => color.variants);
     let minPrice: Prisma.Decimal | null = null;
     let maxPrice: Prisma.Decimal | null = null;
@@ -437,6 +495,7 @@ export class ProductService extends PrismaBaseService<'product'> {
       minPrice: minPrice?.toString() ?? null,
       maxPrice: maxPrice?.toString() ?? null,
       totalStock: variants.reduce((total, variant) => total + variant.stock, 0),
+      soldQuantity,
     };
   }
   async updateProduct(
@@ -481,13 +540,17 @@ export class ProductService extends PrismaBaseService<'product'> {
   }
 
   async deleteProduct(id: string, vendorId?: string, isAdmin = false) {
-    await this.assertCanManage(id, vendorId, isAdmin);
+    const target = await this.assertCanManage(id, vendorId, isAdmin);
+    const archivedSlug = target?.slug
+      ? `${target.slug.replace(/-deleted-\d+$/, '').slice(0, 210)}-deleted-${Date.now()}`
+      : undefined;
 
     const deleted = await this.prismaService.extended.product.update({
       where: { id },
       data: {
-        status: 'inactive',
+        status: ProductStatus.inactive,
         deletedAt: new Date(),
+        ...(archivedSlug ? { slug: archivedSlug } : {}),
       },
     });
     this.realtime.emitProductUpdated(deleted.id, deleted.vendorId);
@@ -501,19 +564,19 @@ export class ProductService extends PrismaBaseService<'product'> {
     id: string,
     vendorId: string | undefined,
     isAdmin: boolean,
-  ) {
+  ): Promise<{ id: string; slug?: string }> {
     if (!isAdmin) {
-      await this.getOwnedProduct(id, vendorId!);
-      return;
+      return this.getOwnedProduct(id, vendorId!);
     }
 
     const product = await this.extended.findFirst({
-      where: { id },
-      select: { id: true },
+      where: { id, deletedAt: null },
+      select: { id: true, slug: true },
     });
     if (!product) {
       throw new NotFoundException('Sản phẩm không tồn tại');
     }
+    return product;
   }
 
   /**
@@ -525,15 +588,78 @@ export class ProductService extends PrismaBaseService<'product'> {
     productId: string,
     colors: NonNullable<UpdateProductDto['colors']>,
   ) {
-    for (const color of colors) {
-      const imageUrls = this.normalizeImages(color.imageUrls);
-      let colorId: string;
+    const preparedColors = colors.map((color) => ({
+      ...color,
+      normalizedImages: this.normalizeImages(color.imageUrls),
+    }));
+
+    const existingColors = await tx.productColor.findMany({
+      where: { productId },
+      include: { variants: true },
+    });
+
+    type CachedVariant = {
+      id: string;
+      size: string;
+      deletedAt: Date | null;
+    };
+    type CachedColor = {
+      id: string;
+      color: string;
+      deletedAt: Date | null;
+      variantsById: Map<string, CachedVariant>;
+      variantsBySize: Map<string, CachedVariant>;
+    };
+
+    const colorById = new Map<string, CachedColor>();
+    const colorByName = new Map<string, CachedColor>();
+
+    const registerRawColor = (rawColor: {
+      id: string;
+      color: string;
+      deletedAt?: Date | null;
+      variants?: Array<{ id: string; size: string; deletedAt?: Date | null }>;
+    }): CachedColor => {
+      const variantsById = new Map<string, CachedVariant>();
+      const variantsBySize = new Map<string, CachedVariant>();
+      for (const v of rawColor.variants ?? []) {
+        const cachedV: CachedVariant = {
+          id: v.id,
+          size: v.size,
+          deletedAt: v.deletedAt ?? null,
+        };
+        variantsById.set(v.id, cachedV);
+        variantsBySize.set(v.size, cachedV);
+      }
+      const cachedColor: CachedColor = {
+        id: rawColor.id,
+        color: rawColor.color,
+        deletedAt: rawColor.deletedAt ?? null,
+        variantsById,
+        variantsBySize,
+      };
+      colorById.set(rawColor.id, cachedColor);
+      colorByName.set(rawColor.color, cachedColor);
+      return cachedColor;
+    };
+
+    for (const rawColor of existingColors) {
+      registerRawColor(rawColor);
+    }
+
+    const keptColorIds = new Set<string>();
+    const incomingColorIds = new Set(
+      preparedColors
+        .filter((c) => c.id && !c.id.startsWith('temp-'))
+        .map((c) => c.id!),
+    );
+
+    for (const color of preparedColors) {
+      const imageUrls = color.normalizedImages;
+      let targetColor: CachedColor;
 
       if (color.id && !color.id.startsWith('temp-')) {
-        const owned = await tx.productColor.findFirst({
-          where: { id: color.id, productId, deletedAt: null },
-          select: { id: true },
-        });
+        const owned = colorById.get(color.id);
         if (!owned) {
           throw new NotFoundException(
             'Màu sản phẩm không tồn tại trong sản phẩm này',
@@ -542,49 +668,145 @@ export class ProductService extends PrismaBaseService<'product'> {
 
         await tx.productColor.update({
           where: { id: owned.id },
-          data: { color: color.color, imageUrls },
+          data: {
+            color: color.color,
+            imageUrls,
+            ...(owned.deletedAt ? { deletedAt: null } : {}),
+          },
         });
-        colorId = owned.id;
+        owned.deletedAt = null;
+        if (owned.color !== color.color) {
+          colorByName.delete(owned.color);
+          owned.color = color.color;
+          colorByName.set(owned.color, owned);
+        }
+        keptColorIds.add(owned.id);
+        targetColor = owned;
       } else {
-        const existing = await tx.productColor.findUnique({
-          where: { productId_color: { productId, color: color.color } },
-        });
-        if (existing && !existing.deletedAt) {
+        let existing = colorByName.get(color.color);
+        if (
+          !existing &&
+          typeof (tx.productColor as any).findUnique === 'function'
+        ) {
+          const foundDeleted = await tx.productColor.findUnique({
+            where: { productId_color: { productId, color: color.color } },
+            include: { variants: true },
+          });
+          if (foundDeleted) {
+            existing = registerRawColor(foundDeleted);
+          }
+        }
+
+        if (
+          existing &&
+          !existing.deletedAt &&
+          (keptColorIds.has(existing.id) || incomingColorIds.has(existing.id))
+        ) {
           throw new ConflictException(
             `Màu "${color.color}" đã tồn tại trong sản phẩm`,
           );
         }
 
-        // Màu đã xóa mềm vẫn chịu ràng buộc unique nên được khôi phục thay vì tạo mới.
-        const saved = existing
-          ? await tx.productColor.update({
-              where: { id: existing.id },
-              data: { deletedAt: null, imageUrls },
-            })
-          : await tx.productColor.create({
-              data: { productId, color: color.color, imageUrls },
-            });
-        colorId = saved.id;
+        // Màu đã xóa mềm (hoặc gửi lại theo tên) được khôi phục/cập nhật thay vì tạo trùng khóa unique.
+        if (existing) {
+          await tx.productColor.update({
+            where: { id: existing.id },
+            data: { deletedAt: null, imageUrls },
+          });
+          existing.deletedAt = null;
+          keptColorIds.add(existing.id);
+          targetColor = existing;
+        } else {
+          const saved = await tx.productColor.create({
+            data: { productId, color: color.color, imageUrls },
+          });
+          const createdCached: CachedColor = {
+            id: saved.id,
+            color: color.color,
+            deletedAt: null,
+            variantsById: new Map(),
+            variantsBySize: new Map(),
+          };
+          colorById.set(saved.id, createdCached);
+          colorByName.set(color.color, createdCached);
+          if (saved.id) {
+            keptColorIds.add(saved.id);
+          }
+          targetColor = createdCached;
+        }
       }
 
+      const keptVariantIds = new Set<string>();
+      const incomingVariantIds = new Set(
+        (color.variants ?? [])
+          .filter((v) => v.id && !v.id.startsWith('temp-'))
+          .map((v) => v.id!),
+      );
+
       for (const variant of color.variants ?? []) {
-        await this.syncVariant(tx, colorId, variant);
+        await this.syncVariant(
+          tx,
+          targetColor,
+          variant,
+          keptVariantIds,
+          incomingVariantIds,
+        );
       }
+
+      const removedVariantIds = Array.from(targetColor.variantsById.values())
+        .filter((v) => !v.deletedAt && !keptVariantIds.has(v.id))
+        .map((v) => v.id);
+      if (removedVariantIds.length > 0) {
+        const now = new Date();
+        await tx.productVariant.updateMany({
+          where: { id: { in: removedVariantIds } },
+          data: { deletedAt: now },
+        });
+        for (const vid of removedVariantIds) {
+          const cached = targetColor.variantsById.get(vid);
+          if (cached) cached.deletedAt = now;
+        }
+      }
+    }
+
+    const removedColorIds = existingColors
+      .filter((c) => !c.deletedAt && !keptColorIds.has(c.id))
+      .map((c) => c.id);
+    if (removedColorIds.length > 0) {
+      const now = new Date();
+      await tx.productVariant.updateMany({
+        where: { productColorId: { in: removedColorIds }, deletedAt: null },
+        data: { deletedAt: now },
+      });
+      await tx.productColor.updateMany({
+        where: { id: { in: removedColorIds } },
+        data: { deletedAt: now },
+      });
     }
   }
 
   private async syncVariant(
     tx: Prisma.TransactionClient,
-    productColorId: string,
+    colorCache: {
+      id: string;
+      variantsById: Map<
+        string,
+        { id: string; size: string; deletedAt: Date | null }
+      >;
+      variantsBySize: Map<
+        string,
+        { id: string; size: string; deletedAt: Date | null }
+      >;
+    },
     variant: { id?: string; size: string; price: number; stock?: number },
+    keptVariantIds: Set<string>,
+    incomingVariantIds: Set<string>,
   ) {
+    const productColorId = colorCache.id;
     const stock = variant.stock ?? 0;
 
     if (variant.id && !variant.id.startsWith('temp-')) {
-      const owned = await tx.productVariant.findFirst({
-        where: { id: variant.id, productColorId, deletedAt: null },
-        select: { id: true },
-      });
+      const owned = colorCache.variantsById.get(variant.id);
       if (!owned) {
         throw new NotFoundException(
           'Biến thể sản phẩm không tồn tại trong màu này',
@@ -593,32 +815,75 @@ export class ProductService extends PrismaBaseService<'product'> {
 
       await tx.productVariant.update({
         where: { id: owned.id },
-        data: { size: variant.size, price: variant.price, stock },
+        data: {
+          size: variant.size,
+          price: variant.price,
+          stock,
+          ...(owned.deletedAt ? { deletedAt: null } : {}),
+        },
       });
+      owned.deletedAt = null;
+      if (owned.size !== variant.size) {
+        colorCache.variantsBySize.delete(owned.size);
+        owned.size = variant.size;
+        colorCache.variantsBySize.set(owned.size, owned);
+      }
+      keptVariantIds.add(owned.id);
       return;
     }
 
-    const existing = await tx.productVariant.findUnique({
-      where: { productColorId_size: { productColorId, size: variant.size } },
-    });
-    if (existing && !existing.deletedAt) {
+    let existing = colorCache.variantsBySize.get(variant.size);
+    if (
+      !existing &&
+      typeof (tx.productVariant as any).findUnique === 'function'
+    ) {
+      const foundDeleted = await tx.productVariant.findUnique({
+        where: {
+          productColorId_size: { productColorId, size: variant.size },
+        },
+      });
+      if (foundDeleted) {
+        const cached = {
+          id: foundDeleted.id,
+          size: foundDeleted.size,
+          deletedAt: foundDeleted.deletedAt ?? null,
+        };
+        colorCache.variantsById.set(cached.id, cached);
+        colorCache.variantsBySize.set(cached.size, cached);
+        existing = cached;
+      }
+    }
+
+    if (
+      existing &&
+      !existing.deletedAt &&
+      (keptVariantIds.has(existing.id) || incomingVariantIds.has(existing.id))
+    ) {
       throw new ConflictException(
         `Size "${variant.size}" đã tồn tại trong màu này`,
       );
     }
 
-    // Size đã xóa mềm vẫn chịu ràng buộc unique nên được khôi phục thay vì tạo mới.
+    // Size đã xóa mềm (hoặc gửi lại theo tên) được khôi phục/cập nhật thay vì tạo trùng khóa unique.
     if (existing) {
       await tx.productVariant.update({
         where: { id: existing.id },
         data: { deletedAt: null, price: variant.price, stock },
       });
+      existing.deletedAt = null;
+      keptVariantIds.add(existing.id);
       return;
     }
 
-    await tx.productVariant.create({
+    const created = await tx.productVariant.create({
       data: { productColorId, size: variant.size, price: variant.price, stock },
     });
+    if (created?.id) {
+      const cached = { id: created.id, size: variant.size, deletedAt: null };
+      colorCache.variantsById.set(created.id, cached);
+      colorCache.variantsBySize.set(variant.size, cached);
+      keptVariantIds.add(created.id);
+    }
   }
 
   /**
@@ -630,8 +895,8 @@ export class ProductService extends PrismaBaseService<'product'> {
 
   private async getOwnedProduct(id: string, vendorId: string) {
     const product = await this.extended.findFirst({
-      where: { id, vendorId },
-      select: { id: true },
+      where: { id, vendorId, deletedAt: null },
+      select: { id: true, slug: true },
     });
 
     if (!product) {

@@ -1,55 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { LogOut, Crown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Store,
-  Tags, 
-  ShoppingCart, 
-  Ticket,
-  Star,
-  LineChart,
-  LogOut,
-  UserCheck,
-  Truck,
-  Calculator,
-  ClipboardList,
-  ShieldCheck,
-  PieChart,
-  Sparkles
-} from 'lucide-react';
-
-const navGroups = [
-  {
-    title: 'TỔNG QUAN & PHÂN TÍCH',
-    items: [
-      { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-      { name: 'Phân tích Doanh thu', path: '/analytics', icon: LineChart },
-      { name: 'Phân tích Khách hàng', path: '/customer-analytics', icon: PieChart },
-    ],
-  },
-  {
-    title: 'QUẢN LÝ ĐỐI TÁC & BÁN HÀNG',
-    items: [
-      { name: 'Duyệt Đăng ký Vendor', path: '/vendor-registrations', icon: ShieldCheck },
-      { name: 'Danh sách Vendor', path: '/vendors', icon: Store },
-      { name: 'Quản lý Đơn hàng', path: '/orders', icon: ShoppingCart },
-      { name: 'Vận chuyển & Điều phối', path: '/shipping', icon: Truck },
-      { name: 'Danh mục', path: '/categories', icon: Tags },
-      { name: 'Mã giảm giá', path: '/vouchers', icon: Ticket },
-    ],
-  },
-  {
-    title: 'NHÂN SỰ & VẬN HÀNH CRM',
-    items: [
-      { name: 'Nhân sự & Nhân viên', path: '/employees', icon: UserCheck },
-      { name: 'Bảng lương & Chấm công', path: '/payroll', icon: Calculator },
-      { name: 'Khảo sát CRM', path: '/surveys', icon: ClipboardList },
-      { name: 'Khách hàng', path: '/users', icon: Users },
-      { name: 'Đánh giá sản phẩm', path: '/reviews', icon: Star },
-    ],
-  },
-];
+import { WORKSPACE_GROUPS } from './workspaceConfig';
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -60,45 +12,57 @@ export default function Sidebar() {
     navigate('/login');
   };
 
+  const userInitial = (user?.fullName || 'A').trim().charAt(0).toUpperCase();
+
   return (
-    <aside className="w-64 bg-slate-900 text-slate-300 h-screen flex flex-col shrink-0 border-r border-slate-800 shadow-xl select-none">
+    <aside className="w-64 bg-gradient-to-b from-[#08130E] to-[#0E2219] text-[#A3B8AE] h-screen flex flex-col shrink-0 border-r border-[#1A3327] shadow-xl select-none">
       {/* Brand Header */}
-      <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800 shrink-0 bg-slate-900/90 backdrop-blur-sm">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
-            <Sparkles className="w-4 h-4" />
+      <div className="h-16 flex items-center justify-between px-5 border-b border-[#1A3327] shrink-0 bg-[#08130E]/80 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#C9A84C] to-[#9E7B23] flex items-center justify-center text-[#08130E] shadow-lg shadow-[#C9A84C]/20">
+            <Crown className="w-4.5 h-4.5 stroke-[2.25]" />
           </div>
           <div>
-            <h1 className="text-sm font-extrabold text-white tracking-wider">ADMIN PORTAL</h1>
-            <p className="text-[10px] text-slate-400 font-medium">Miva Marketplace Hub</p>
+            <h1 className="text-base font-black text-white tracking-tight leading-none">MIVA</h1>
+            <p className="text-[11px] text-[#C9A84C] font-semibold mt-0.5">Quản trị sàn</p>
           </div>
         </div>
       </div>
 
-      {/* Nav List with Sleek Custom Scrollbar */}
+      {/* Consolidated 7 Workspaces Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5 custom-scrollbar">
-        {navGroups.map((group) => (
+        {WORKSPACE_GROUPS.map((group) => (
           <div key={group.title} className="space-y-1">
-            <div className="px-3 pb-1 text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <div className="px-3 pb-1 text-[10px] font-bold tracking-wider text-[#7A9689] uppercase">
               {group.title}
             </div>
-            <ul className="space-y-0.5">
+            <ul className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <li key={item.name}>
+                  <li key={item.path}>
                     <NavLink
                       to={item.path}
                       className={({ isActive }) =>
-                        `flex items-center px-3 py-2 rounded-xl text-xs font-medium transition-all ${
-                          isActive 
-                            ? 'bg-indigo-600 text-white font-semibold shadow-sm shadow-indigo-600/25' 
-                            : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/80'
+                        `group flex items-center px-3 py-2.5 rounded-xl text-xs transition-all ${
+                          isActive
+                            ? 'bg-[#1A3A2C]/90 text-white font-semibold border-l-[3px] border-[#C9A84C] shadow-sm'
+                            : 'text-[#A3B8AE] font-medium hover:bg-[#142920] hover:text-white border-l-[3px] border-transparent'
                         }`
                       }
                     >
-                      <Icon className="w-4 h-4 mr-2.5 shrink-0" />
-                      <span className="truncate">{item.name}</span>
+                      {({ isActive }) => (
+                        <>
+                          <Icon
+                            className={`w-4 h-4 mr-2.5 shrink-0 transition-colors ${
+                              isActive
+                                ? 'text-[#C9A84C]'
+                                : 'text-[#7E998C] group-hover:text-white'
+                            }`}
+                          />
+                          <span className="truncate">{item.name}</span>
+                        </>
+                      )}
                     </NavLink>
                   </li>
                 );
@@ -109,17 +73,31 @@ export default function Sidebar() {
       </nav>
 
       {/* Sticky User Profile & Logout Footer */}
-      <div className="p-3 border-t border-slate-800/90 bg-slate-900/95 shrink-0">
-        <div className="flex items-center justify-between gap-2 px-2 py-1.5 mb-2 rounded-lg bg-slate-800/50 text-xs">
-          <div className="truncate">
-            <p className="font-semibold text-slate-200 truncate">{user?.fullName || 'Quản trị viên'}</p>
-            <p className="text-[10px] text-slate-400 truncate">{user?.email || 'admin@miva.vn'}</p>
+      <div className="p-3 border-t border-[#1A3327] bg-[#08130E]/70 shrink-0">
+        <div className="flex items-center justify-between gap-2.5 px-2.5 py-2 mb-2 rounded-xl bg-[#0F241B]/90 border border-[#1E3B2E] text-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-[#1A3A2C] text-[#C9A84C] border border-[#C9A84C]/30 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.fullName || 'Admin'} className="w-full h-full object-cover" />
+              ) : (
+                userInitial
+              )}
+            </div>
+            <div className="truncate">
+              <p className="font-semibold text-white truncate">
+                {user?.fullName || 'Quản trị viên'}
+              </p>
+              <p className="text-[10px] text-[#8AA398] truncate">
+                {user?.email || 'admin@miva.vn'}
+              </p>
+            </div>
           </div>
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#C9A84C]/15 text-[#DEC47E] border border-[#C9A84C]/30 shrink-0">
             ROOT
           </span>
         </div>
-        <button 
+        <button
+          type="button"
           onClick={handleLogout}
           className="flex items-center justify-center w-full px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:text-white hover:bg-rose-500/20 border border-rose-500/20 transition-all"
         >

@@ -1,11 +1,9 @@
 import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Sparkles, ShieldCheck, Truck, HeadphonesIcon, Gift, MoveRight, Flame } from 'lucide-react';
+import { ArrowRight, Sparkles, MoveRight, Flame } from 'lucide-react';
 import { useProducts, useBestSellingProducts } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
-import ProductCard from '../../components/product/ProductCard/ProductCard';
-import ProductCardSkeleton from '../../components/product/ProductCard/ProductCardSkeleton';
-import Pagination from '../../components/common/Pagination/Pagination';
+import ProductGrid from '../../components/product/ProductGrid/ProductGrid';
 
 export default function Home() {
   const [currentPage, setCurrentPage] = useState(1);
@@ -166,19 +164,15 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 lg:gap-8">
-          {isLoadingBestSelling ? (
-            [...Array(4)].map((_, i) => <ProductCardSkeleton key={i} />)
-          ) : bestSellingProducts.length > 0 ? (
-            bestSellingProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))
-          ) : (
-            <div className="col-span-full py-20 text-center border-dashed border-2 border-gray-200">
-              <p className="text-gray-500">Chưa có sản phẩm nào.</p>
-            </div>
-          )}
-        </div>
+        <ProductGrid
+          products={bestSellingProducts}
+          isLoading={isLoadingBestSelling}
+          skeletonCount={4}
+          columns={4}
+          gridClassName="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 lg:gap-8"
+          emptyTitle="Chưa có sản phẩm nào"
+          emptyDescription="Danh sách sản phẩm nổi bật sẽ sớm được cập nhật."
+        />
       </section>
 
       {/* ── Member Promotion Banner ── */}
@@ -225,32 +219,22 @@ export default function Home() {
         </div>
 
         {/* Product Grid - 10 items displayed (2 rows of 5 on desktop) */}
-        <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 lg:gap-6 transition-opacity duration-200 ${isFetchingAllProducts && !isLoadingAllProducts ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
-          {isLoadingAllProducts ? (
-            [...Array(10)].map((_, i) => <ProductCardSkeleton key={i} />)
-          ) : allProducts.length > 0 ? (
-            allProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))
-          ) : (
-            <div className="col-span-full py-20 text-center border-dashed border-2 border-gray-200 rounded-lg">
-              <p className="text-gray-500">Chưa có sản phẩm nào.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Pagination */}
-        {!isLoadingAllProducts && allProductsMeta.totalPages > 1 && (
-          <div className="mt-12 border-t border-gray-200/80 dark:border-dark-border/80 pt-6">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={allProductsMeta.totalPages}
-              totalItems={allProductsMeta.totalItems}
-              itemsPerPage={10}
-              onPageChange={handlePageChange}
-            />
-          </div>
-        )}
+        <ProductGrid
+          products={allProducts}
+          isLoading={isLoadingAllProducts}
+          isFetching={isFetchingAllProducts}
+          skeletonCount={10}
+          columns={5}
+          emptyTitle="Chưa có sản phẩm nào"
+          emptyDescription="Bộ sưu tập sản phẩm mới sẽ sớm được ra mắt."
+          pagination={{
+            currentPage,
+            totalPages: allProductsMeta.totalPages,
+            totalItems: allProductsMeta.totalItems,
+            itemsPerPage: 10,
+            onPageChange: handlePageChange,
+          }}
+        />
       </section>
 
     </div>

@@ -1,27 +1,28 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, Edit, Lock, Unlock, CalendarPlus, Plus, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Edit, Lock, Unlock, CalendarPlus, Plus, Loader2, Trash2, AlertTriangle } from 'lucide-react';
+import { ExtendEndDateModal } from '@shared/components/common/ExtendEndDateModal';
 import { vouchersApi } from '../../api';
 import { formatCurrency, formatDate } from '../../utils/formatHelpers';
-import { Button, Badge, Modal } from '../../components/ui';
+import { Button, Badge, Modal, PaginationFooter, useToast } from '../../components/ui';
 import VoucherFormModal from './VoucherFormModal';
 
 export default function VoucherManagement() {
+  const { toast } = useToast();
   const [vouchers, setVouchers] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Client-side pagination
   const [page, setPage] = useState(1);
   const itemsPerPage = 10;
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [voucherToEdit, setVoucherToEdit] = useState(null);
 
-  // Extend Voucher Modal State
   const [extendModalOpen, setExtendModalOpen] = useState(false);
   const [voucherToExtend, setVoucherToExtend] = useState(null);
-  const [extendEndDate, setExtendEndDate] = useState('');
-  const [loadingExtend, setLoadingExtend] = useState(false);
+
+  const [voucherToDelete, setVoucherToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchVouchers = useCallback(async () => {
     setLoading(true);
@@ -40,7 +41,6 @@ export default function VoucherManagement() {
     fetchVouchers();
   }, [fetchVouchers]);
 
-  // Client-side filtering
   const filteredVouchers = useMemo(() => {
     const q = search.toLowerCase();
     return vouchers.filter(v =>
@@ -50,10 +50,9 @@ export default function VoucherManagement() {
     );
   }, [vouchers, search]);
 
-  // Client-side pagination derivation
   const totalItems = filteredVouchers.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
-  
+
   const currentVouchers = useMemo(() => {
     const start = (page - 1) * itemsPerPage;
     return filteredVouchers.slice(start, start + itemsPerPage);
@@ -80,46 +79,41 @@ export default function VoucherManagement() {
     if (window.confirm(`Bạn có chắc chắn muốn ${actionText} voucher "${voucher.code}"?`)) {
       try {
         await vouchersApi.setStatus(voucher.id, nextStatus);
+        toast.success(`Đã ${actionText} mã giảm giá "${voucher.code}" thành công`);
         fetchVouchers();
       } catch (err) {
-        alert(err.response?.data?.message || `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} voucher thất bại`);
+        toast.error(err.response?.data?.message || `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} voucher thất bại`);
       }
     }
   };
 
-  const addDaysToNow = (days) => {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
-  };
-
   const handleOpenExtendModal = (voucher) => {
     setVoucherToExtend(voucher);
-    // Default to +30 days from now
-    setExtendEndDate(addDaysToNow(30));
     setExtendModalOpen(true);
   };
 
-  const handleConfirmExtend = async () => {
-    if (!voucherToExtend || !extendEndDate) return;
+  const handleConfirmSoftDelete = async () => {
+    if (!voucherToDelete) return;
     try {
-      setLoadingExtend(true);
-      await vouchersApi.extendVoucher(voucherToExtend.id, new Date(extendEndDate).toISOString());
-      setExtendModalOpen(false);
+      setDeleting(true);
+      await vouchersApi.deleteVoucher(voucherToDelete.id);
+      toast.success(`Đã xóa mềm mã giảm giá "${voucherToDelete.code}" thành công`);
+      setVoucherToDelete(null);
       await fetchVouchers();
-      alert(`Đã gia hạn thành công voucher "${voucherToExtend.code}" đến ${formatDate(extendEndDate)}!`);
     } catch (err) {
-      alert(err.response?.data?.message || 'Gia hạn voucher thất bại');
+      toast.error(err.response?.data?.message || 'Xóa mềm mã giảm giá thất bại');
     } finally {
-      setLoadingExtend(false);
+      setDeleting(false);
     }
   };
 
   const handleSave = async (savedData) => {
     if (voucherToEdit) {
       await vouchersApi.updateVoucher(voucherToEdit.id, savedData);
+      toast.success(`Đã cập nhật mã giảm giá "${savedData.code || voucherToEdit.code}"`);
     } else {
       await vouchersApi.createVoucher(savedData);
+      toast.success(`Đã tạo mã giảm giá "${savedData.code}" thành công`);
     }
     setIsModalOpen(false);
     await fetchVouchers();
@@ -129,8 +123,8 @@ export default function VoucherManagement() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Quản lý Voucher</h1>
-          <p className="text-slate-500 dark:text-slate-400">{totalItems} vouchers trong hệ thống</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Quản lý Mã giảm giá Sàn</h1>
+          <p className="text-slate-500 dark:text-slate-400">{totalItems} mã giảm giá trong hệ thống</p>
         </div>
         <Button icon={Plus} onClick={handleAddClick}>
           Thêm Voucher
@@ -141,12 +135,12 @@ export default function VoucherManagement() {
         <div className="p-4 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-2 max-w-md">
             <Search className="w-4 h-4 text-slate-400 mr-2" />
-            <input 
-              type="text" 
-              placeholder="Tìm theo mã, tên hoặc danh mục..." 
+            <input
+              type="text"
+              placeholder="Tìm theo mã, tên hoặc danh mục..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="bg-transparent border-none outline-none text-sm w-full dark:text-slate-200" 
+              className="bg-transparent border-none outline-none text-sm w-full dark:text-slate-200"
             />
           </div>
         </div>
@@ -154,7 +148,7 @@ export default function VoucherManagement() {
         <div className="overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+              <Loader2 className="w-6 h-6 animate-spin text-[#1A3A2C] dark:text-[#C9A84C]" />
               <span className="ml-2 text-slate-500">Đang tải...</span>
             </div>
           ) : currentVouchers.length === 0 ? (
@@ -182,7 +176,9 @@ export default function VoucherManagement() {
                   return (
                     <tr key={v.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">
-                        <span className="font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-indigo-600 dark:text-indigo-400 font-semibold">{v.code}</span>
+                        <span className="font-mono bg-[#EEF5F1] dark:bg-[#1A3A2C]/50 px-2 py-0.5 rounded text-[#1A3A2C] dark:text-[#DEC47E] font-semibold border border-[#2A5C4A]/15 dark:border-[#C9A84C]/25">
+                          {v.code}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-100">{v.name}</td>
                       <td className="px-4 py-3 text-xs">
@@ -193,13 +189,13 @@ export default function VoucherManagement() {
                         ) : v.categories && v.categories.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {v.categories.map(c => (
-                              <span key={c.id} className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 font-medium">
+                              <span key={c.id} className="px-2 py-0.5 rounded-full bg-[#FBF7EC] text-[#B08A2E] dark:bg-[#C9A84C]/15 dark:text-[#DEC47E] font-medium">
                                 {c.name}
                               </span>
                             ))}
                           </div>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-medium">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#EEF5F1] text-[#1A3A2C] dark:bg-[#1A3A2C]/60 dark:text-[#6BB392] font-medium">
                             Toàn sàn
                           </span>
                         )}
@@ -243,6 +239,14 @@ export default function VoucherManagement() {
                             onClick={() => handleToggleStatus(v)}
                             title={isLocked ? 'Mở khóa voucher' : 'Khóa voucher'}
                           />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={Trash2}
+                            className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                            onClick={() => setVoucherToDelete(v)}
+                            title="Xóa mềm mã giảm giá"
+                          />
                         </div>
                       </td>
                     </tr>
@@ -252,101 +256,79 @@ export default function VoucherManagement() {
             </table>
           )}
         </div>
-        
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Trang {page} / {totalPages}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                icon={ChevronLeft} 
-                disabled={page <= 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-              />
-              <Button 
-                variant="outline" 
-                size="sm" 
-                icon={ChevronRight} 
-                disabled={page >= totalPages}
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              />
-            </div>
-          </div>
-        )}
+
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          itemLabel="mã giảm giá"
+        />
       </div>
 
-      <VoucherFormModal 
+      <VoucherFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         voucherToEdit={voucherToEdit}
         onSave={handleSave}
       />
 
-      {/* Modal Gia Hạn Voucher */}
-      {extendModalOpen && voucherToExtend && (
-        <Modal
-          isOpen={extendModalOpen}
-          onClose={() => setExtendModalOpen(false)}
-          title={`Gia hạn thời hạn Voucher: ${voucherToExtend.code}`}
-          maxWidth="max-w-md"
-        >
-          <div className="space-y-4 text-sm">
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs space-y-1">
-              <div>Chương trình: <strong>{voucherToExtend.name}</strong></div>
-              <div>Mã Voucher: <code className="font-bold text-amber-600 font-mono">{voucherToExtend.code}</code></div>
-              <div>Thời hạn kết thúc hiện tại: <span className="text-slate-500 font-semibold">{formatDate(voucherToExtend.endDate)}</span></div>
-            </div>
+      <ExtendEndDateModal
+        isOpen={extendModalOpen}
+        onClose={() => setExtendModalOpen(false)}
+        title={voucherToExtend ? `Gia hạn thời hạn Voucher: ${voucherToExtend.code}` : 'Gia hạn Voucher'}
+        itemTitle={voucherToExtend?.name}
+        itemCode={voucherToExtend?.code}
+        currentEndDate={voucherToExtend?.endDate}
+        onConfirm={async (isoEnd) => {
+          await vouchersApi.extendVoucher(voucherToExtend.id, isoEnd);
+          toast.success(`Đã gia hạn mã giảm giá "${voucherToExtend.code}" thành công`);
+          await fetchVouchers();
+        }}
+      />
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Chọn nhanh thời hạn gia hạn:
-              </label>
-              <div className="grid grid-cols-4 gap-2">
-                {[7, 14, 30, 60].map((days) => (
-                  <button
-                    key={days}
-                    type="button"
-                    onClick={() => setExtendEndDate(addDaysToNow(days))}
-                    className="py-1.5 px-2 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/50 text-slate-700 dark:text-slate-200 transition-colors"
-                  >
-                    +{days} ngày
-                  </button>
-                ))}
+      <Modal
+        isOpen={Boolean(voucherToDelete)}
+        onClose={() => !deleting && setVoucherToDelete(null)}
+        title="Xóa mềm mã giảm giá"
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setVoucherToDelete(null)}
+              disabled={deleting}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleConfirmSoftDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Đang xử lý...' : 'Xác nhận xóa mềm'}
+            </Button>
+          </div>
+        }
+      >
+        {voucherToDelete && (
+          <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                Thao tác này thực hiện <strong>xóa mềm (Soft Delete)</strong> theo chuẩn an toàn dữ liệu của MIVA.
               </div>
             </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Ngày kết thúc mới:
-              </label>
-              <input
-                type="date"
-                min={new Date().toISOString().split('T')[0]}
-                value={extendEndDate}
-                onChange={(e) => setExtendEndDate(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <Button variant="outline" onClick={() => setExtendModalOpen(false)}>
-                Hủy
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleConfirmExtend}
-                disabled={!extendEndDate || loadingExtend}
-              >
-                {loadingExtend ? 'Đang gia hạn...' : 'Xác nhận gia hạn'}
-              </Button>
-            </div>
+            <p className="leading-relaxed">
+              Mã giảm giá <strong className="font-mono text-slate-900 dark:text-white">{voucherToDelete.code}</strong> ({voucherToDelete.name}) sẽ được{' '}
+              <strong>ẩn khỏi danh sách quản lý và ngừng áp dụng mới</strong>, nhưng{' '}
+              <strong>toàn bộ dữ liệu và lịch sử đơn hàng trong cơ sở dữ liệu vẫn được giữ nguyên</strong>.
+            </p>
           </div>
-        </Modal>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

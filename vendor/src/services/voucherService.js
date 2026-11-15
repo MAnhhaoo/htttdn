@@ -22,7 +22,7 @@ export const voucherService = {
   },
   
   extendVoucher: async (id, endDate) => {
-    return apiClient.patch(/vouchers//extend, { endDate });
+    return apiClient.patch(`/vouchers/${id}/extend`, { endDate });
   },
   
   deleteVoucher: async (id) => {

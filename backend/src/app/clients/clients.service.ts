@@ -11,7 +11,10 @@ import { PrismaBaseService } from '../../common/service/prisma-base.service';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 
-import { PaginationUtilService } from '../../common/utils/paginaton-util/pagintion-util.service';
+import {
+  PaginationUtilService,
+  paginatePrismaQuery,
+} from '../../common/utils/paginaton-util/pagintion-util.service';
 
 import { QueryUtilService } from '../../common/utils/query-util/query-util.service';
 
@@ -81,28 +84,18 @@ export class ClientsService extends PrismaBaseService<'client'> {
       ...scope,
       ...searchCondition,
     };
-    // đếm tổng người dùng
-    const totalItems = await this.extended.count({
-      where,
-    });
 
-    const paging = this.paginationUtilService.paging({
-      page,
-      itemPerPage,
-      totalItems,
-    });
-
-    const list = await this.extended.findMany({
-      omit: { password: true },
-      where,
-      skip: paging.skip,
-      take: paging.itemPerPage,
-      orderBy: {
-        createdAt: 'desc',
+    return paginatePrismaQuery(
+      this.extended,
+      { page, itemPerPage },
+      {
+        omit: { password: true },
+        where,
+        orderBy: {
+          createdAt: 'desc',
+        },
       },
-    });
-
-    return paging.format(list);
+    );
   }
 
   async getClient(where: Prisma.ClientWhereUniqueInput) {

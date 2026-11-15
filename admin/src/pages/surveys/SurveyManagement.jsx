@@ -1,23 +1,99 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   CalendarPlus,
-  ClipboardList, Plus, Search, Filter, Eye, BarChart3, CheckCircle2, Clock, 
-  AlertCircle, X, Trash2, Send, Store, ShieldCheck, Star, Calendar, Users, 
-  ChevronRight, Building2, User
+  ClipboardList,
+  Search,
+  Eye,
+  BarChart3,
+  CheckCircle2,
+  X,
+  Send,
+  ShieldCheck,
+  Calendar,
+  Building2,
+  User,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
+import { SurveyQuestionBuilder } from '@shared/components/surveys/SurveyQuestionBuilder';
+import { SurveyResultsPanel } from '@shared/components/surveys/SurveyResultsPanel';
+import { SurveyPreviewModal } from '@shared/components/surveys/SurveyPreviewModal';
+import { ExtendEndDateModal } from '@shared/components/common/ExtendEndDateModal';
 import { surveysApi } from '../../api';
-import { Button, Modal } from '../../components/ui';
-import {
-  CLIENT_TOPICS,
-  VENDOR_TOPICS,
-  CLIENT_TEMPLATES,
-  VENDOR_TEMPLATES,
-  getPresetByTopic,
-} from '../../data/surveyTemplates';
+import { Button, Modal, useToast } from '../../components/ui';
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
+const CUSTOM_TOPIC_LABEL = 'Chủ đề khác (Tự nhập)';
+
+const FALLBACK_TEMPLATES = {
+  client: [
+    {
+      topic: 'Trải nghiệm mua sắm trên MIVA',
+      title: 'Khảo sát trải nghiệm mua sắm và giao diện sàn MIVA',
+      description:
+        'MIVA trân trọng lắng nghe ý kiến của bạn về giao diện, tính năng và trải nghiệm mua sắm chung để nâng cấp nền tảng ngày một tốt hơn.',
+      imageUrl: '',
+      scope: 'platform',
+      audienceType: 'all_users',
+      triggerType: 'manual',
+      questions: [
+        {
+          id: '1',
+          question: 'Mức độ hài lòng chung của bạn khi trải nghiệm mua sắm trên sàn MIVA?',
+          type: 'rating',
+          required: true,
+          options: [],
+        },
+        {
+          id: '2',
+          question: 'Đóng góp ý kiến hoặc đề xuất của bạn để MIVA cải thiện chất lượng dịch vụ:',
+          type: 'text',
+          required: false,
+          options: [],
+        },
+      ],
+    },
+  ],
+  vendor: [
+    {
+      topic: 'Trải nghiệm quản lý cửa hàng',
+      title: 'Khảo sát trải nghiệm sử dụng Cổng quản trị đối tác bán hàng (Vendor Portal)',
+      description:
+        'Thu thập ý kiến đóng góp của Quý đối tác về giao diện, sự tiện lợi và hiệu năng của công cụ quản lý bán hàng MIVA.',
+      imageUrl: '',
+      scope: 'platform',
+      audienceType: 'all_vendors',
+      triggerType: 'manual',
+      questions: [
+        {
+          id: '1',
+          question: 'Mức độ hài lòng của Đối tác về sự tiện lợi và tốc độ của Vendor Portal?',
+          type: 'rating',
+          required: true,
+          options: [],
+        },
+        {
+          id: '2',
+          question: 'Góp ý của Shop để hoàn thiện cổng quản trị đối tác bán hàng:',
+          type: 'text',
+          required: false,
+          options: [],
+        },
+      ],
+    },
+  ],
+};
+
+const normalizeTemplateQuestions = (questions = []) =>
+  questions.map((q, idx) => ({
+    id: String(idx + 1),
+    question: q.question || '',
+    type: q.type || 'rating',
+    required: Boolean(q.required),
+    options: Array.isArray(q.options) ? [...q.options] : [],
+  }));
 
 export default function SurveyManagement() {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'create' | 'results'
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -29,66 +105,41 @@ export default function SurveyManagement() {
   const [selectedSurveyId, setSelectedSurveyId] = useState(null);
   const [surveyResults, setSurveyResults] = useState(null);
   const [resultsLoading, setResultsLoading] = useState(false);
+
   // Extend Survey Modal State
   const [extendModalOpen, setExtendModalOpen] = useState(false);
   const [surveyToExtend, setSurveyToExtend] = useState(null);
-  const [extendEndDate, setExtendEndDate] = useState('');
-  const [loadingExtend, setLoadingExtend] = useState(false);
 
-  const addDaysToNow = (days) => {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
-  };
-
-  const handleOpenExtendModal = (survey) => {
-    setSurveyToExtend(survey);
-    setExtendEndDate(addDaysToNow(14));
-    setExtendModalOpen(true);
-  };
-
-  const handleConfirmExtend = async () => {
-    if (!surveyToExtend || !extendEndDate) return;
-    try {
-      setLoadingExtend(true);
-      await surveysApi.extendSurvey(surveyToExtend.id, new Date(extendEndDate).toISOString());
-      setExtendModalOpen(false);
-      await fetchSurveys();
-      alert(`Đã gia hạn thành công khảo sát "${surveyToExtend.title}" đến ${new Date(extendEndDate).toLocaleDateString('vi-VN')}!`);
-    } catch (err) {
-      alert(err.response?.data?.message || 'Gia hạn khảo sát thất bại');
-    } finally {
-      setLoadingExtend(false);
-    }
-  };
-
+  // Soft-Delete Survey Modal State
+  const [surveyToDelete, setSurveyToDelete] = useState(null);
+  const [deletingSurvey, setDeletingSurvey] = useState(false);
 
   // Preview State
   const [previewSurvey, setPreviewSurvey] = useState(null);
 
-  // Form State
-  const initialPreset = CLIENT_TEMPLATES[0];
+  // Templates & Form State
+  const defaultPreset = FALLBACK_TEMPLATES.client[0];
   const [targetType, setTargetType] = useState('client'); // 'client' | 'vendor'
-  const [title, setTitle] = useState(initialPreset?.title || CLIENT_TOPICS[0]);
-  const [description, setDescription] = useState(initialPreset?.description || '');
-  const [imageUrl, setImageUrl] = useState(initialPreset?.imageUrl || '');
-  const [selectedTopic, setSelectedTopic] = useState(CLIENT_TOPICS[0]);
-  const [customTopic, setCustomTopic] = useState('');
+  const [templatesByTarget, setTemplatesByTarget] = useState(FALLBACK_TEMPLATES);
+  const [topicsByTarget, setTopicsByTarget] = useState({
+    client: [defaultPreset.topic, CUSTOM_TOPIC_LABEL],
+    vendor: [FALLBACK_TEMPLATES.vendor[0].topic, CUSTOM_TOPIC_LABEL],
+  });
+  const [title, setTitle] = useState(defaultPreset.title);
+  const [description, setDescription] = useState(defaultPreset.description);
+  const [imageUrl, setImageUrl] = useState(defaultPreset.imageUrl || '');
+  const [selectedTopic, setSelectedTopic] = useState(defaultPreset.topic);
   const [audienceType, setAudienceType] = useState('all_users');
   const [triggerType, setTriggerType] = useState('manual');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [questions, setQuestions] = useState(
-    initialPreset?.questions.map((q, idx) => ({ ...q, id: String(idx + 1) })) || []
+  const [questions, setQuestions] = useState(() =>
+    normalizeTemplateQuestions(defaultPreset.questions),
   );
   const [submitting, setSubmitting] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState(null);
 
-  useEffect(() => {
-    loadSurveys();
-  }, [statusFilter]);
-
-  const loadSurveys = async () => {
+  const loadSurveys = useCallback(async () => {
     try {
       setLoading(true);
       const params = {};
@@ -101,41 +152,114 @@ export default function SurveyManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
+
+  useEffect(() => {
+    loadSurveys();
+  }, [loadSurveys]);
+
+  const applyPreset = useCallback((preset, fallbackTitle = '') => {
+    if (preset) {
+      setTitle(preset.title || fallbackTitle);
+      setDescription(preset.description || '');
+      setImageUrl(preset.imageUrl || '');
+      setQuestions(normalizeTemplateQuestions(preset.questions));
+    } else if (fallbackTitle && !fallbackTitle.includes('Khác')) {
+      setTitle(fallbackTitle);
+    }
+  }, []);
+
+  // Load templates from backend API when creating surveys
+  useEffect(() => {
+    if (activeTab !== 'create') return;
+    let mounted = true;
+    const fetchTemplates = async () => {
+      try {
+        const res = await surveysApi.getTemplates(targetType);
+        const raw = res?.data?.data || res?.data || res;
+        const list =
+          Array.isArray(raw?.templates) && raw.templates.length > 0
+            ? raw.templates
+            : FALLBACK_TEMPLATES[targetType];
+        const rawTopics =
+          Array.isArray(raw?.topics) && raw.topics.length > 0
+            ? raw.topics
+            : list.map((t) => t.topic);
+        const topicList = rawTopics.includes(CUSTOM_TOPIC_LABEL)
+          ? rawTopics
+          : [...rawTopics, CUSTOM_TOPIC_LABEL];
+
+        if (!mounted) return;
+        setTemplatesByTarget((prev) => ({ ...prev, [targetType]: list }));
+        setTopicsByTarget((prev) => ({ ...prev, [targetType]: topicList }));
+        const firstPreset = list[0];
+        if (firstPreset) {
+          setSelectedTopic(firstPreset.topic);
+          applyPreset(firstPreset, firstPreset.topic);
+        }
+      } catch {
+        // Keep lightweight offline fallback silently
+      }
+    };
+    fetchTemplates();
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, targetType, applyPreset]);
+
+  const currentTopics = topicsByTarget[targetType] || [CUSTOM_TOPIC_LABEL];
+  const currentTemplates = templatesByTarget[targetType] || FALLBACK_TEMPLATES[targetType];
 
   const handleTopicSelect = (topic) => {
     setSelectedTopic(topic);
-    const preset = getPresetByTopic(targetType, topic);
+    const preset = currentTemplates.find((t) => t.topic === topic);
     if (preset) {
-      setTitle(preset.title);
-      setDescription(preset.description || '');
-      if (preset.imageUrl) setImageUrl(preset.imageUrl);
-      setQuestions(preset.questions.map((q, idx) => ({ ...q, id: String(idx + 1) })));
+      applyPreset(preset, topic);
+    } else if (topic === CUSTOM_TOPIC_LABEL) {
+      setTitle('');
+      setDescription('');
     } else {
-      if (!topic.includes('Khác')) {
-        setTitle(topic);
-      }
+      setTitle(topic);
     }
   };
 
   const handleTargetTypeChange = (type) => {
     setTargetType(type);
-    const defaultTopic = type === 'client' ? CLIENT_TOPICS[0] : VENDOR_TOPICS[0];
-    setSelectedTopic(defaultTopic);
     if (type === 'client') {
       setAudienceType('all_users');
     } else {
       setAudienceType('all_vendors');
       setTriggerType('manual');
     }
-    const preset = getPresetByTopic(type, defaultTopic);
-    if (preset) {
-      setTitle(preset.title);
-      setDescription(preset.description || '');
-      if (preset.imageUrl) setImageUrl(preset.imageUrl);
-      setQuestions(preset.questions.map((q, idx) => ({ ...q, id: String(idx + 1) })));
-    } else {
-      setTitle(defaultTopic);
+    const list = templatesByTarget[type] || FALLBACK_TEMPLATES[type];
+    const firstPreset = list[0];
+    if (firstPreset) {
+      setSelectedTopic(firstPreset.topic);
+      applyPreset(firstPreset, firstPreset.topic);
+    }
+  };
+
+  const handleOpenExtendModal = (survey) => {
+    setSurveyToExtend(survey);
+    setExtendModalOpen(true);
+  };
+
+  const handleConfirmDeleteSurvey = async () => {
+    if (!surveyToDelete) return;
+    try {
+      setDeletingSurvey(true);
+      await surveysApi.deleteSurvey(surveyToDelete.id);
+      if (selectedSurveyId === surveyToDelete.id) {
+        setSelectedSurveyId(null);
+        setSurveyResults(null);
+      }
+      toast.success(`Đã xóa mềm khảo sát "${surveyToDelete.title}" thành công`);
+      setSurveyToDelete(null);
+      await loadSurveys();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Xóa mềm khảo sát thất bại');
+    } finally {
+      setDeletingSurvey(false);
     }
   };
 
@@ -148,7 +272,7 @@ export default function SurveyManagement() {
       setSurveyResults(res?.data || res);
     } catch (err) {
       console.error('Failed to load results:', err);
-      alert('Không thể tải kết quả: ' + (err.response?.data?.message || err.message));
+      toast.error('Không thể tải kết quả: ' + (err.response?.data?.message || err.message));
     } finally {
       setResultsLoading(false);
     }
@@ -157,73 +281,96 @@ export default function SurveyManagement() {
   const handleChangeStatus = async (surveyId, newStatus) => {
     try {
       await surveysApi.changeStatus(surveyId, newStatus);
-      loadSurveys();
+      toast.success(
+        newStatus === 'active'
+          ? 'Đã kích hoạt chiến dịch khảo sát thành công'
+          : 'Đã đóng chiến dịch khảo sát',
+      );
+      await loadSurveys();
       if (selectedSurveyId === surveyId) {
         handleOpenResults(surveyId);
       }
     } catch (err) {
-      alert('Không thể cập nhật trạng thái: ' + (err.response?.data?.message || err.message));
+      toast.error('Không thể cập nhật trạng thái: ' + (err.response?.data?.message || err.message));
     }
   };
 
-  // Question manipulation
+  // Question manipulation handlers for SurveyQuestionBuilder
   const handleAddQuestion = (type) => {
     const newQ = {
       id: Date.now().toString(),
       question: '',
       type,
       required: false,
-      options: type === 'single_choice' || type === 'multiple_choice' ? ['Lựa chọn 1', 'Lựa chọn 2'] : []
+      options:
+        type === 'single_choice' || type === 'multiple_choice'
+          ? ['Lựa chọn 1', 'Lựa chọn 2']
+          : [],
     };
-    setQuestions([...questions, newQ]);
+    setQuestions((prev) => [...prev, newQ]);
   };
 
   const handleUpdateQuestion = (index, field, value) => {
-    const updated = [...questions];
-    updated[index][field] = value;
-    setQuestions(updated);
+    setQuestions((prev) =>
+      prev.map((q, i) => (i === index ? { ...q, [field]: value } : q)),
+    );
   };
 
   const handleRemoveQuestion = (index) => {
-    setQuestions(questions.filter((_, i) => i !== index));
+    setQuestions((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleAddOption = (qIndex) => {
-    const updated = [...questions];
-    updated[qIndex].options.push(`Lựa chọn ${updated[qIndex].options.length + 1}`);
-    setQuestions(updated);
+    setQuestions((prev) =>
+      prev.map((q, i) =>
+        i === qIndex
+          ? { ...q, options: [...(q.options || []), `Lựa chọn ${(q.options || []).length + 1}`] }
+          : q,
+      ),
+    );
   };
 
   const handleUpdateOption = (qIndex, optIndex, val) => {
-    const updated = [...questions];
-    updated[qIndex].options[optIndex] = val;
-    setQuestions(updated);
+    setQuestions((prev) =>
+      prev.map((q, i) =>
+        i === qIndex
+          ? {
+              ...q,
+              options: (q.options || []).map((opt, oIdx) => (oIdx === optIndex ? val : opt)),
+            }
+          : q,
+      ),
+    );
   };
 
   const handleRemoveOption = (qIndex, optIndex) => {
-    const updated = [...questions];
-    updated[qIndex].options = updated[qIndex].options.filter((_, i) => i !== optIndex);
-    setQuestions(updated);
+    setQuestions((prev) =>
+      prev.map((q, i) =>
+        i === qIndex
+          ? { ...q, options: (q.options || []).filter((_, oIdx) => oIdx !== optIndex) }
+          : q,
+      ),
+    );
   };
 
-  // Create survey
   const handleCreateSurvey = async (activateImmediately = false) => {
-    const surveyTitle = title.trim() || (selectedTopic.includes('Khác') ? customTopic : selectedTopic);
+    const surveyTitle =
+      title.trim() || (!selectedTopic.includes('Khác') ? selectedTopic : '');
     if (!surveyTitle) {
-      alert('Vui lòng nhập tiêu đề hoặc chủ đề khảo sát');
+      toast.error('Vui lòng nhập tiêu đề khảo sát');
       return;
     }
     if (questions.length === 0) {
-      alert('Vui lòng thêm ít nhất một câu hỏi khảo sát');
+      toast.error('Vui lòng thêm ít nhất một câu hỏi khảo sát');
       return;
     }
     for (const q of questions) {
       if (!q.question.trim()) {
-        alert('Có câu hỏi chưa nhập nội dung');
+        toast.error('Có câu hỏi chưa nhập nội dung');
         return;
       }
       if ((q.type === 'single_choice' || q.type === 'multiple_choice') && q.options.length < 2) {
-        alert(`Câu hỏi trắc nghiệm "${q.question}" cần ít nhất 2 đáp án`);
+        toast.error(`Câu hỏi trắc nghiệm "${q.question}" cần ít nhất 2 đáp án`);
         return;
       }
     }
@@ -233,7 +380,7 @@ export default function SurveyManagement() {
       const payload = {
         title: surveyTitle,
         description: description.trim() || undefined,
-        imageUrl: (imageUrl && imageUrl.trim().startsWith('http')) ? imageUrl.trim() : undefined,
+        imageUrl: imageUrl && imageUrl.trim().startsWith('http') ? imageUrl.trim() : undefined,
         scope: 'platform',
         audienceType: targetType === 'vendor' ? 'all_vendors' : audienceType,
         triggerType,
@@ -242,12 +389,13 @@ export default function SurveyManagement() {
         questions: questions.map((q, idx) => ({
           question: q.question.trim(),
           type: q.type,
-          required: !!q.required,
+          required: Boolean(q.required),
           position: idx + 1,
-          options: (q.type === 'single_choice' || q.type === 'multiple_choice')
-            ? q.options.map((opt, oIdx) => ({ content: opt.trim(), position: oIdx + 1 }))
-            : undefined
-        }))
+          options:
+            q.type === 'single_choice' || q.type === 'multiple_choice'
+              ? q.options.map((opt, oIdx) => ({ content: opt.trim(), position: oIdx + 1 }))
+              : undefined,
+        })),
       };
 
       const res = await surveysApi.createSurvey(payload);
@@ -257,37 +405,37 @@ export default function SurveyManagement() {
         await surveysApi.changeStatus(created.id, 'active');
       }
 
-      setFeedbackMsg(
-        activateImmediately
-          ? `Khảo sát cho ${targetType === 'vendor' ? 'Đối tác Nhà bán' : 'Khách hàng'} đã kích hoạt và gửi thông báo thành công!`
-          : 'Đã lưu bản nháp khảo sát thành công!'
-      );
-      loadSurveys();
+      const msg = activateImmediately
+        ? `Khảo sát cho ${targetType === 'vendor' ? 'Đối tác Nhà bán' : 'Khách hàng'} đã kích hoạt và gửi thông báo thành công!`
+        : 'Đã lưu bản nháp khảo sát thành công!';
+      setFeedbackMsg(msg);
+      toast.success(msg);
+      await loadSurveys();
       setActiveTab('list');
-
-      // Reset form
-      setTitle('');
-      setDescription('');
+      setStartDate('');
+      setEndDate('');
     } catch (err) {
       console.error('Error creating survey:', err);
       const data = err.response?.data;
       let errorText = err.message;
       if (data?.errors) {
         if (Array.isArray(data.errors) && data.errors.length > 0) {
-          errorText = data.errors.map(e => e.message || e.error || JSON.stringify(e)).join(', ');
+          errorText = data.errors
+            .map((e) => e.message || e.error || JSON.stringify(e))
+            .join(', ');
         } else if (typeof data.errors === 'string') {
           errorText = data.errors;
         }
       } else if (data?.message && data.message !== 'ERROR') {
         errorText = data.message;
       }
-      alert('Lỗi tạo khảo sát: ' + errorText);
+      toast.error('Lỗi tạo khảo sát: ' + errorText);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const filteredSurveys = surveys.filter(s => {
+  const filteredSurveys = surveys.filter((s) => {
     if (searchTerm) {
       const match = s.title?.toLowerCase().includes(searchTerm.toLowerCase());
       if (!match) return false;
@@ -298,59 +446,53 @@ export default function SurveyManagement() {
   });
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-blue-50 dark:bg-blue-950/40 text-blue-600 rounded-xl">
-              <ClipboardList className="w-6 h-6" />
-            </span>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Survey Management (CRM)</h1>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Quản trị toàn bộ chiến dịch khảo sát Client (Khách hàng) và Vendor (Đối tác bán hàng).
-          </p>
+      <div>
+        <div className="flex items-center gap-2.5">
+          <span className="p-2 bg-[#EEF5F1] dark:bg-[#1A3A2C]/60 text-[#1A3A2C] dark:text-[#DEC47E] rounded-xl border border-[#2A5C4A]/15 dark:border-[#C9A84C]/25">
+            <ClipboardList className="w-6 h-6" />
+          </span>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            Chiến dịch Khảo sát CRM
+          </h1>
         </div>
-
-        {activeTab !== 'create' && (
-          <button
-            onClick={() => setActiveTab('create')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl shadow-sm hover:shadow transition-all"
-          >
-            <Plus className="w-4 h-4" /> Tạo khảo sát mới
-          </button>
-        )}
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Quản trị toàn bộ chiến dịch khảo sát Khách hàng (Client) và Đối tác bán hàng (Vendor).
+        </p>
       </div>
 
-      {/* Tabs */}
+      {/* Sub-Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800">
         <button
+          type="button"
           onClick={() => setActiveTab('list')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
             activeTab === 'list'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-[#1A3A2C] dark:border-[#C9A84C] text-[#1A3A2C] dark:text-[#DEC47E]'
               : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
           }`}
         >
           Tất cả khảo sát ({surveys.length})
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('create')}
           className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
             activeTab === 'create'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-[#1A3A2C] dark:border-[#C9A84C] text-[#1A3A2C] dark:text-[#DEC47E]'
               : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
           }`}
         >
-          + Tạo khảo sát (Client / Vendor)
+          + Tạo khảo sát mới
         </button>
         {selectedSurveyId && (
           <button
+            type="button"
             onClick={() => setActiveTab('results')}
             className={`pb-3 px-4 text-sm font-semibold border-b-2 transition-all ${
               activeTab === 'results'
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-[#1A3A2C] dark:border-[#C9A84C] text-[#1A3A2C] dark:text-[#DEC47E]'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
             }`}
           >
@@ -365,7 +507,11 @@ export default function SurveyManagement() {
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             <span className="text-sm font-medium">{feedbackMsg}</span>
           </div>
-          <button onClick={() => setFeedbackMsg(null)} className="text-emerald-600 hover:text-emerald-800">
+          <button
+            type="button"
+            onClick={() => setFeedbackMsg(null)}
+            className="text-emerald-600 hover:text-emerald-800"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -383,7 +529,7 @@ export default function SurveyManagement() {
                 placeholder="Tìm kiếm theo tiêu đề..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100"
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:border-[#2A5C4A] text-slate-800 dark:text-slate-100"
               />
             </div>
 
@@ -409,9 +555,9 @@ export default function SurveyManagement() {
                   className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300"
                 >
                   <option value="all">Tất cả trạng thái</option>
-                  <option value="active">Đang mở (Active)</option>
-                  <option value="draft">Bản nháp (Draft)</option>
-                  <option value="closed">Đã đóng (Closed)</option>
+                  <option value="active">Đang diễn ra</option>
+                  <option value="draft">Bản nháp</option>
+                  <option value="closed">Đã đóng</option>
                 </select>
               </div>
             </div>
@@ -421,14 +567,18 @@ export default function SurveyManagement() {
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             {loading ? (
               <div className="py-16 text-center text-slate-400">
-                <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                <div className="w-8 h-8 border-2 border-[#1A3A2C] dark:border-[#C9A84C] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                 <p className="text-sm font-medium">Đang tải danh sách khảo sát...</p>
               </div>
             ) : filteredSurveys.length === 0 ? (
               <div className="py-16 text-center text-slate-400">
                 <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p className="text-base font-semibold text-slate-700 dark:text-slate-300">Không tìm thấy khảo sát nào</p>
-                <p className="text-sm text-slate-500 mt-1">Tạo khảo sát để bắt đầu thu thập dữ liệu trải nghiệm.</p>
+                <p className="text-base font-semibold text-slate-700 dark:text-slate-300">
+                  Không tìm thấy khảo sát nào
+                </p>
+                <p className="text-sm text-slate-500 mt-1">
+                  Tạo khảo sát để bắt đầu thu thập dữ liệu trải nghiệm.
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -447,10 +597,13 @@ export default function SurveyManagement() {
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {filteredSurveys.map((survey) => {
                       const isVendorTarget = survey.audienceType === 'all_vendors';
-                      const isCreatedByAdmin = !!survey.adminId || survey.scope === 'platform';
+                      const isCreatedByAdmin = Boolean(survey.adminId) || survey.scope === 'platform';
 
                       return (
-                        <tr key={survey.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors">
+                        <tr
+                          key={survey.id}
+                          className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition-colors"
+                        >
                           <td className="px-6 py-4">
                             <div className="font-semibold text-slate-900 dark:text-white max-w-sm truncate">
                               {survey.title}
@@ -465,14 +618,16 @@ export default function SurveyManagement() {
                                 <Building2 className="w-3 h-3" /> Toàn bộ Vendor
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-                                <User className="w-3 h-3" /> Khách hàng (Client)
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-[#EEF5F1] dark:bg-[#1A3A2C]/50 text-[#1A3A2C] dark:text-[#6BB392] border border-[#2A5C4A]/20 dark:border-[#2A5C4A]/50">
+                                <User className="w-3 h-3" /> Khách hàng
                               </span>
                             )}
                           </td>
                           <td className="px-4 py-4 text-xs">
                             {isCreatedByAdmin ? (
-                              <span className="font-medium text-blue-600 dark:text-blue-400">MIVA Admin</span>
+                              <span className="font-semibold text-[#1A3A2C] dark:text-[#DEC47E]">
+                                MIVA Admin
+                              </span>
                             ) : (
                               <span className="font-medium text-amber-600 dark:text-amber-400">
                                 {survey.vendor?.storeName || 'Shop đối tác'}
@@ -480,9 +635,13 @@ export default function SurveyManagement() {
                             )}
                           </td>
                           <td className="px-4 py-4 text-xs text-slate-500">
-                            {survey.startDate ? new Date(survey.startDate).toLocaleDateString('vi-VN') : 'Bắt đầu ngay'}
+                            {survey.startDate
+                              ? new Date(survey.startDate).toLocaleDateString('vi-VN')
+                              : 'Bắt đầu ngay'}
                             {' → '}
-                            {survey.endDate ? new Date(survey.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}
+                            {survey.endDate
+                              ? new Date(survey.endDate).toLocaleDateString('vi-VN')
+                              : 'Không giới hạn'}
                           </td>
                           <td className="px-4 py-4">
                             {survey.status === 'active' && (
@@ -505,25 +664,28 @@ export default function SurveyManagement() {
                             {survey._count?.responses || 0}
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-1.5">
                               <button
+                                type="button"
                                 onClick={() => handleOpenResults(survey.id)}
-                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50"
+                                className="p-1.5 rounded-lg text-[#1A3A2C] dark:text-[#DEC47E] hover:bg-[#EEF5F1] dark:hover:bg-[#1A3A2C]/50 transition-colors"
                                 title="Xem thống kê kết quả"
                               >
                                 <BarChart3 className="w-4 h-4" />
                               </button>
                               <button
+                                type="button"
                                 onClick={() => setPreviewSurvey(survey)}
-                                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                 title="Xem trước câu hỏi"
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
                               {survey.status === 'draft' && (
                                 <button
+                                  type="button"
                                   onClick={() => handleChangeStatus(survey.id, 'active')}
-                                  className="px-2.5 py-1 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-sm"
+                                  className="px-2.5 py-1 text-xs font-semibold bg-[#1A3A2C] hover:bg-[#2A5C4A] text-white rounded-lg shadow-sm transition-colors"
                                   title="Kích hoạt và gửi thông báo"
                                 >
                                   Kích hoạt
@@ -531,6 +693,7 @@ export default function SurveyManagement() {
                               )}
                               {survey.status === 'active' && (
                                 <button
+                                  type="button"
                                   onClick={() => handleChangeStatus(survey.id, 'closed')}
                                   className="px-2.5 py-1 text-xs font-semibold bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100"
                                   title="Đóng khảo sát"
@@ -538,8 +701,10 @@ export default function SurveyManagement() {
                                   Đóng
                                 </button>
                               )}
-                              {(survey.status === 'closed' || (survey.endDate && new Date(survey.endDate) < new Date())) && (
+                              {(survey.status === 'closed' ||
+                                (survey.endDate && new Date(survey.endDate) < new Date())) && (
                                 <button
+                                  type="button"
                                   onClick={() => handleOpenExtendModal(survey)}
                                   className="px-2.5 py-1 text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-sm flex items-center gap-1 transition-colors"
                                   title="Khảo sát đã hết hạn / đã đóng - Bấm để gia hạn"
@@ -548,6 +713,14 @@ export default function SurveyManagement() {
                                   Gia hạn
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => setSurveyToDelete(survey)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                                title="Xóa mềm khảo sát"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -568,7 +741,7 @@ export default function SurveyManagement() {
             {/* Step 1: Target Actor Selection */}
             <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
               <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-blue-600" />
+                <ShieldCheck className="w-5 h-5 text-[#1A3A2C] dark:text-[#C9A84C]" />
                 1. Chọn đối tượng khảo sát
               </h3>
 
@@ -578,15 +751,23 @@ export default function SurveyManagement() {
                   onClick={() => handleTargetTypeChange('client')}
                   className={`p-4 rounded-2xl border text-left flex items-start gap-3 transition-all ${
                     targetType === 'client'
-                      ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 ring-2 ring-blue-600/20'
+                      ? 'border-[#1A3A2C] dark:border-[#C9A84C] bg-[#EEF5F1]/60 dark:bg-[#1A3A2C]/30 ring-2 ring-[#2A5C4A]/20'
                       : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 hover:border-slate-300'
                   }`}
                 >
-                  <span className={`p-2 rounded-xl shrink-0 ${targetType === 'client' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                  <span
+                    className={`p-2 rounded-xl shrink-0 ${
+                      targetType === 'client'
+                        ? 'bg-[#1A3A2C] text-[#C9A84C]'
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
                     <User className="w-5 h-5" />
                   </span>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">Luồng 1 – Khảo sát Client (Người mua)</h4>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      Luồng 1 – Khảo sát Khách hàng (Client)
+                    </h4>
                     <p className="text-xs text-slate-500 mt-1">
                       Thu thập trải nghiệm mua sắm, thanh toán, giao hàng, đề xuất tính năng mới trên MIVA.
                     </p>
@@ -598,17 +779,25 @@ export default function SurveyManagement() {
                   onClick={() => handleTargetTypeChange('vendor')}
                   className={`p-4 rounded-2xl border text-left flex items-start gap-3 transition-all ${
                     targetType === 'vendor'
-                      ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 ring-2 ring-blue-600/20'
+                      ? 'border-[#1A3A2C] dark:border-[#C9A84C] bg-[#EEF5F1]/60 dark:bg-[#1A3A2C]/30 ring-2 ring-[#2A5C4A]/20'
                       : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 hover:border-slate-300'
                   }`}
                 >
-                  <span className={`p-2 rounded-xl shrink-0 ${targetType === 'vendor' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                  <span
+                    className={`p-2 rounded-xl shrink-0 ${
+                      targetType === 'vendor'
+                        ? 'bg-[#1A3A2C] text-[#C9A84C]'
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
                     <Building2 className="w-5 h-5" />
                   </span>
                   <div>
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">Luồng 2 – Khảo sát Vendor (Đối tác)</h4>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                      Luồng 2 – Khảo sát Đối tác (Vendor)
+                    </h4>
                     <p className="text-xs text-slate-500 mt-1">
-                      Thu thập phản hồi về quản lý cửa hàng, đóng gói giao ship, chính sách nền tảng MIVA.
+                      Thu thập phản hồi về quản lý cửa hàng, đóng gói giao vận, chính sách nền tảng MIVA.
                     </p>
                   </div>
                 </button>
@@ -617,17 +806,17 @@ export default function SurveyManagement() {
               {/* Preset Topics based on Target */}
               <div className="pt-2">
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-                  Chủ đề khảo sát theo luồng nghiệp vụ:
+                  Chủ đề khảo sát mẫu từ hệ thống:
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {(targetType === 'client' ? CLIENT_TOPICS : VENDOR_TOPICS).map((topic) => (
+                  {currentTopics.map((topic) => (
                     <button
                       type="button"
                       key={topic}
                       onClick={() => handleTopicSelect(topic)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                         selectedTopic === topic
-                          ? 'bg-blue-600 text-white shadow-sm'
+                          ? 'bg-[#1A3A2C] dark:bg-[#2A5C4A] text-white shadow-sm'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
                       }`}
                     >
@@ -647,152 +836,42 @@ export default function SurveyManagement() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Nhập tiêu đề khảo sát..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100 font-semibold"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:border-[#2A5C4A] text-slate-800 dark:text-slate-100 font-semibold"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Mô tả lời mời (hiển thị trong Notification)
+                  Mô tả lời mời (hiển thị trong thông báo)
                 </label>
                 <textarea
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Ban Quản Trị MIVA trân trọng kính mời quý khách tham gia khảo sát..."
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100 resize-none"
+                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:border-[#2A5C4A] text-slate-800 dark:text-slate-100 resize-none"
                 />
               </div>
             </div>
 
-            {/* Step 2: Questions Builder */}
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                  <ClipboardList className="w-5 h-5 text-blue-600" />
-                  2. Danh sách câu hỏi ({questions.length})
-                </h3>
-
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => handleAddQuestion('rating')}
-                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold"
-                  >
-                    + Đánh giá Sao
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddQuestion('single_choice')}
-                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold"
-                  >
-                    + Chọn 1
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddQuestion('multiple_choice')}
-                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold"
-                  >
-                    + Chọn nhiều
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddQuestion('text')}
-                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold"
-                  >
-                    + Tự luận
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-4 pt-2">
-                {questions.map((q, idx) => (
-                  <div
-                    key={q.id}
-                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 space-y-3"
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 text-xs font-bold flex items-center justify-center shrink-0 mt-2">
-                        {idx + 1}
-                      </span>
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          value={q.question}
-                          onChange={(e) => handleUpdateQuestion(idx, 'question', e.target.value)}
-                          placeholder="Nhập nội dung câu hỏi..."
-                          className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold focus:outline-none focus:border-blue-500 text-slate-900 dark:text-white"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveQuestion(idx)}
-                        className="p-2 text-slate-400 hover:text-rose-500 rounded-lg"
-                        title="Xóa câu hỏi"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between pl-8 text-xs text-slate-500">
-                      <div className="flex items-center gap-3">
-                        <span className="font-medium bg-slate-200/70 dark:bg-slate-700 px-2 py-0.5 rounded">
-                          Loại: {q.type === 'rating' ? 'Đánh giá Sao (1-5)' : q.type === 'single_choice' ? 'Chọn 1 đáp án' : q.type === 'multiple_choice' ? 'Chọn nhiều' : 'Tự luận'}
-                        </span>
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={q.required}
-                            onChange={(e) => handleUpdateQuestion(idx, 'required', e.target.checked)}
-                            className="rounded text-blue-600 focus:ring-blue-500"
-                          />
-                          <span>Bắt buộc trả lời</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    {(q.type === 'single_choice' || q.type === 'multiple_choice') && (
-                      <div className="pl-8 space-y-2 pt-1">
-                        {q.options.map((opt, oIdx) => (
-                          <div key={oIdx} className="flex items-center gap-2">
-                            <span className="text-xs text-slate-400 font-bold w-4">{oIdx + 1}.</span>
-                            <input
-                              type="text"
-                              value={opt}
-                              onChange={(e) => handleUpdateOption(idx, oIdx, e.target.value)}
-                              className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200"
-                            />
-                            {q.options.length > 2 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveOption(idx, oIdx)}
-                                className="text-slate-400 hover:text-rose-500 p-1"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => handleAddOption(idx)}
-                          className="text-xs text-blue-600 hover:underline font-medium pt-1"
-                        >
-                          + Thêm lựa chọn
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Step 2: Shared Questions Builder */}
+            <SurveyQuestionBuilder
+              questions={questions}
+              onAddQuestion={handleAddQuestion}
+              onRemoveQuestion={handleRemoveQuestion}
+              onUpdateQuestion={handleUpdateQuestion}
+              onAddOption={handleAddOption}
+              onUpdateOption={handleUpdateOption}
+              onRemoveOption={handleRemoveOption}
+              sectionTitle="2. Danh sách câu hỏi khảo sát"
+            />
           </div>
 
-          {/* Delivery & Activation */}
+          {/* Step 3: Delivery & Activation */}
           <div className="space-y-6">
             <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
               <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-blue-600" />
+                <Calendar className="w-5 h-5 text-[#1A3A2C] dark:text-[#C9A84C]" />
                 3. Thiết lập gửi thông báo
               </h3>
 
@@ -808,11 +887,25 @@ export default function SurveyManagement() {
                   <option value="manual">Gửi thủ công ngay khi kích hoạt</option>
                   {targetType === 'client' && (
                     <>
-                      <option value="after_order_completed">Tự động gửi khi đơn hàng hoàn thành</option>
-                      <option value="after_checkout">Tự động gửi sau khi Checkout</option>
+                      <option value="after_order_completed">
+                        Tự động gửi khi đơn hàng hoàn thành
+                      </option>
+                      <option value="after_checkout">Tự động gửi sau khi đặt hàng</option>
                     </>
                   )}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Ngày bắt đầu (tùy chọn)
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100"
+                />
               </div>
 
               <div>
@@ -827,8 +920,10 @@ export default function SurveyManagement() {
                 />
               </div>
 
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl text-xs text-blue-800 dark:text-blue-300">
-                Khi kích hoạt, hệ thống sẽ tự động tạo thông báo gửi tới biểu tượng <strong>Chuông Thông báo</strong> của từng đối tượng ({targetType === 'vendor' ? 'Tất cả Vendor' : 'Tất cả Client'}).
+              <div className="p-3 bg-[#EEF5F1] dark:bg-[#1A3A2C]/40 border border-[#2A5C4A]/20 rounded-xl text-xs text-[#1A3A2C] dark:text-[#C5D6CE]">
+                Khi kích hoạt, hệ thống sẽ tự động tạo thông báo gửi tới biểu tượng{' '}
+                <strong>Chuông Thông báo</strong> của từng đối tượng (
+                {targetType === 'vendor' ? 'Tất cả Vendor' : 'Tất cả Khách hàng'}).
               </div>
             </div>
 
@@ -837,9 +932,9 @@ export default function SurveyManagement() {
                 type="button"
                 onClick={() => handleCreateSurvey(true)}
                 disabled={submitting}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3 bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white rounded-xl font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-4 h-4 text-[#C9A84C]" />
                 {submitting ? 'Đang kích hoạt...' : 'Kích hoạt & Gửi thông báo ngay'}
               </button>
 
@@ -849,7 +944,7 @@ export default function SurveyManagement() {
                 disabled={submitting}
                 className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-xs transition-colors"
               >
-                Lưu thành bản nháp (Draft)
+                Lưu thành bản nháp
               </button>
 
               <button
@@ -864,308 +959,82 @@ export default function SurveyManagement() {
         </div>
       )}
 
-      {/* ──────────────── TAB 3: RESULTS (ADMIN) ──────────────── */}
+      {/* ──────────────── TAB 3: SHARED RESULTS PANEL ──────────────── */}
       {activeTab === 'results' && (
-        <div className="space-y-6">
-          <button
-            onClick={() => setActiveTab('list')}
-            className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1"
-          >
-            ← Quay lại danh sách khảo sát
-          </button>
-
-          {resultsLoading ? (
-            <div className="py-20 text-center text-slate-400">
-              <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-              <p className="text-sm">Đang tải số liệu thống kê...</p>
-            </div>
-          ) : !surveyResults ? (
-            <div className="py-12 text-center text-slate-400">
-              <AlertCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              <p>Chưa có dữ liệu thống kê cho khảo sát này</p>
-            </div>
-          ) : (
-            <>
-              {/* Summary KPIs */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Tổng người được mời</div>
-                  <div className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                    {surveyResults.summary?.invitedCount || 0}
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Đã mở xem</div>
-                  <div className="text-2xl font-bold text-blue-600 mt-1">
-                    {surveyResults.summary?.openedCount || 0}
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Đã trả lời</div>
-                  <div className="text-2xl font-bold text-emerald-600 mt-1">
-                    {surveyResults.summary?.responseCount || 0}
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <div className="text-xs text-slate-500 font-medium">Chưa trả lời</div>
-                  <div className="text-2xl font-bold text-amber-500 mt-1">
-                    {surveyResults.summary?.pendingCount || 0}
-                  </div>
-                </div>
-
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm col-span-2 sm:col-span-1">
-                  <div className="text-xs text-slate-500 font-medium">Tỷ lệ hoàn thành</div>
-                  <div className="text-2xl font-bold text-indigo-600 mt-1">
-                    {((surveyResults.summary?.completionRate || 0) * 100).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-
-              {/* Question breakdown */}
-              <div className="space-y-6">
-                <h3 className="font-bold text-lg text-slate-900 dark:text-white">
-                  Kết quả chi tiết từng câu hỏi
-                </h3>
-
-                {surveyResults.questions?.map((q, idx) => (
-                  <div
-                    key={q.id}
-                    className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4"
-                  >
-                    <div>
-                      <div className="flex items-start gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
-                          {idx + 1}
-                        </span>
-                        <div>
-                          <h4 className="font-bold text-base text-slate-900 dark:text-white">
-                            {q.question}
-                          </h4>
-                          <span className="text-xs text-slate-400">
-                            Loại: {q.type === 'rating' ? 'Đánh giá Sao' : q.type === 'single_choice' ? 'Chọn 1' : q.type === 'multiple_choice' ? 'Chọn nhiều' : 'Tự luận'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Rating Results */}
-                    {q.type === 'rating' && q.result?.distribution && (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-3xl font-extrabold text-amber-500">
-                            {Number(q.result.average || 0).toFixed(1)}
-                          </span>
-                          <div className="flex items-center text-amber-400">
-                            {[1, 2, 3, 4, 5].map(s => (
-                              <Star
-                                key={s}
-                                className={`w-5 h-5 ${
-                                  s <= Math.round(q.result.average || 0)
-                                    ? 'fill-amber-400 text-amber-400'
-                                    : 'text-slate-300'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          <span className="text-xs text-slate-500">
-                            ({q.result.answeredCount || 0} đánh giá)
-                          </span>
-                        </div>
-
-                        <div className="space-y-1.5 pt-2">
-                          {q.result.distribution.map(d => {
-                            const percent = q.result.answeredCount ? (d.count / q.result.answeredCount) * 100 : 0;
-                            return (
-                              <div key={d.value} className="flex items-center gap-3 text-xs">
-                                <span className="w-12 text-slate-600 dark:text-slate-400 font-semibold">{d.value} sao</span>
-                                <div className="flex-1 h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-amber-400 rounded-full transition-all duration-500"
-                                    style={{ width: `${percent}%` }}
-                                  />
-                                </div>
-                                <span className="w-14 text-right font-medium text-slate-700 dark:text-slate-300">
-                                  {d.count} ({percent.toFixed(0)}%)
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Choices Results */}
-                    {(q.type === 'single_choice' || q.type === 'multiple_choice') && q.result?.options && (
-                      <div className="space-y-2 pt-2">
-                        {q.result.options.map((opt, oIdx) => (
-                          <div key={opt.id} className="space-y-1 text-xs">
-                            <div className="flex justify-between font-medium text-slate-700 dark:text-slate-300">
-                              <span>{opt.content}</span>
-                              <span className="font-semibold text-blue-600 dark:text-blue-400">
-                                {opt.count} lượt ({Number(opt.percentage || 0).toFixed(1)}%)
-                              </span>
-                            </div>
-                            <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-500"
-                                style={{
-                                  width: `${opt.percentage || 0}%`,
-                                  backgroundColor: COLORS[oIdx % COLORS.length]
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Text Feedback */}
-                    {q.type === 'text' && q.result?.list && (
-                      <div className="space-y-2 pt-2">
-                        {q.result.list.length === 0 ? (
-                          <p className="text-xs text-slate-400 italic">Chưa có phản hồi tự luận nào.</p>
-                        ) : (
-                          q.result.list.map((ans) => (
-                            <div
-                              key={ans.id}
-                              className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1"
-                            >
-                              <div className="flex items-center justify-between text-slate-400">
-                                <span className="font-semibold text-slate-700 dark:text-slate-300">
-                                  {ans.response?.client?.fullName || 'Người tham gia'}
-                                </span>
-                                <span>{new Date(ans.createdAt).toLocaleDateString('vi-VN')}</span>
-                              </div>
-                              <p className="text-slate-800 dark:text-slate-100 italic">
-                                "{ans.textAnswer}"
-                              </p>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        <SurveyResultsPanel
+          loading={resultsLoading}
+          surveyResults={surveyResults}
+          onBack={() => setActiveTab('list')}
+        />
       )}
 
-      {/* Preview Modal */}
-      {previewSurvey && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-4 border border-slate-200 dark:border-slate-800 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-start justify-between">
+      {/* Shared Preview Modal */}
+      <SurveyPreviewModal
+        survey={previewSurvey}
+        onClose={() => setPreviewSurvey(null)}
+      />
+
+      {/* Shared Extend End Date Modal */}
+      <ExtendEndDateModal
+        isOpen={extendModalOpen}
+        onClose={() => setExtendModalOpen(false)}
+        title={
+          surveyToExtend
+            ? `Gia hạn khảo sát: ${surveyToExtend.title}`
+            : 'Gia hạn thời hạn khảo sát'
+        }
+        itemTitle={surveyToExtend?.title}
+        currentEndDate={surveyToExtend?.endDate}
+        onConfirm={async (isoEnd) => {
+          await surveysApi.extendSurvey(surveyToExtend.id, isoEnd);
+          toast.success(`Đã gia hạn khảo sát "${surveyToExtend.title}" thành công`);
+          await loadSurveys();
+        }}
+      />
+
+      {/* Soft-Delete Confirmation Modal */}
+      <Modal
+        isOpen={Boolean(surveyToDelete)}
+        onClose={() => !deletingSurvey && setSurveyToDelete(null)}
+        title="Xóa mềm khảo sát"
+        maxWidth="max-w-md"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSurveyToDelete(null)}
+              disabled={deletingSurvey}
+            >
+              Hủy
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleConfirmDeleteSurvey}
+              disabled={deletingSurvey}
+            >
+              {deletingSurvey ? 'Đang xử lý...' : 'Xác nhận xóa mềm'}
+            </Button>
+          </div>
+        }
+      >
+        {surveyToDelete && (
+          <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-200">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-600">
-                  Xem trước khảo sát
-                </span>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mt-1">
-                  {previewSurvey.title}
-                </h3>
-              </div>
-              <button onClick={() => setPreviewSurvey(null)} className="p-1 text-slate-400 hover:text-slate-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            {previewSurvey.description && (
-              <p className="text-sm text-slate-600 dark:text-slate-300">{previewSurvey.description}</p>
-            )}
-
-            <div className="space-y-4 pt-2">
-              {previewSurvey.questions?.map((q, idx) => (
-                <div key={q.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border text-xs space-y-2">
-                  <div className="font-semibold text-slate-800 dark:text-slate-200">
-                    {idx + 1}. {q.question} {q.required && <span className="text-rose-500">*</span>}
-                  </div>
-                  {q.type === 'rating' && (
-                    <div className="flex gap-1 text-amber-400">
-                      {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-4 h-4 fill-amber-400" />)}
-                    </div>
-                  )}
-                  {q.options?.map(opt => (
-                    <div key={opt.id} className="p-2 bg-white dark:bg-slate-800 rounded border text-slate-600 dark:text-slate-300">
-                      • {opt.content}
-                    </div>
-                  ))}
-                  {q.type === 'text' && (
-                    <div className="p-2 bg-white dark:bg-slate-800 rounded border text-slate-400 italic">
-                      [Người nhận nhập câu trả lời tự luận]
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Modal Gia Hạn Khảo Sát */}
-      {extendModalOpen && surveyToExtend && (
-        <Modal
-          isOpen={extendModalOpen}
-          onClose={() => setExtendModalOpen(false)}
-          title={`Gia hạn thời hạn khảo sát: ${surveyToExtend.title}`}
-          maxWidth="max-w-md"
-        >
-          <div className="space-y-4 text-sm">
-            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs space-y-1">
-              <div>Tiêu đề: <strong>{surveyToExtend.title}</strong></div>
-              <div>Hạn chót hiện tại: <span className="text-slate-500 font-semibold">{surveyToExtend.endDate ? new Date(surveyToExtend.endDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}</span></div>
-              {surveyToExtend.status === 'closed' && (
-                <div className="text-amber-600 dark:text-amber-400 font-medium">* Khảo sát đang ở trạng thái đã đóng. Khi gia hạn, khảo sát sẽ tự động mở lại trạng thái hoạt động.</div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Chọn nhanh thời hạn gia hạn:
-              </label>
-              <div className="grid grid-cols-4 gap-2">
-                {[7, 14, 30, 60].map((days) => (
-                  <button
-                    key={days}
-                    type="button"
-                    onClick={() => setExtendEndDate(addDaysToNow(days))}
-                    className="py-1.5 px-2 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/50 text-slate-700 dark:text-slate-200 transition-colors"
-                  >
-                    +{days} ngày
-                  </button>
-                ))}
+                Thao tác này thực hiện <strong>xóa mềm (Soft Delete)</strong>, không xóa vĩnh viễn bản ghi trong CSDL.
               </div>
             </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Ngày kết thúc mới:
-              </label>
-              <input
-                type="date"
-                min={new Date().toISOString().split('T')[0]}
-                value={extendEndDate}
-                onChange={(e) => setExtendEndDate(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg border-slate-200 dark:border-slate-700 dark:bg-slate-800 text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <Button variant="outline" onClick={() => setExtendModalOpen(false)}>
-                Hủy
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleConfirmExtend}
-                disabled={!extendEndDate || loadingExtend}
-              >
-                {loadingExtend ? 'Đang gia hạn...' : 'Xác nhận gia hạn'}
-              </Button>
-            </div>
+            <p className="leading-relaxed">
+              Khảo sát <strong className="text-slate-900 dark:text-white">&ldquo;{surveyToDelete.title}&rdquo;</strong> sẽ được{' '}
+              <strong>ẩn khỏi danh sách hiển thị</strong>, nhưng{' '}
+              <strong>bảo toàn nguyên vẹn bộ câu hỏi và toàn bộ phản hồi lịch sử trong cơ sở dữ liệu (CSDL)</strong>.
+            </p>
           </div>
-        </Modal>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

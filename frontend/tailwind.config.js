@@ -3,6 +3,7 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
+    "../shared/**/*.{js,ts,jsx,tsx}",
   ],
   darkMode: 'class', // enable dark mode manually
   theme: {
@@ -11,19 +12,21 @@ export default {
         primary: {
           light: '#F5ECD7',
           DEFAULT: '#C9A84C', // Gold accent
-          dark: '#9A7B30',
+          dark: '#B08A2E',
         },
         dark: {
-          bg: '#0C0C0C',
-          card: '#161616',
-          border: '#2A2A2A',
+          bg: '#0B110E',
+          surface: '#131B17',
+          card: '#15201B',
+          border: '#223029',
           text: '#F0EDE6',
-          muted: '#888888',
+          muted: '#94A89E',
         },
         light: {
-          bg: '#FAFAF8',
+          bg: '#FAF7F2',
+          surface: '#F0EFEC',
           card: '#FFFFFF',
-          border: '#E8E8E3',
+          border: '#E5E3DD',
           text: '#1A1A1A',
           muted: '#6B6B6B',
         },

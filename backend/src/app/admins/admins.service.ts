@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Injectable,
   NotFoundException,
   Optional,
@@ -11,7 +10,12 @@ import { PrismaBaseService } from '../../common/service/prisma-base.service';
 
 import { PrismaService } from '../../common/prisma/prisma.service';
 
-import { PaginationUtilService } from '../../common/utils/paginaton-util/pagintion-util.service';
+import { AccountDirectoryService } from '../../common/account/account-directory.service';
+
+import {
+  PaginationUtilService,
+  paginatePrismaQuery,
+} from '../../common/utils/paginaton-util/pagintion-util.service';
 
 import { QueryUtilService } from '../../common/utils/query-util/query-util.service';
 
@@ -27,6 +31,8 @@ import { GetAdminsPaginationDto } from './dto/get-admin.dto';
 
 @Injectable()
 export class AdminsService extends PrismaBaseService<'admin'> {
+  private readonly fallbackDirectory: AccountDirectoryService;
+
   constructor(
     prismaService: PrismaService,
 
@@ -35,8 +41,14 @@ export class AdminsService extends PrismaBaseService<'admin'> {
     private readonly queryUtil: QueryUtilService,
 
     @Optional() private readonly realtime?: RealtimeService,
+    @Optional() private readonly accountDirectory?: AccountDirectoryService,
   ) {
     super(prismaService, 'admin');
+    this.fallbackDirectory = new AccountDirectoryService(prismaService);
+  }
+
+  private get directory(): AccountDirectoryService {
+    return this.accountDirectory ?? this.fallbackDirectory;
   }
 
   async getAdmins({ status, ...query }: GetAdminsPaginationDto) {
@@ -61,27 +73,17 @@ export class AdminsService extends PrismaBaseService<'admin'> {
       ...searchCondition,
     };
 
-    const totalItems = await this.extended.count({
-      where,
-    });
-
-    const paging = this.paginationUtilService.paging({
-      page,
-      itemPerPage,
-      totalItems,
-    });
-
-    const list = await this.extended.findMany({
-      omit: { password: true },
-      where,
-      skip: paging.skip,
-      take: paging.itemPerPage,
-      orderBy: {
-        createdAt: 'desc',
+    return paginatePrismaQuery(
+      this.extended,
+      { page, itemPerPage },
+      {
+        omit: { password: true },
+        where,
+        orderBy: {
+          createdAt: 'desc',
+        },
       },
-    });
-
-    return paging.format(list);
+    );
   }
 
   async getAdmin(where: Prisma.AdminWhereUniqueInput) {
@@ -101,22 +103,7 @@ export class AdminsService extends PrismaBaseService<'admin'> {
     targetId: string | undefined,
     currentUser?: UserInfo,
   ) {
-    if (!targetId) return;
-    if (currentUser?.userID && targetId === currentUser.userID) {
-      throw new BadRequestException(
-        'Không thể tự khóa tài khoản của chính mình',
-      );
-    }
-    const activeAdmins = await this.prismaService.extended.admin.findMany({
-      where: { status: 'active' },
-      select: { id: true },
-    });
-    const remaining = activeAdmins.filter((a) => a.id !== targetId).length;
-    if (remaining === 0) {
-      throw new BadRequestException(
-        'Không thể khóa tài khoản quản trị viên đang hoạt động cuối cùng',
-      );
-    }
+    return this.directory.assertCanLockAdmin(targetId, currentUser?.userID);
   }
 
   async updateAdmin(params: {

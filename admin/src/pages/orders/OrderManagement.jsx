@@ -6,11 +6,13 @@ import {
   ChevronRight,
   RotateCcw,
   RefreshCw,
+  Package,
   X
 } from 'lucide-react';
 import { ordersApi, employeesApi } from '../../api';
 import { formatCurrency, formatDate } from '../../utils/formatHelpers';
 import {
+  computeBatchOrderFinancials,
   extractOrderEmployees,
   formatShortOrderCode,
   groupOrdersByCheckoutBatch,
@@ -23,7 +25,7 @@ import OrderDetailModal from './OrderDetailModal';
 export default function OrderManagement() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [employeeFilter, setEmployeeFilter] = useState('all');
-  const [sortOrder, setSortOrder] = useState('asc');
+  const [sortOrder, setSortOrder] = useState('desc');
   const [employeeList, setEmployeeList] = useState([]);
 
   useEffect(() => {
@@ -72,7 +74,7 @@ export default function OrderManagement() {
     itemsPerPage: 10,
     extraParams,
     isDefaultExtraParams:
-      statusFilter === 'all' && employeeFilter === 'all' && sortOrder === 'asc',
+      statusFilter === 'all' && employeeFilter === 'all' && sortOrder === 'desc',
     realtimeEvent: 'miva:orders',
   });
 
@@ -80,7 +82,7 @@ export default function OrderManagement() {
     resetPaginatedList(() => {
       setStatusFilter('all');
       setEmployeeFilter('all');
-      setSortOrder('asc');
+      setSortOrder('desc');
     });
   };
 
@@ -147,7 +149,7 @@ export default function OrderManagement() {
     search.trim() ||
       statusFilter !== 'all' ||
       employeeFilter !== 'all' ||
-      sortOrder !== 'asc' ||
+      sortOrder !== 'desc' ||
       page !== 1
   );
 
@@ -255,8 +257,8 @@ export default function OrderManagement() {
 
               <Select
                 options={[
-                  { value: 'asc', label: 'Sắp xếp: Cũ nhất (ASC)' },
                   { value: 'desc', label: 'Sắp xếp: Mới nhất (DESC)' },
+                  { value: 'asc', label: 'Sắp xếp: Cũ nhất (ASC)' },
                 ]}
                 value={sortOrder}
                 onChange={e => {
@@ -291,6 +293,7 @@ export default function OrderManagement() {
                 {groupedOrders.map(order => {
                   const subOrders = order.subOrders || [order];
                   const isMerged = subOrders.length > 1;
+                  const fin = computeBatchOrderFinancials(subOrders);
                   const userName = order.client?.fullName || order.receiverName || order.user?.fullName || 'Khách hàng';
                   const fullOrderCode = order.orderCode || order.id;
                   const displayOrderCode = `#${formatShortOrderCode(fullOrderCode)}`;
@@ -319,8 +322,36 @@ export default function OrderManagement() {
                       <td className="px-4 py-3.5 text-sm text-slate-600 dark:text-slate-400">
                         {formatDate(order.createdAt)}
                       </td>
-                      <td className="px-4 py-3.5 text-sm text-right font-bold text-slate-900 dark:text-slate-100">
-                        {formatCurrency(order.totalAmount)}
+                      <td className="px-4 py-3.5 text-sm text-right">
+                        {fin.isPartiallyCancelled ? (
+                          <div className="leading-tight">
+                            <span className="font-bold text-slate-900 dark:text-slate-100 block">
+                              {formatCurrency(fin.activeTotalAmount)}
+                            </span>
+                            <span className="text-[11px] text-slate-400 line-through">
+                              {formatCurrency(fin.originalTotalAmount)}
+                            </span>
+                            <span className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold ml-1">
+                              • Hủy {fin.cancelledCount}/{fin.totalSubCount}
+                            </span>
+                          </div>
+                        ) : fin.isAllCancelled ? (
+                          <div className="leading-tight">
+                            <span className="font-bold text-slate-400 dark:text-slate-500 block">
+                              0 ₫
+                            </span>
+                            <span className="text-[11px] text-slate-400 line-through">
+                              {formatCurrency(fin.originalTotalAmount)}
+                            </span>
+                            <span className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold ml-1">
+                              • {isMerged ? `Đã hủy ${fin.totalSubCount}/${fin.totalSubCount}` : 'Đã hủy'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="font-bold text-slate-900 dark:text-slate-100">
+                            {formatCurrency(fin.activeTotalAmount)}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -390,7 +421,15 @@ export default function OrderManagement() {
               }}
             />
           ) : (
-            <div className="bg-white dark:bg-slate-900 transition-colors rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm min-h-[520px]" />
+            <div className="bg-white dark:bg-slate-900 transition-colors rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm min-h-[520px] flex flex-col items-center justify-center p-6 text-center text-slate-400 dark:text-slate-500">
+              <Package className="w-10 h-10 mb-2.5 opacity-40" />
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                Chưa chọn đơn hàng
+              </p>
+              <p className="text-xs mt-1 max-w-[240px]">
+                Bấm vào một hóa đơn ở danh sách bên trái để xem sản phẩm, điều phối nhân sự &amp; vận chuyển.
+              </p>
+            </div>
           )}
         </div>
       </div>

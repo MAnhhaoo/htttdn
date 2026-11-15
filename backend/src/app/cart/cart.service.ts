@@ -5,32 +5,32 @@ import {
 import { ProductStatus } from '@prisma/client';
 
 import { PrismaService } from 'src/common/prisma/prisma.service';
+import { PRODUCT_VARIANT_SUMMARY_SELECT } from 'src/common/prisma/prisma-selects.const';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 
 const cartInclude = {
   items: {
-    orderBy: { createdAt: 'asc' as const },
-    include: {
+    where: {
+      deletedAt: null,
       productVariant: {
-        include: {
-          productColor: {
-            include: {
-              product: {
-                include: {
-                  category: true,
-                  vendor: {
-                    select: {
-                      id: true,
-                      fullName: true,
-                      storeName: true,
-                      avatarUrl: true,
-                    },
-                  },
-                },
+        deletedAt: null,
+        productColor: {
+          is: {
+            deletedAt: null,
+            product: {
+              is: {
+                deletedAt: null,
+                status: ProductStatus.active,
               },
             },
           },
         },
+      },
+    },
+    orderBy: { createdAt: 'asc' as const },
+    include: {
+      productVariant: {
+        select: PRODUCT_VARIANT_SUMMARY_SELECT,
       },
     },
   },
@@ -61,17 +61,37 @@ export class CartService {
         cartId_productVariantId: {
           cartId: cart.id,
           productVariantId: dto.productVariantId}}});
-    const quantity = (current?.quantity ?? 0) + dto.quantity;
-    if (quantity > variant.stock) {
-      throw new BadRequestException('Số lượng vượt quá tồn kho');
-    }
-    await this.prisma.extended.cartItem.upsert({
-      where: {
-        cartId_productVariantId: {
+
+    if (current && current.deletedAt === null) {
+      const nextQty = current.quantity + dto.quantity;
+      if (nextQty > variant.stock) {
+        throw new BadRequestException('Số lượng vượt quá tồn kho');
+      }
+      await this.prisma.extended.cartItem.update({
+        where: { id: current.id },
+        data: { quantity: nextQty },
+      });
+    } else if (current && current.deletedAt !== null) {
+      const nextQty = dto.quantity;
+      if (nextQty > variant.stock) {
+        throw new BadRequestException('Số lượng vượt quá tồn kho');
+      }
+      await this.prisma.extended.cartItem.update({
+        where: { id: current.id },
+        data: { quantity: nextQty, deletedAt: null },
+      });
+    } else {
+      if (dto.quantity > variant.stock) {
+        throw new BadRequestException('Số lượng vượt quá tồn kho');
+      }
+      await this.prisma.extended.cartItem.create({
+        data: {
           cartId: cart.id,
-          productVariantId: dto.productVariantId}},
-      create: { cartId: cart.id, ...dto },
-      update: { quantity }});
+          productVariantId: dto.productVariantId,
+          quantity: dto.quantity,
+        },
+      });
+    }
     return this.get(clientId);
   }
 
@@ -82,21 +102,28 @@ export class CartService {
       throw new BadRequestException('Số lượng vượt quá tồn kho');
     }
     await this.prisma.extended.cartItem.update({
-      where: { id: itemId },
+      where: { id: item.id },
       data: { quantity }});
     return this.get(clientId);
   }
 
   async remove(clientId: string, itemId: string) {
-    await this.getOwnedItem(clientId, itemId);
-    await this.prisma.extended.cartItem.delete({ where: { id: itemId } });
+    const item = await this.getOwnedItem(clientId, itemId);
+    await this.prisma.extended.cartItem.update({
+      where: { id: item.id },
+      data: { deletedAt: new Date() },
+    });
     return this.get(clientId);
   }
 
   async clear(clientId: string) {
     const cart = await this.prisma.extended.cart.findUnique({ where: { clientId } });
-    if (cart)
-      await this.prisma.extended.cartItem.deleteMany({ where: { cartId: cart.id } });
+    if (cart && !cart.deletedAt) {
+      await this.prisma.extended.cartItem.updateMany({
+        where: { cartId: cart.id, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+    }
     return this.get(clientId);
   }
 
@@ -118,7 +145,13 @@ export class CartService {
 
   private getOwnedItem(clientId: string, itemId: string) {
     return this.prisma.extended.cartItem
-      .findFirst({ where: { id: itemId, cart: { clientId, deletedAt: null } } })
+      .findFirst({
+        where: {
+          id: itemId,
+          deletedAt: null,
+          cart: { clientId, deletedAt: null },
+        },
+      })
       .then((item) => {
         if (!item)
           throw new NotFoundException('Sản phẩm không có trong giỏ hàng');

@@ -1,28 +1,7 @@
-import { useEffect } from 'react';
-import { io } from 'socket.io-client';
+import { SharedRealtimeBridge } from '@shared/realtime/RealtimeBridge';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function RealtimeBridge() {
   const { user } = useAuth();
-  useEffect(() => {
-    if (!user?.id) return;
-    const socket = io('/realtime', { auth: { role: 'vendor' }, withCredentials: true });
-    const dispatch = (name) => () => window.dispatchEvent(new Event(`miva:${name}`));
-    const orders = dispatch('orders');
-    const products = dispatch('products');
-    const categories = dispatch('categories');
-    const notifications = dispatch('notification');
-    const dashboard = dispatch('dashboard');
-    socket.on('realtime:ready', () => { orders(); products(); categories(); notifications(); dashboard(); });
-    socket.on('order:created', () => { orders(); products(); notifications(); dashboard(); });
-    socket.on('order:updated', () => { orders(); products(); notifications(); dashboard(); });
-    socket.on('payment:updated', () => { orders(); dashboard(); });
-    socket.on('shipment:updated', () => { orders(); dashboard(); });
-    socket.on('product:updated', () => { products(); dashboard(); });
-    socket.on('category:updated', categories);
-    socket.on('notification:created', notifications);
-    socket.on('notification:updated', notifications);
-    return () => socket.disconnect();
-  }, [user?.id]);
-  return null;
+  return <SharedRealtimeBridge userId={user?.id} role="vendor" />;
 }

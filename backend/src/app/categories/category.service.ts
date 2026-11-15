@@ -3,7 +3,11 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { PrismaBaseService } from 'src/common/service/prisma-base.service';
-import { PaginationUtilService } from 'src/common/utils/paginaton-util/pagintion-util.service';
+import {
+  PaginationUtilService,
+  formatPaginatedList,
+  normalizePagination,
+} from 'src/common/utils/paginaton-util/pagintion-util.service';
 import { QueryUtilService } from 'src/common/utils/query-util/query-util.service';
 import { StringUtilService } from 'src/common/utils/string-util/string-util.service';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -45,28 +49,29 @@ export class CategoryService extends PrismaBaseService<'category'> {
         where.deletedAt = { not: null };
       }
 
-      const totalItems = await this.prismaService.category.count({ where });
-      const paging = this.paginationUtilService.paging({
-        page,
-        itemPerPage,
-        totalItems,
-      });
+      const rawCategory = (this.prismaService as any).category ?? this.extended;
+      const normalized = normalizePagination({ page, itemPerPage });
+      const [totalItems, list] = await Promise.all([
+        rawCategory.count({ where }),
+        rawCategory.findMany({
+          where,
+          skip: normalized.skip,
+          take: normalized.itemPerPage,
+          orderBy: {
+            createdAt: 'desc',
+          },
+        }),
+      ]);
 
-      const list = await this.prismaService.category.findMany({
-        where,
-        skip: paging.skip,
-        take: itemPerPage,
-        orderBy: {
-          createdAt: 'desc',
-        },
-      });
-
-      const formattedList = list.map((cat) => ({
+      const formattedList = list.map((cat: any) => ({
         ...cat,
         status: cat.deletedAt ? 'inactive' : 'active',
       }));
 
-      return paging.format(formattedList);
+      return formatPaginatedList(formattedList, totalItems, {
+        page: normalized.page,
+        itemPerPage: normalized.itemPerPage,
+      });
     }
 
     const where: Prisma.CategoryWhereInput = {
@@ -74,31 +79,28 @@ export class CategoryService extends PrismaBaseService<'category'> {
       ...searchCondition,
     };
 
-    const totalItems = await this.extended.count({
-      where,
-    });
-
-    const paging = this.paginationUtilService.paging({
-      page,
-      itemPerPage,
-      totalItems,
-    });
-
-    const list = await this.extended.findMany({
-      where,
-      skip: paging.skip,
-      take: itemPerPage,
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    const normalized = normalizePagination({ page, itemPerPage });
+    const [totalItems, list] = await Promise.all([
+      this.extended.count({ where }),
+      this.extended.findMany({
+        where,
+        skip: normalized.skip,
+        take: normalized.itemPerPage,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+    ]);
 
     const formattedList = list.map((cat: any) => ({
       ...cat,
       status: 'active',
     }));
 
-    return paging.format(formattedList);
+    return formatPaginatedList(formattedList, totalItems, {
+      page: normalized.page,
+      itemPerPage: normalized.itemPerPage,
+    });
   }
 
   async createCategory(createCategoryDto: CreateCategoryDto) {
@@ -134,7 +136,7 @@ export class CategoryService extends PrismaBaseService<'category'> {
     data: UpdateCategoryDto;
   }) {
     const { where, data: dataUpdate } = params;
-    const data = await this.prismaService.category.update({
+    const data = await this.extended.update({
       data: { name: dataUpdate.name },
       where,
     });
@@ -143,7 +145,8 @@ export class CategoryService extends PrismaBaseService<'category'> {
   }
 
   async toggleLock(where: Prisma.CategoryWhereUniqueInput) {
-    const existing = await this.prismaService.category.findUnique({
+    const rawCategory = (this.prismaService as any).category ?? this.extended;
+    const existing = await rawCategory.findUnique({
       where: { id: where.id },
     });
     if (!existing) {

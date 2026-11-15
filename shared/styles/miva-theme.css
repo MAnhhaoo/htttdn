@@ -1,0 +1,80 @@
+/* ==========================================================================
+   MIVA Unified 4-Portal Design Tokens (Tailwind CSS v4)
+   Brand Identity: Forest Emerald (#1A3A2C) & Champagne Gold (#C9A84C)
+   ========================================================================== */
+
+@theme {
+  /* ── MIVA Forest Emerald (Primary Brand Scale) ── */
+  --color-brand-50: #EEF5F1;
+  --color-brand-100: #DCEAE2;
+  --color-brand-200: #B9D6C6;
+  --color-brand-300: #8BBAA1;
+  --color-brand-400: #579678;
+  --color-brand-500: #35755B;
+  --color-brand-600: #2A5C4A;
+  --color-brand-700: #1A3A2C;
+  --color-brand-800: #142F23;
+  --color-brand-900: #0E2219;
+  --color-brand-950: #08130E;
+
+  /* ── MIVA Champagne Gold (Luxury Accent Scale) ── */
+  --color-gold-50: #FBF7EC;
+  --color-gold-100: #F5ECD7;
+  --color-gold-200: #EAD8A6;
+  --color-gold-300: #DEC47E;
+  --color-gold-400: #D4B662;
+  --color-gold-500: #C9A84C;
+  --color-gold-600: #B08A2E;
+  --color-gold-700: #8C6B1F;
+
+  /* ── Storefront Promo Accent (Harmonized Forest Emerald & Champagne Gold) ── */
+  --color-promo-50: #EEF5F1;
+  --color-promo-100: #DCEAE2;
+  --color-promo-500: #1A3A2C;
+  --color-promo-600: #142F23;
+
+  /* ── Harmonized Neutral Slate (Warm Sage Light / Deep Forest Charcoal Dark) ── */
+  --color-slate-50: #F5F7F5;
+  --color-slate-100: #ECEFED;
+  --color-slate-200: #DAE0DC;
+  --color-slate-300: #BCC6C0;
+  --color-slate-400: #8C9B93;
+  --color-slate-500: #5F6F67;
+  --color-slate-600: #45544C;
+  --color-slate-700: #2E3B34;
+  --color-slate-800: #1E2823;
+  --color-slate-900: #131B17;
+  --color-slate-950: #0B110E;
+
+  /* ── Remap Legacy Indigo Utilities -> MIVA Forest Emerald Across Portals ── */
+  --color-indigo-50: #EEF5F1;
+  --color-indigo-100: #DCEAE2;
+  --color-indigo-200: #B9D6C6;
+  --color-indigo-300: #8BBAA1;
+  --color-indigo-400: #579678;
+  --color-indigo-500: #2A5C4A;
+  --color-indigo-600: #1A3A2C;
+  --color-indigo-700: #142F23;
+  --color-indigo-800: #10261C;
+  --color-indigo-900: #0E2219;
+  --color-indigo-950: #08130E;
+}
+
+/* Unified sleek scrollbar across Sidebar, Modals & Workspace Panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(140, 155, 147, 0.35);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(201, 168, 76, 0.65);
+}

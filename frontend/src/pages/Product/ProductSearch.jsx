@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { SlidersHorizontal, X, ChevronRight, RotateCcw, Search, Loader2, ArrowRight } from 'lucide-react';
+import { SlidersHorizontal, X, ChevronRight, RotateCcw, Search } from 'lucide-react';
 import { useProducts } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
-import ProductCard from '../../components/product/ProductCard/ProductCard';
-import ProductCardSkeleton from '../../components/product/ProductCard/ProductCardSkeleton';
-import Pagination from '../../components/common/Pagination/Pagination';
+import ProductGrid from '../../components/product/ProductGrid/ProductGrid';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -372,53 +370,25 @@ export default function ProductSearch() {
 
           {/* Product Grid Area */}
           <div className="flex-1 min-w-0">
-            {/* Loading overlay for page transitions */}
-            <div className={`relative ${isFetching && !isLoading ? 'opacity-60' : ''} transition-opacity`}>
-              {isFetching && !isLoading && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-white dark:bg-dark-card px-4 py-2 rounded-full shadow-lg border border-light-border dark:border-dark-border flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                  <span className="text-sm text-light-muted dark:text-dark-muted">Đang tải...</span>
-                </div>
-              )}
-
-              {/* Product Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
-                {isLoading ? (
-                  [...Array(ITEMS_PER_PAGE)].map((_, i) => <ProductCardSkeleton key={i} />)
-                ) : products.length > 0 ? (
-                  products.map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))
-                ) : (
-                  <div className="col-span-full py-20 text-center card-surface rounded-2xl border-dashed">
-                    <Search className="w-12 h-12 text-light-muted dark:text-dark-muted mx-auto mb-4 opacity-30" />
-                    <p className="text-lg font-medium text-light-text dark:text-dark-text mb-2">
-                      Không tìm thấy sản phẩm
-                    </p>
-                    <p className="text-sm text-light-muted dark:text-dark-muted mb-4">
-                      Thử thay đổi bộ lọc khoảng giá hoặc danh mục tìm kiếm
-                    </p>
-                    <button
-                      onClick={handleResetFilters}
-                      className="text-primary font-semibold hover:underline"
-                    >
-                      Xóa tất cả bộ lọc
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Pagination */}
-            {!isLoading && meta.totalPages > 1 && (
-              <Pagination
-                currentPage={page}
-                totalPages={meta.totalPages}
-                totalItems={meta.totalItems}
-                itemsPerPage={ITEMS_PER_PAGE}
-                onPageChange={handlePageChange}
-              />
-            )}
+            <ProductGrid
+              products={products}
+              isLoading={isLoading}
+              isFetching={isFetching}
+              skeletonCount={ITEMS_PER_PAGE}
+              gridClassName="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5"
+              emptyIcon={Search}
+              emptyTitle="Không tìm thấy sản phẩm"
+              emptyDescription="Thử thay đổi bộ lọc khoảng giá hoặc danh mục tìm kiếm"
+              emptyActionText={hasActiveFilters ? 'Xóa tất cả bộ lọc' : undefined}
+              onEmptyAction={hasActiveFilters ? handleResetFilters : undefined}
+              pagination={{
+                currentPage: page,
+                totalPages: meta.totalPages,
+                totalItems: meta.totalItems,
+                itemsPerPage: ITEMS_PER_PAGE,
+                onPageChange: handlePageChange,
+              }}
+            />
           </div>
         </div>
       </div>

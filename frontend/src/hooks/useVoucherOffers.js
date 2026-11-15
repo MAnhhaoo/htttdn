@@ -8,7 +8,6 @@ export function useVoucherOffers(productIds) {
     queryFn: () => voucherService.catalog(ids),
     enabled: ids.length > 0,
     staleTime: 15000,
-    refetchInterval: 30000,
   });
   return query.data || [];
 }

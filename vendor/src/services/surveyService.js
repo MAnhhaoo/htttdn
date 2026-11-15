@@ -30,10 +30,14 @@ export const surveyService = {
   },
 
   extendSurvey: async (id, endDate) => {
-    return apiClient.patch(/surveys//extend, { endDate });
+    return apiClient.patch(`/surveys/${id}/extend`, { endDate });
   },
 
   deleteSurvey: async (id) => {
+    return apiClient.delete(`/surveys/${id}`);
+  },
+
+  remove: async (id) => {
     return apiClient.delete(`/surveys/${id}`);
   },
 

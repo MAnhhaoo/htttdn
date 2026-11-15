@@ -4,7 +4,6 @@ import {
   Heart,
   ShoppingCart,
   ShoppingBag,
-  TrendingUp,
   Store,
   RefreshCw,
   Search,
@@ -13,14 +12,12 @@ import {
   BarChart3,
   Calendar,
   Sparkles,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
   Award,
-  CircleDollarSign,
   UserCheck,
 } from 'lucide-react';
 import { reportsApi } from '../../api';
+import { PaginationFooter } from '../../components/ui';
+import { formatPrice, formatDateOnly } from '../../utils/formatHelpers';
 
 export default function CustomerAnalytics() {
   const [loading, setLoading] = useState(true);
@@ -57,19 +54,7 @@ export default function CustomerAnalytics() {
     setClientPage(1);
   }, [ageFilter, search]);
 
-  const formatPrice = (val) => {
-    if (!val && val !== 0) return '0 ₫';
-    return Number(val).toLocaleString('vi-VN') + ' ₫';
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
+  const formatDate = (dateStr) => formatDateOnly(dateStr, '—');
 
   const overview = data?.overview;
   const ageGroups = data?.ageGroups || [];
@@ -157,7 +142,7 @@ export default function CustomerAnalytics() {
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm relative overflow-hidden">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tỷ lệ giới tính</span>
-            <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950 flex items-center justify-center text-purple-600">
+            <div className="w-10 h-10 rounded-xl bg-[#FBF7EC] dark:bg-[#C9A84C]/15 flex items-center justify-center text-[#B08A2E] dark:text-[#DEC47E]">
               <PieChart className="w-5 h-5" />
             </div>
           </div>
@@ -206,8 +191,8 @@ export default function CustomerAnalytics() {
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         isDominant
-                          ? 'bg-gradient-to-r from-amber-500 to-indigo-600'
-                          : 'bg-indigo-500'
+                          ? 'bg-gradient-to-r from-[#C9A84C] to-[#1A3A2C]'
+                          : 'bg-[#2A5C4A]'
                       }`}
                       style={{ width: `${Math.max(grp.percentage, grp.count > 0 ? 3 : 0)}%` }}
                     />
@@ -381,12 +366,12 @@ export default function CustomerAnalytics() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-[#FBF7EC] dark:bg-[#C9A84C]/15 text-[#B08A2E] dark:text-[#DEC47E] flex items-center justify-center">
                   <ShoppingCart className="w-4 h-4" />
                 </div>
                 <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100">Top Cửa hàng ĐƯỢC QUAN TÂM (Giỏ hàng)</h3>
               </div>
-              <span className="text-xs font-semibold text-blue-600">Trong giỏ</span>
+              <span className="text-xs font-semibold text-[#B08A2E] dark:text-[#DEC47E]">Trong giỏ</span>
             </div>
 
             <div className="space-y-3">
@@ -404,7 +389,7 @@ export default function CustomerAnalytics() {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="font-bold text-blue-600 dark:text-blue-400 block">{v.cartCount} SP</span>
+                    <span className="font-bold text-[#1A3A2C] dark:text-[#DEC47E] block">{v.cartCount} SP</span>
                     <span className="text-[10px] text-slate-400">{v.totalItems} số lượng</span>
                   </div>
                 </div>
@@ -560,29 +545,13 @@ export default function CustomerAnalytics() {
         </div>
 
         {/* Client Pagination */}
-        {clientData.totalPages > 1 && (
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 text-xs">
-            <span className="text-slate-500">
-              Trang {clientData.page} / {clientData.totalPages} (Tổng {clientData.totalItems} khách hàng)
-            </span>
-            <div className="flex gap-2">
-              <button
-                disabled={clientPage <= 1}
-                onClick={() => setClientPage((p) => Math.max(1, p - 1))}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 disabled:opacity-40"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                disabled={clientPage >= clientData.totalPages}
-                onClick={() => setClientPage((p) => p + 1)}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 disabled:opacity-40"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
+        <PaginationFooter
+          page={clientData.page || clientPage}
+          totalPages={clientData.totalPages}
+          totalItems={clientData.totalItems}
+          itemLabel="khách hàng"
+          onPageChange={setClientPage}
+        />
       </div>
     </div>
   );

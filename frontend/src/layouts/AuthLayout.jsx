@@ -3,22 +3,22 @@ import { ArrowLeft, Sparkles, ShieldCheck, Truck, Crown, Star } from 'lucide-rea
 
 export default function AuthLayout() {
   return (
-    <div className="min-h-screen flex font-sans bg-[#faf7f2] relative overflow-hidden">
+    <div className="min-h-screen flex font-sans bg-[#FAF7F2] dark:bg-[#0B110E] text-[#1A1A1A] dark:text-[#F0EDE6] relative overflow-hidden transition-colors">
       {/* Ambient background for mobile & right-side bleed */}
       <div className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute -top-32 -right-32 w-[520px] h-[520px] rounded-full bg-[#cca471]/20 blur-[120px]" />
-        <div className="absolute -bottom-40 left-1/3 w-[600px] h-[600px] rounded-full bg-[#1a4f40]/10 blur-[140px]" />
+        <div className="absolute -top-32 -right-32 w-[520px] h-[520px] rounded-full bg-[#C9A84C]/20 dark:bg-[#C9A84C]/12 blur-[120px]" />
+        <div className="absolute -bottom-40 left-1/3 w-[600px] h-[600px] rounded-full bg-[#1A3A2C]/10 dark:bg-[#1A3A2C]/35 blur-[140px]" />
         <div
-          className="absolute inset-0 opacity-[0.35]"
+          className="absolute inset-0 opacity-[0.35] dark:opacity-[0.15]"
           style={{
-            backgroundImage: 'radial-gradient(#1a4f40 0.65px, transparent 0.65px)',
+            backgroundImage: 'radial-gradient(#1A3A2C 0.65px, transparent 0.65px)',
             backgroundSize: '28px 28px',
           }}
         />
       </div>
 
       {/* Left Side - Luxury Editorial Banner */}
-      <div className="hidden lg:flex lg:w-[52%] bg-gradient-to-br from-[#0a231b] via-[#154235] to-[#0d2d23] text-white flex-col justify-between p-12 xl:p-16 relative overflow-hidden shadow-2xl z-10">
+      <div className="hidden lg:flex lg:w-[52%] bg-gradient-to-br from-[#08130E] via-[#1A3A2C] to-[#0E2219] text-white flex-col justify-between p-12 xl:p-16 relative overflow-hidden shadow-2xl z-10 border-r border-[#1A3327]">
         {/* Aurora Mesh Glows */}
         <div className="pointer-events-none absolute -top-28 -left-28 w-[520px] h-[520px] rounded-full bg-emerald-400/15 blur-[130px]" />
         <div className="pointer-events-none absolute top-1/3 -right-24 w-[460px] h-[460px] rounded-full bg-[#cca471]/25 blur-[120px]" />
@@ -123,12 +123,12 @@ export default function AuthLayout() {
       {/* Right Side - Form Container with Luxury Ambient Background */}
       <div className="w-full lg:w-[48%] flex items-center justify-center p-6 sm:p-10 lg:p-14 relative overflow-y-auto max-h-screen z-10">
         {/* Decorative warm glow rings behind form card */}
-        <div className="pointer-events-none absolute top-12 right-12 w-64 h-64 rounded-full bg-gradient-to-br from-[#cca471]/20 to-transparent blur-3xl" />
-        <div className="pointer-events-none absolute bottom-12 left-12 w-72 h-72 rounded-full bg-gradient-to-tr from-[#1a4f40]/15 to-transparent blur-3xl" />
+        <div className="pointer-events-none absolute top-12 right-12 w-64 h-64 rounded-full bg-gradient-to-br from-[#C9A84C]/20 to-transparent blur-3xl" />
+        <div className="pointer-events-none absolute bottom-12 left-12 w-72 h-72 rounded-full bg-gradient-to-tr from-[#1A3A2C]/15 dark:from-[#2A5C4A]/25 to-transparent blur-3xl" />
 
-        <div className="w-full max-w-[460px] bg-white/85 backdrop-blur-xl rounded-3xl p-8 sm:p-10 shadow-[0_24px_60px_-15px_rgba(26,79,64,0.14)] border border-white/90 ring-1 ring-[#1a4f40]/10 relative">
+        <div className="w-full max-w-[460px] bg-white/90 dark:bg-[#131B17]/95 backdrop-blur-xl rounded-3xl p-8 sm:p-10 shadow-[0_24px_60px_-15px_rgba(26,58,44,0.14)] dark:shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65)] border border-white/90 dark:border-[#223029] ring-1 ring-[#1A3A2C]/10 dark:ring-[#C9A84C]/20 relative transition-colors">
           {/* Subtle top gold/emerald accent bar */}
-          <div className="absolute top-0 inset-x-10 h-1 rounded-b-full bg-gradient-to-r from-transparent via-[#1a4f40] to-transparent opacity-75" />
+          <div className="absolute top-0 inset-x-10 h-1 rounded-b-full bg-gradient-to-r from-transparent via-[#1A3A2C] dark:via-[#C9A84C] to-transparent opacity-80" />
           <Outlet />
         </div>
       </div>

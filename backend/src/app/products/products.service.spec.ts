@@ -13,7 +13,8 @@ describe('ProductService', () => {
   const productDelegate = {
     count: jest.fn(),
     findMany: jest.fn(),
-    findFirst: jest.fn()};
+    findFirst: jest.fn()
+  };
 
   const service = new ProductService(
     { extended: { product: productDelegate } } as unknown as PrismaService,
@@ -37,7 +38,8 @@ describe('ProductService', () => {
     category: {
       id: '88888888-8888-4888-8888-888888888888',
       name: 'Shoes',
-      slug: 'shoes'},
+      slug: 'shoes'
+    },
     colors: [
       {
         id: '44444444-4444-4444-8444-444444444444',
@@ -56,7 +58,8 @@ describe('ProductService', () => {
             price: new Prisma.Decimal('150.50'),
             createdAt: new Date('2026-01-01T00:00:00.000Z'),
             updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-            deletedAt: null},
+            deletedAt: null
+          },
           {
             id: '66666666-6666-4666-8666-666666666666',
             productColorId: '44444444-4444-4444-8444-444444444444',
@@ -65,9 +68,12 @@ describe('ProductService', () => {
             price: new Prisma.Decimal('200'),
             createdAt: new Date('2026-01-01T00:00:00.000Z'),
             updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-            deletedAt: null},
-        ]},
-    ]};
+            deletedAt: null
+          },
+        ]
+      },
+    ]
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -79,20 +85,24 @@ describe('ProductService', () => {
   it('returns only active public products with catalog summary fields', async () => {
     const result = await service.getProducts({
       page: 1,
-      itemPerPage: 10});
+      itemPerPage: 10
+    });
 
     expect(productDelegate.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           deletedAt: null,
           status: ProductStatus.active,
-          category: { deletedAt: null }}}),
+          category: { deletedAt: null }
+        }
+      }),
     );
     expect(result.list[0]).toMatchObject({
       thumbnail: '/uploads/products/sneaker.webp',
       minPrice: '150.5',
       maxPrice: '200',
-      totalStock: 5});
+      totalStock: 5
+    });
   });
 
   it('lets a vendor filter their own products by status', async () => {
@@ -106,7 +116,9 @@ describe('ProductService', () => {
         where: {
           deletedAt: null,
           vendorId: product.vendorId,
-          status: ProductStatus.inactive}}),
+          status: ProductStatus.inactive
+        }
+      }),
     );
   });
 
@@ -119,7 +131,9 @@ describe('ProductService', () => {
           id: product.id,
           deletedAt: null,
           status: ProductStatus.active,
-          category: { deletedAt: null }}}),
+          category: { deletedAt: null }
+        }
+      }),
     );
 
     productDelegate.findFirst.mockResolvedValueOnce(null);
@@ -167,15 +181,14 @@ describe('ProductService â€“ ownership and shared rules', () => {
     const tx = {
       product: { update: jest.fn().mockResolvedValue({ id: productId, vendorId }) },
       productColor: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn(),
+        updateMany: jest.fn(),
         create: jest.fn().mockResolvedValue({ id: 'new-color' }),
       },
       productVariant: {
-        findFirst: jest.fn().mockResolvedValue(null),
-        findUnique: jest.fn().mockResolvedValue(null),
         update: jest.fn(),
+        updateMany: jest.fn(),
         create: jest.fn(),
       },
     };
@@ -207,15 +220,24 @@ describe('ProductService â€“ ownership and shared rules', () => {
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
 
-    expect(tx.productColor.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: otherColorId, productId, deletedAt: null } }),
-    );
+    expect(tx.productColor.findMany).toHaveBeenCalledWith({
+      where: { productId },
+      include: { variants: true },
+    });
     expect(tx.productColor.update).not.toHaveBeenCalled();
   });
 
   it('rejects a variant id that does not belong to the color being updated', async () => {
     const { service, tx } = setup();
-    tx.productColor.findFirst.mockResolvedValue({ id: 'own-color' });
+    tx.productColor.findMany.mockResolvedValue([
+      {
+        id: 'own-color',
+        productId,
+        color: 'Red',
+        deletedAt: null,
+        variants: [],
+      },
+    ]);
 
     await expect(
       service.updateProduct(
@@ -234,18 +256,31 @@ describe('ProductService â€“ ownership and shared rules', () => {
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
 
-    expect(tx.productVariant.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: otherVariantId, productColorId: 'own-color', deletedAt: null },
-      }),
-    );
+    expect(tx.productColor.findMany).toHaveBeenCalledWith({
+      where: { productId },
+      include: { variants: true },
+    });
     expect(tx.productVariant.update).not.toHaveBeenCalled();
   });
 
   it('restores a soft-deleted size instead of violating the unique constraint', async () => {
     const { service, tx } = setup();
-    tx.productColor.findFirst.mockResolvedValue({ id: 'own-color' });
-    tx.productVariant.findUnique.mockResolvedValue({ id: 'old-variant', deletedAt: new Date() });
+    tx.productColor.findMany.mockResolvedValue([
+      {
+        id: 'own-color',
+        productId,
+        color: 'Red',
+        deletedAt: null,
+        variants: [
+          {
+            id: 'old-variant',
+            productColorId: 'own-color',
+            size: 'S',
+            deletedAt: new Date(),
+          },
+        ],
+      },
+    ]);
 
     await service.updateProduct(
       productId,
@@ -302,5 +337,232 @@ describe('ProductService â€“ ownership and shared rules', () => {
     }
     expect(productDelegate.findFirst).not.toHaveBeenCalled();
     expect(service).toBeDefined();
+  });
+
+  it('enriches catalog products with soldQuantity from non-cancelled orders', async () => {
+    const prodId = '33333333-3333-4333-8333-333333333333';
+    const sampleProduct = {
+      id: prodId,
+      categoryId: '88888888-8888-4888-8888-888888888888',
+      vendorId: '11111111-1111-4111-8111-111111111111',
+      name: 'Sneaker',
+      slug: 'sneaker',
+      description: null,
+      status: ProductStatus.active,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      deletedAt: null,
+      category: { id: '88888888-8888-4888-8888-888888888888', name: 'Shoes', slug: 'shoes' },
+      vendor: { id: '11111111-1111-4111-8111-111111111111', storeName: 'Shop A', address: 'Quận 1, TP. Hồ Chí Minh' },
+      colors: [
+        {
+          id: '44444444-4444-4444-8444-444444444444',
+          productId: prodId,
+          color: 'Black',
+          imageUrls: ['/uploads/products/sneaker.webp'],
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          deletedAt: null,
+          variants: [
+            {
+              id: '55555555-5555-4555-8555-555555555555',
+              productColorId: '44444444-4444-4444-8444-444444444444',
+              stock: 3,
+              size: 'M',
+              price: new Prisma.Decimal('150000'),
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+              deletedAt: null,
+            },
+          ],
+        },
+      ],
+    };
+
+    const delegate = {
+      count: jest.fn().mockResolvedValue(1),
+      findMany: jest.fn().mockResolvedValue([sampleProduct]),
+      findFirst: jest.fn().mockResolvedValue(sampleProduct),
+    };
+    const queryRaw = jest.fn().mockResolvedValue([{ productId: prodId, soldQuantity: 42n }]);
+    const enrichedService = new ProductService(
+      { extended: { product: delegate, $queryRaw: queryRaw } } as unknown as PrismaService,
+      new PaginationUtilService(),
+      new QueryUtilService(),
+      new StringUtilService(),
+      { emitProductUpdated: jest.fn() } as unknown as RealtimeService,
+    );
+
+    const detail = await enrichedService.getProductById(prodId);
+    expect(detail.soldQuantity).toBe(42);
+    expect((detail as any).vendor.address).toBe('Quận 1, TP. Hồ Chí Minh');
+
+    const rawSqlArg = queryRaw.mock.calls[0][0];
+    const sqlText = Array.isArray(rawSqlArg?.strings)
+      ? rawSqlArg.strings.join('?')
+      : String(rawSqlArg);
+    expect(sqlText).not.toContain('deletedAt');
+    expect(sqlText).toContain(`'cancelled'::"OrderStatus"`);
+
+    queryRaw.mockRejectedValueOnce(new Error('DB transient failure'));
+    const fallbackList = await enrichedService.getProducts({ page: 1, itemPerPage: 10 });
+    expect(fallbackList.list).toHaveLength(1);
+    expect(fallbackList.list[0].soldQuantity).toBe(0);
+  });
+
+  it('soft-deletes vendor product (hidden on UI, preserved in database) and frees its slug', async () => {
+    const deleteMock = jest.fn();
+    const updateMock = jest.fn().mockImplementation(async ({ data }) => ({
+      id: productId,
+      vendorId,
+      ...data,
+    }));
+    const findFirstMock = jest.fn().mockResolvedValue({
+      id: productId,
+      slug: 'xit-khoang-aspasia',
+    });
+    const realtimeMock = { emitProductUpdated: jest.fn() };
+
+    const softDeleteService = new ProductService(
+      {
+        extended: {
+          product: {
+            findFirst: findFirstMock,
+            update: updateMock,
+            delete: deleteMock,
+          },
+        },
+      } as unknown as PrismaService,
+      new PaginationUtilService(),
+      new QueryUtilService(),
+      new StringUtilService(),
+      realtimeMock as unknown as RealtimeService,
+    );
+
+    const deleted = await softDeleteService.deleteProduct(productId, vendorId, false);
+
+    expect(findFirstMock).toHaveBeenCalledWith({
+      where: { id: productId, vendorId, deletedAt: null },
+      select: { id: true, slug: true },
+    });
+    expect(deleteMock).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: productId },
+      data: expect.objectContaining({
+        status: ProductStatus.inactive,
+        deletedAt: expect.any(Date),
+        slug: expect.stringMatching(/^xit-khoang-aspasia-deleted-\d+$/),
+      }),
+    });
+    expect(deleted.deletedAt).toBeInstanceOf(Date);
+    expect(deleted.status).toBe(ProductStatus.inactive);
+    expect(realtimeMock.emitProductUpdated).toHaveBeenCalledWith(productId, vendorId);
+  });
+
+  it('soft-deletes removed colors and variants in syncColors without physical deletion', async () => {
+    const { service, tx } = setup();
+    tx.productColor.findMany.mockResolvedValue([
+      {
+        id: 'kept-color',
+        productId,
+        color: 'Black',
+        deletedAt: null,
+        variants: [
+          { id: 'kept-var', productColorId: 'kept-color', size: 'S', deletedAt: null },
+          { id: 'removed-var', productColorId: 'kept-color', size: 'M', deletedAt: null },
+        ],
+      },
+      {
+        id: 'removed-color',
+        productId,
+        color: 'White',
+        deletedAt: null,
+        variants: [
+          { id: 'removed-color-var', productColorId: 'removed-color', size: 'L', deletedAt: null },
+        ],
+      },
+    ]);
+
+    await service.updateProduct(
+      productId,
+      {
+        colors: [
+          {
+            id: 'kept-color',
+            color: 'Black',
+            imageUrls: [],
+            variants: [{ id: 'kept-var', size: 'S', price: 120, stock: 4 }],
+          },
+        ],
+      },
+      vendorId,
+    );
+
+    expect(tx.productVariant.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['removed-var'] } },
+      data: { deletedAt: expect.any(Date) },
+    });
+    expect(tx.productVariant.updateMany).toHaveBeenCalledWith({
+      where: { productColorId: { in: ['removed-color'] }, deletedAt: null },
+      data: { deletedAt: expect.any(Date) },
+    });
+    expect(tx.productColor.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['removed-color'] } },
+      data: { deletedAt: expect.any(Date) },
+    });
+  });
+
+  it('soft-deletes and restores product favorites while preserving rows', async () => {
+    const clientId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const favoriteDelegate = {
+      upsert: jest.fn().mockResolvedValue({ id: 'fav-1', clientId, productId, deletedAt: null }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn().mockResolvedValue([]),
+    };
+    const productDelegateLocal = {
+      findFirst: jest.fn().mockResolvedValue({
+        id: productId,
+        vendorId,
+        status: ProductStatus.active,
+        deletedAt: null,
+        colors: [],
+      }),
+    };
+    const favService = new ProductService(
+      {
+        extended: {
+          product: productDelegateLocal,
+          productFavorite: favoriteDelegate,
+        },
+      } as unknown as PrismaService,
+      new PaginationUtilService(),
+      new QueryUtilService(),
+      new StringUtilService(),
+      { emitProductUpdated: jest.fn() } as unknown as RealtimeService,
+    );
+
+    await favService.addFavorite(productId, clientId);
+    expect(favoriteDelegate.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { clientId_productId: { clientId, productId } },
+        create: { clientId, productId },
+        update: { deletedAt: null },
+      }),
+    );
+
+    const removed = await favService.removeFavorite(productId, clientId);
+    expect(removed).toEqual({ productId, favorited: false });
+    expect(favoriteDelegate.updateMany).toHaveBeenCalledWith({
+      where: { clientId, productId, deletedAt: null },
+      data: { deletedAt: expect.any(Date) },
+    });
+
+    const status = await favService.favoriteStatus(productId, clientId);
+    expect(status).toEqual({ productId, favorited: false });
+    expect(favoriteDelegate.findFirst).toHaveBeenCalledWith({
+      where: { clientId, productId, deletedAt: null },
+      select: { id: true },
+    });
   });
 });

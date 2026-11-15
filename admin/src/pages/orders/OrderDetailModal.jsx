@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Modal, Button, Badge } from '../../components/ui';
+import { Button, Badge } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../utils/formatHelpers';
 import {
+  computeBatchOrderFinancials,
   extractOrderEmployees,
   extractOrderVendors,
   formatShortOrderCode,
@@ -19,8 +20,6 @@ import {
   Package, 
   Clock, 
   ShieldAlert,
-  RotateCcw,
-  CreditCard,
   User,
   MapPin,
   FileText,
@@ -34,7 +33,7 @@ import {
   X
 } from 'lucide-react';
 
-export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onStatusChange, onOrderUpdated, inline = false }) {
+export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onStatusChange, onOrderUpdated }) {
   // Assignment Modal State
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [employees, setEmployees] = useState([]);
@@ -50,7 +49,7 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
     setSelectedSubIndex(0);
   }, [rawOrder?.id, isOpen]);
 
-  if (!rawOrder || (!inline && !isOpen)) return null;
+  if (!rawOrder) return null;
 
   const subOrders = rawOrder.subOrders && rawOrder.subOrders.length > 0 ? rawOrder.subOrders : [rawOrder];
   const isMergedGroup = subOrders.length > 1;
@@ -83,24 +82,8 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
   const totalQuantity = orderItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
   const appliedVouchers = order.voucherDetails || [];
 
-  // Tổng hợp toàn bộ cụm đơn nếu là hóa đơn gộp
-  const groupTotalSubtotal = subOrders.reduce(
-    (s, so) => s + Number(so.subtotalAmount ?? so.totalAmount ?? 0),
-    0
-  );
-  const groupTotalDiscount = subOrders.reduce(
-    (s, so) => s + Number(so.discountAmount || 0),
-    0
-  );
-  const groupTotalAmount = subOrders.reduce(
-    (s, so) => s + Number(so.totalAmount || 0),
-    0
-  );
-  const groupTotalQty = subOrders.reduce(
-    (s, so) =>
-      s + (so.details || []).reduce((acc, d) => acc + Number(d.quantity || 0), 0),
-    0
-  );
+  // Tổng hợp tài chính toàn bộ cụm đơn (tách rõ đơn hiệu lực và đơn đã hủy)
+  const batchFin = computeBatchOrderFinancials(subOrders);
 
   const getStatusBadgeVariant = getOrderStatusBadgeVariant;
 
@@ -129,10 +112,10 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
     handlingEmp: assignedHandling,
     shippingEmp: assignedShipper,
     exceptionEmp: assignedException,
-    handlingHistory,
-    shippingHistory,
-    exceptionHistory,
   } = extractOrderEmployees(order);
+
+  const shipments = order.shipments || [];
+  const isEditable = order.status !== 'completed' && order.status !== 'cancelled';
 
   // Tái sử dụng hàm phân loại nhân viên theo 3 phòng ban từ orderHelpers.js
   const {
@@ -227,13 +210,13 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
 
   const footerContent = (
     <>
-      <Button variant="ghost" size={inline ? 'sm' : 'md'} onClick={onClose}>Đóng</Button>
+      <Button variant="ghost" size="sm" onClick={onClose}>Đóng</Button>
       {onStatusChange && (
         <div className="flex flex-wrap gap-2 ml-auto">
           {order.status === 'pending' && (
             <Button
-              size={inline ? 'sm' : 'md'}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              size="sm"
+              className="bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white"
               onClick={() => onStatusChange(order.id, 'confirmed')}
             >
               Duyệt đơn #{selectedSubIndex + 1} (Confirmed)
@@ -241,7 +224,7 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
           )}
           {order.status === 'shipping' && (
             <Button
-              size={inline ? 'sm' : 'md'}
+              size="sm"
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
               onClick={() => onStatusChange(order.id, 'completed', 'Admin xác nhận hoàn thành đơn hàng')}
             >
@@ -252,7 +235,7 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
           {order.status !== 'completed' && order.status !== 'cancelled' && (
             <Button
               variant="danger"
-              size={inline ? 'sm' : 'md'}
+              size="sm"
               onClick={() => {
                 const defaultReason = escalationLog?.note
                   ? `Phê duyệt sự cố từ Shipper: ${escalationLog.note}`
@@ -275,7 +258,7 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
   );
 
   const detailContent = (
-    <div className={inline ? 'space-y-4' : 'space-y-6'}>
+    <div className="space-y-4">
 
           {/* =====================================================================
               NẾU LÀ HÓA ĐƠN GỘP (2+ ĐƠN HÀNG): HIỂN THỊ DANH SÁCH 2 ĐƠN HÀNG RA NGAY ĐẦU MODAL
@@ -288,23 +271,56 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
                   Hóa đơn gộp gồm {subOrders.length} đơn hàng đặt cùng lượt (Bấm vào từng đơn bên dưới để điều phối chi tiết)
                 </div>
                 <div className="text-xs text-slate-700 dark:text-slate-200 flex flex-wrap items-center gap-3">
-                  <span>Tổng SL: <strong>{groupTotalQty} SP</strong></span>
-                  <span>Tổng tạm tính: <strong>{formatCurrency(groupTotalSubtotal)}</strong></span>
-                  {groupTotalDiscount > 0 && (
-                    <span className="text-emerald-600 dark:text-emerald-400">
-                      Tổng KM: <strong>-{formatCurrency(groupTotalDiscount)}</strong>
-                    </span>
+                  {batchFin.isPartiallyCancelled ? (
+                    <>
+                      <span>SL hiệu lực: <strong>{batchFin.activeQty} SP</strong></span>
+                      <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                        Đã hủy {batchFin.cancelledCount} đơn (-{formatCurrency(batchFin.cancelledAmount)})
+                      </span>
+                      <span>
+                        Thực thu ({batchFin.activeCount}/{batchFin.totalSubCount} đơn):{' '}
+                        <strong className="text-blue-600 dark:text-blue-400 text-sm">
+                          {formatCurrency(batchFin.activeTotalAmount)}
+                        </strong>{' '}
+                        <span className="line-through text-slate-400 text-[11px]">
+                          {formatCurrency(batchFin.originalTotalAmount)}
+                        </span>
+                      </span>
+                    </>
+                  ) : batchFin.isAllCancelled ? (
+                    <>
+                      <span className="text-rose-600 dark:text-rose-400 font-semibold">
+                        Đã hủy toàn bộ {batchFin.totalSubCount}/{batchFin.totalSubCount} đơn
+                      </span>
+                      <span>
+                        Thực thu: <strong className="text-slate-500 text-sm">0 ₫</strong>{' '}
+                        <span className="line-through text-slate-400 text-[11px]">
+                          {formatCurrency(batchFin.originalTotalAmount)}
+                        </span>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Tổng SL: <strong>{batchFin.activeQty} SP</strong></span>
+                      <span>Tổng tạm tính: <strong>{formatCurrency(batchFin.activeSubtotalAmount)}</strong></span>
+                      {batchFin.activeDiscountAmount > 0 && (
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          Tổng KM: <strong>-{formatCurrency(batchFin.activeDiscountAmount)}</strong>
+                        </span>
+                      )}
+                      <span>
+                        Tổng cộng ({subOrders.length} đơn):{' '}
+                        <strong className="text-blue-600 dark:text-blue-400 text-sm">{formatCurrency(batchFin.activeTotalAmount)}</strong>
+                      </span>
+                    </>
                   )}
-                  <span>
-                    Tổng cộng ({subOrders.length} đơn):{' '}
-                    <strong className="text-blue-600 dark:text-blue-400 text-sm">{formatCurrency(groupTotalAmount)}</strong>
-                  </span>
                 </div>
               </div>
 
-              <div className={inline ? 'grid grid-cols-1 gap-2.5' : 'grid grid-cols-1 md:grid-cols-2 gap-3'}>
+              <div className="grid grid-cols-1 gap-2.5">
                 {subOrders.map((so, idx) => {
                   const isSelected = idx === selectedSubIndex;
+                  const isSoCancelled = so.status === 'cancelled';
                   const soDetails = so.details || [];
                   const soQty = soDetails.reduce((s, d) => s + Number(d.quantity || 0), 0);
                   const soSubtotal = Number(so.subtotalAmount ?? so.totalAmount ?? 0);
@@ -316,14 +332,16 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
                       onClick={() => setSelectedSubIndex(idx)}
                       className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                         isSelected
-                          ? 'border-blue-600 bg-white dark:bg-slate-900 ring-2 ring-blue-500/20 shadow-sm'
-                          : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 hover:border-blue-400'
+                          ? 'border-[#1A3A2C] dark:border-[#C9A84C] bg-white dark:bg-slate-900 ring-2 ring-[#2A5C4A]/20 shadow-sm'
+                          : isSoCancelled
+                            ? 'border-rose-200 dark:border-rose-900/50 bg-white/70 dark:bg-slate-900/40 opacity-80 hover:opacity-100'
+                            : 'border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 hover:border-[#2A5C4A]'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2">
                           <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                            isSelected ? 'bg-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                            isSelected ? 'bg-[#1A3A2C] dark:bg-[#2A5C4A] text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
                           }`}>
                             Đơn hàng #{idx + 1}
                           </span>
@@ -364,7 +382,7 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
                               <span className="truncate max-w-[220px]">
                                 • {pName} <span className="text-slate-400">({cName}/{sName})</span> <strong>x{d.quantity}</strong>
                               </span>
-                              <span className="font-mono font-medium">
+                              <span className={`font-mono font-medium ${isSoCancelled ? 'line-through text-slate-400' : ''}`}>
                                 {formatCurrency(Number(d.price || 0) * Number(d.quantity || 0))}
                               </span>
                             </div>
@@ -381,8 +399,21 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
                             </span>
                           )}
                         </div>
-                        <div className="font-bold text-blue-600 dark:text-blue-400">
-                          {formatCurrency(so.totalAmount)}
+                        <div className="text-right">
+                          {isSoCancelled ? (
+                            <span className="inline-flex items-center gap-1">
+                              <span className="line-through text-slate-400 font-semibold">
+                                {formatCurrency(so.totalAmount)}
+                              </span>
+                              <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400">
+                                (Không thu)
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="font-bold text-blue-600 dark:text-blue-400">
+                              {formatCurrency(so.totalAmount)}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -415,35 +446,501 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
             </div>
           )}
           
-          {/* Top Info */}
-          <div className={`grid grid-cols-1 ${inline ? 'gap-4 p-4' : 'md:grid-cols-2 gap-6 p-5'} bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800`}>
+          {/* 1. LÊN ĐẦU: DANH SÁCH SẢN PHẨM TRONG ĐƠN & TỔNG THANH TOÁN / VOUCHER */}
+          <div>
+            <h4 className="text-xs uppercase tracking-wider font-bold text-slate-800 dark:text-slate-100 mb-2.5 flex items-center gap-2">
+              <Package className="w-4 h-4 text-blue-600 shrink-0" />
+              Sản phẩm trong đơn {isMergedGroup ? `#${selectedSubIndex + 1}` : ''} ({orderItems.length} mặt hàng • SL: {totalQuantity})
+            </h4>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {orderItems.map((item, index) => (
+                  <div key={index} className="p-3 flex items-start gap-2.5">
+                    {item.image ? (
+                      <img src={item.image} alt={item.productName} className="w-10 h-10 rounded object-cover border border-slate-200 dark:border-slate-800 shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded bg-slate-100 border border-slate-200 dark:border-slate-800 shrink-0" />
+                    )}
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="text-xs font-medium text-slate-800 dark:text-slate-100 leading-snug">
+                        <span className="font-mono text-slate-400 mr-1.5">#{index + 1}</span>
+                        {item.productName || 'Sản phẩm'}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {item.colorName} • Size {item.size}
+                        {item.productVariant?.sku ? ` • SKU: ${item.productVariant.sku}` : ''}
+                      </p>
+                      <p className="text-[11px] text-indigo-600 dark:text-indigo-400 flex flex-wrap items-center gap-1">
+                        <Store className="w-3 h-3 shrink-0" />
+                        <span>{item.vendorName}</span>
+                        {item.vendorCode && (
+                          <span className="font-mono font-semibold bg-indigo-50 dark:bg-indigo-950/60 px-1 rounded border border-indigo-200 dark:border-indigo-800">
+                            {item.vendorCode}
+                          </span>
+                        )}
+                      </p>
+                      <div className="flex items-center justify-between pt-1 text-xs">
+                        <span className="text-slate-500 dark:text-slate-400">
+                          {formatCurrency(item.price)} <strong className="text-slate-700 dark:text-slate-200">x{item.quantity}</strong>
+                        </span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-100">
+                          {formatCurrency(item.price * item.quantity)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="px-3 py-2 bg-slate-50/80 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs font-semibold">
+                <span className="text-slate-600 dark:text-slate-300">
+                  Tạm tính (<span className="text-blue-600 dark:text-blue-400 font-bold">{totalQuantity} SP</span>):
+                </span>
+                <span className="text-slate-800 dark:text-slate-100 font-bold">
+                  {formatCurrency(order.subtotalAmount ?? order.totalAmount)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Khuyến mãi áp dụng (VoucherDetail) & Tổng thanh toán */}
+          <div className="grid grid-cols-1 gap-2.5">
+            {/* Voucher Detail Box */}
+            <div className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl p-3 border border-emerald-200/70 dark:border-emerald-900/50 space-y-2">
+              <h5 className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                <TicketPercent className="w-4 h-4 text-emerald-600 shrink-0" />
+                Khuyến mãi áp dụng
+              </h5>
+              {appliedVouchers.length > 0 ? (
+                <div className="space-y-1.5">
+                  {appliedVouchers.map((vd, idx) => (
+                    <div
+                      key={vd.id || idx}
+                      className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/70 text-xs flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-[10px]">
+                            #{vd.sequence || idx + 1}
+                          </span>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-100">
+                            {vd.voucher?.code || 'VOUCHER'}
+                          </span>
+                          <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+                            {vd.voucher?.scope === 'vendor' ? 'Shop' : 'Sàn'}
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                          {vd.voucher?.description || 'Khuyến mãi đơn hàng'} • Đủ ĐK: {formatCurrency(vd.eligibleAmount || 0)}
+                        </p>
+                      </div>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
+                        -{formatCurrency(vd.discountAmount || 0)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : Number(order.discountAmount) > 0 ? (
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                  Giảm giá khuyến mãi trực tiếp: <strong>-{formatCurrency(order.discountAmount)}</strong>
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500 italic">
+                  Không áp dụng mã khuyến mãi (Voucher).
+                </p>
+              )}
+            </div>
+
+            {/* Summary Totals */}
+            <div className="w-full bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-800 space-y-1.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400">Tổng số lượng</span>
+                <span className="font-semibold text-slate-800 dark:text-slate-100">{totalQuantity} sản phẩm</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-500 dark:text-slate-400">Tạm tính (Subtotal)</span>
+                <span className="font-medium text-slate-800 dark:text-slate-100">{formatCurrency(order.subtotalAmount ?? order.totalAmount)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400">
+                <span>Giảm giá khuyến mãi</span>
+                <span className="font-semibold">-{formatCurrency(order.discountAmount || 0)}</span>
+              </div>
+              <div className="flex justify-between text-xs pb-1.5 border-b border-slate-200 dark:border-slate-800">
+                <span className="text-slate-500 dark:text-slate-400">Phí vận chuyển</span>
+                <span className="font-medium text-slate-800 dark:text-slate-100">
+                  {Number(order.shippingFee) > 0 ? formatCurrency(order.shippingFee) : 'Miễn phí'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-1">
+                <span className="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                  {order.status === 'cancelled'
+                    ? `${isMergedGroup ? `Đơn #${selectedSubIndex + 1} ` : 'Đơn '}đã hủy (Không thu)`
+                    : isMergedGroup
+                      ? `Thành tiền đơn #${selectedSubIndex + 1}`
+                      : 'Tổng thanh toán'}
+                </span>
+                {order.status === 'cancelled' ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="line-through text-slate-400 text-xs">
+                      {formatCurrency(order.totalAmount)}
+                    </span>
+                    <span className="font-bold text-rose-600 dark:text-rose-400 text-base">0 ₫</span>
+                  </span>
+                ) : (
+                  <span className="font-bold text-blue-600 dark:text-blue-400 text-base">{formatCurrency(order.totalAmount)}</span>
+                )}
+              </div>
+              {isMergedGroup && (
+                <div className="pt-2 border-t border-indigo-200 dark:border-indigo-800 space-y-1">
+                  {batchFin.isPartiallyCancelled ? (
+                    <>
+                      <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                        <span>Tổng đặt ban đầu ({batchFin.totalSubCount} đơn)</span>
+                        <span className="line-through">{formatCurrency(batchFin.originalTotalAmount)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-rose-600 dark:text-rose-400 font-medium">
+                        <span>Trừ đơn đã hủy ({batchFin.cancelledCount} đơn)</span>
+                        <span>-{formatCurrency(batchFin.cancelledAmount)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1">
+                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                          Thực thu còn lại ({batchFin.activeCount}/{batchFin.totalSubCount} đơn)
+                        </span>
+                        <span className="font-extrabold text-indigo-600 dark:text-indigo-400 text-base">
+                          {formatCurrency(batchFin.activeTotalAmount)}
+                        </span>
+                      </div>
+                    </>
+                  ) : batchFin.isAllCancelled ? (
+                    <>
+                      <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+                        <span>Tổng đặt ban đầu ({batchFin.totalSubCount} đơn)</span>
+                        <span className="line-through">{formatCurrency(batchFin.originalTotalAmount)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1">
+                        <span className="text-xs font-bold text-rose-600 dark:text-rose-400">
+                          Thực thu (Đã hủy {batchFin.totalSubCount}/{batchFin.totalSubCount} đơn)
+                        </span>
+                        <span className="font-extrabold text-slate-500 dark:text-slate-400 text-base">
+                          0 ₫
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                        Tổng cả {subOrders.length} đơn gộp
+                      </span>
+                      <span className="font-extrabold text-indigo-600 dark:text-indigo-400 text-base">
+                        {formatCurrency(batchFin.activeTotalAmount)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 2. Ở GIỮA: KHỐI HỢP NHẤT NHÂN SỰ (3 BAN NGHIỆ VỤ) & KIỆN HÀNG VẬN CHUYỂN NỘI BỘ */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                  Nhân sự &amp; Vận chuyển {isMergedGroup ? `đơn #${selectedSubIndex + 1}` : 'nội bộ'}
+                </h4>
+                {shipments.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-blue-100/80 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                    {shipments.length} kiện
+                  </span>
+                )}
+              </div>
+              {isEditable && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenAssignModal()}
+                  disabled={assigning}
+                  className="px-2.5 py-1 rounded-lg bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white text-[11px] font-semibold inline-flex items-center gap-1 shadow-xs transition shrink-0"
+                >
+                  <UserCheck className="w-3 h-3" />
+                  Phân công
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              {/* Ban 1: Điều phối & Liên kết Vendor */}
+              <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 shadow-xs flex flex-col justify-between gap-2">
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase flex items-center gap-1">
+                    <Package className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    1. Điều phối &amp; Vendor
+                  </span>
+                  {isEditable ? (
+                    <div className="flex items-center gap-1.5 text-[11px] shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAssignModal(assignedHandling?.id)}
+                        disabled={assigning}
+                        className="font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:underline"
+                        title="Đổi điều phối viên dùng chung cho cả đơn hàng"
+                      >
+                        Đổi
+                      </button>
+                      <span className="text-slate-300 dark:text-slate-700">•</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAutoAssign('handling')}
+                        disabled={assigning}
+                        className="font-medium text-slate-500 hover:text-indigo-600 dark:text-slate-400 inline-flex items-center gap-0.5"
+                        title="Tự động phân công điều phối viên"
+                      >
+                        <Sparkles className="w-3 h-3 text-indigo-500" />
+                        Auto
+                      </button>
+                    </div>
+                  ) : (
+                    assignedHandling && <Badge variant="success" size="sm">Đã giao</Badge>
+                  )}
+                </div>
+
+                {assignedHandling ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs shrink-0">
+                      {assignedHandling.fullName?.charAt(0) || 'Đ'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
+                        {assignedHandling.fullName}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-mono truncate">
+                        {assignedHandling.employeeCode}
+                        {assignedHandling.phone ? ` • ${assignedHandling.phone}` : ''}
+                        {isMergedGroup ? ` • Chung ${subOrders.length} đơn` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">
+                    Chưa chỉ định điều phối {isMergedGroup ? `(chung ${subOrders.length} đơn)` : ''}
+                  </p>
+                )}
+              </div>
+
+              {/* Ban 2 + Kiện hàng & Vận chuyển nội bộ (Đã gộp) */}
+              <div className="p-2.5 rounded-xl border border-blue-200/80 dark:border-blue-800/60 bg-white dark:bg-slate-800/80 shadow-xs flex flex-col justify-between gap-2">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-[11px] font-bold text-blue-700 dark:text-blue-400 uppercase flex items-center gap-1">
+                      <Truck className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      2. Bưu tá &amp; Kiện hàng
+                    </span>
+                    {isEditable ? (
+                      <div className="flex items-center gap-1.5 text-[11px] shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignModal(assignedShipper?.id)}
+                          disabled={assigning}
+                          className="font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline"
+                          title="Chỉnh lại bưu tá giao nhận phụ trách đơn này"
+                        >
+                          Đổi
+                        </button>
+                        <span className="text-slate-300 dark:text-slate-700">•</span>
+                        <button
+                          type="button"
+                          onClick={() => handleAutoAssign('shipping')}
+                          disabled={assigning}
+                          className="font-medium text-slate-500 hover:text-blue-600 dark:text-slate-400 inline-flex items-center gap-0.5"
+                          title="Hệ thống tự động phân công bưu tá"
+                        >
+                          <Sparkles className="w-3 h-3 text-blue-500" />
+                          Auto
+                        </button>
+                      </div>
+                    ) : (
+                      assignedShipper && <Badge variant="success" size="sm">Đã giao</Badge>
+                    )}
+                  </div>
+
+                  {assignedShipper ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs shrink-0">
+                        {assignedShipper.fullName?.charAt(0) || 'S'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
+                          {assignedShipper.fullName}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-mono truncate">
+                          {assignedShipper.employeeCode}
+                          {assignedShipper.phone ? ` • ${assignedShipper.phone}` : ''}
+                          {isMergedGroup ? ` • Riêng đơn #${selectedSubIndex + 1}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-600 dark:text-amber-400 italic">
+                      Chưa phân công bưu tá
+                    </p>
+                  )}
+                </div>
+
+                {/* Thông tin Kiện hàng & Vận chuyển nội bộ tích hợp trực tiếp */}
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-700/70 space-y-1.5">
+                  {shipments.length > 0 ? (
+                    shipments.map((shipment) => {
+                      const hasDifferentCarrier =
+                        shipment.carrier &&
+                        (!assignedShipper || shipment.carrier.id !== assignedShipper.id);
+                      return (
+                        <div
+                          key={shipment.id}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 space-y-1"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate">
+                              {shipment.trackingNumber || `SP-${shipment.id.slice(0, 8)}`}
+                            </span>
+                            <Badge variant={getShipmentBadgeVariant(shipment.status)}>
+                              {getShipmentStatusText(shipment.status)}
+                            </Badge>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-400">
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="w-3 h-3 shrink-0" />
+                              {formatDate(shipment.updatedAt || shipment.createdAt)}
+                            </span>
+                            {hasDifferentCarrier && (
+                              <span className="font-medium text-slate-600 dark:text-slate-300">
+                                {shipment.carrier.fullName}
+                              </span>
+                            )}
+                          </div>
+                          {shipment.failedReason && (
+                            <p className="text-[11px] text-red-600 dark:text-red-400 font-medium bg-red-50 dark:bg-red-950/30 px-2 py-1 rounded border border-red-200/70 dark:border-red-900/50">
+                              Lý do thất bại: {shipment.failedReason}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-[11px] text-slate-400 italic">
+                      Chưa khởi tạo kiện vận chuyển nội bộ
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Ban 3: Xử lý Sự cố & Ngoại lệ */}
+              <div className={`p-2.5 rounded-xl border shadow-xs flex flex-col justify-between gap-2 ${
+                assignedException 
+                  ? 'border-amber-300 dark:border-amber-800/60 bg-amber-50/40 dark:bg-amber-950/20' 
+                  : (showEscalationAlert || order.status === 'cancelled')
+                    ? 'border-red-300 dark:border-red-800/60 bg-red-50/40 dark:bg-red-950/20'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80'
+              }`}>
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 uppercase flex items-center gap-1">
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    3. Sự cố &amp; Ngoại lệ
+                  </span>
+                  {isEditable && (showEscalationAlert || assignedException) ? (
+                    <div className="flex items-center gap-1.5 text-[11px] shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAssignModal(assignedException?.id)}
+                        disabled={assigning}
+                        className="font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:underline"
+                      >
+                        Đổi
+                      </button>
+                      <span className="text-slate-300 dark:text-slate-700">•</span>
+                      <button
+                        type="button"
+                        onClick={() => handleAutoAssign('exception')}
+                        disabled={assigning}
+                        className="font-medium text-slate-500 hover:text-amber-600 dark:text-slate-400 inline-flex items-center gap-0.5"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        Auto
+                      </button>
+                    </div>
+                  ) : (
+                    assignedException && <Badge variant="warning" size="sm">Đang xử lý</Badge>
+                  )}
+                </div>
+
+                {assignedException ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs shrink-0">
+                      {assignedException.fullName?.charAt(0) || 'E'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
+                        {assignedException.fullName}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-mono truncate">
+                        {assignedException.employeeCode} {assignedException.phone ? `• ${assignedException.phone}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ) : (showEscalationAlert || order.status === 'cancelled') ? (
+                  <p className="text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Có sự cố (chờ chỉ định)
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">Không phát sinh sự cố</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Ở DƯỚI CÙNG: THÔNG TIN NGƯỜI NHẬN & THÔNG TIN ĐƠN HÀNG */}
+          <div className="grid grid-cols-1 gap-3.5 p-3.5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800">
             <div>
-              <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5" />
+                Thông tin người nhận
+              </h4>
+              <div className="space-y-1.5 text-xs">
+                <p><span className="text-slate-500 dark:text-slate-400">Họ tên:</span> <span className="font-semibold text-slate-800 dark:text-slate-100">{rawOrder.userName || order.client?.fullName || order.receiverName || 'Khách hàng'}</span></p>
+                {(order.receiverPhone || order.client?.phone) && <p><span className="text-slate-500 dark:text-slate-400">Số ĐT:</span> <span className="font-mono font-medium text-slate-800 dark:text-slate-100">{order.receiverPhone || order.client?.phone}</span></p>}
+                {order.client?.email && <p><span className="text-slate-500 dark:text-slate-400">Email:</span> <span className="font-medium text-slate-800 dark:text-slate-100">{order.client.email}</span></p>}
+                <p className="flex items-start gap-1 pt-0.5">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                  <span className="text-slate-800 dark:text-slate-100">{order.shippingAddress || 'Chưa cung cấp địa chỉ'}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
+              <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5" />
                 Thông tin đơn hàng {isMergedGroup ? `(#${selectedSubIndex + 1} / ${subOrders.length})` : ''}
               </h4>
-              <div className="space-y-1.5 text-sm">
-                <p>
-                  <span className="text-slate-500 dark:text-slate-400">Mã đơn:</span>{' '}
-                  <span
-                    className="font-mono font-semibold text-blue-600 dark:text-blue-400"
-                    title={fullOrderCode}
-                  >
-                    #{shortOrderCode}
-                  </span>
-                </p>
-                <p><span className="text-slate-500 dark:text-slate-400">Ngày tạo:</span> <span className="font-medium text-slate-800 dark:text-slate-100">{formatDate(order.createdAt)}</span></p>
-                <p className="flex items-center gap-2">
-                  <span className="text-slate-500 dark:text-slate-400">Trạng thái:</span> 
+              <div className="space-y-1.5 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p>
+                    <span className="text-slate-500 dark:text-slate-400">Mã đơn:</span>{' '}
+                    <span
+                      className="font-mono font-semibold text-blue-600 dark:text-blue-400"
+                      title={fullOrderCode}
+                    >
+                      #{shortOrderCode}
+                    </span>
+                  </p>
                   <Badge variant={getStatusBadgeVariant(order.status)}>{order.status.toUpperCase()}</Badge>
-                </p>
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1">
-                  <span className="text-slate-500 dark:text-slate-400 block text-xs">Gian hàng cung cấp (Vendor):</span>
+                </div>
+                <p><span className="text-slate-500 dark:text-slate-400">Ngày tạo:</span> <span className="font-medium text-slate-800 dark:text-slate-100">{formatDate(order.createdAt)}</span></p>
+                <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 space-y-1">
+                  <span className="text-slate-500 dark:text-slate-400 block">Gian hàng cung cấp (Vendor):</span>
                   {orderVendors.length > 0 ? (
                     <div className="space-y-1">
                       {orderVendors.map((v) => (
                         <div key={v.id} className="flex flex-wrap items-center gap-1.5">
-                          <span className="inline-flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-100 text-xs">
+                          <span className="inline-flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-100">
                             <Store className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                             {v.name}
                           </span>
@@ -459,20 +956,20 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
                       ))}
                     </div>
                   ) : (
-                    <span className="text-xs text-slate-400 italic">Đơn trực thuộc hệ thống MIVA</span>
+                    <span className="text-slate-400 italic">Đơn trực thuộc hệ thống MIVA</span>
                   )}
                 </div>
-                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div className="pt-1.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
                   <div>
-                    <span className="text-slate-500 dark:text-slate-400 block text-xs">Thanh toán:</span>
-                    <span className="font-medium uppercase text-xs text-slate-700 dark:text-slate-300">
+                    <span className="text-slate-500 dark:text-slate-400">Thanh toán: </span>
+                    <span className="font-semibold uppercase text-slate-700 dark:text-slate-300">
                       {order.payment?.method || order.paymentMethod || 'COD'}
                     </span>
                   </div>
                   <div>
                     {getPaymentStatusBadge(order.payment?.status)}
                     {order.payment?.paidAt && (
-                      <span className="block text-[11px] text-slate-400 text-right mt-0.5">
+                      <span className="block text-[10px] text-slate-400 text-right mt-0.5">
                         {formatDate(order.payment.paidAt)}
                       </span>
                     )}
@@ -480,544 +977,36 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
                 </div>
               </div>
             </div>
-            <div>
-              <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5" />
-                Thông tin người nhận
-              </h4>
-              <div className="space-y-1.5 text-sm">
-                <p><span className="text-slate-500 dark:text-slate-400">Họ tên:</span> <span className="font-medium text-slate-800 dark:text-slate-100">{rawOrder.userName || order.client?.fullName || order.receiverName || 'Khách hàng'}</span></p>
-                {order.client?.email && <p><span className="text-slate-500 dark:text-slate-400">Email:</span> <span className="font-medium text-slate-800 dark:text-slate-100">{order.client.email}</span></p>}
-                {(order.receiverPhone || order.client?.phone) && <p><span className="text-slate-500 dark:text-slate-400">Số ĐT:</span> <span className="font-medium text-slate-800 dark:text-slate-100">{order.receiverPhone || order.client?.phone}</span></p>}
-                <p className="flex items-start gap-1">
-                  <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-800 dark:text-slate-100">{order.shippingAddress || 'Chưa cung cấp địa chỉ'}</span>
-                </p>
-              </div>
-            </div>
           </div>
-
-          {/* Phân công nhân sự theo 3 phòng ban nghiệp vụ */}
-          <div className={`bg-slate-50 dark:bg-slate-900/50 ${inline ? 'p-4' : 'p-5'} rounded-xl border border-slate-200 dark:border-slate-800 space-y-3`}>
-            <div className={inline ? 'flex flex-col items-start gap-2' : 'flex items-center justify-between'}>
-              <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <UserCheck className="w-4 h-4 text-blue-600" />
-                Nhân sự phân công phụ trách đơn #{selectedSubIndex + 1} (3 Ban nghiệp vụ)
-              </h4>
-              {order.status !== 'completed' && order.status !== 'cancelled' && (
-                <button
-                  type="button"
-                  onClick={() => handleOpenAssignModal()}
-                  disabled={assigning}
-                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs transition"
-                >
-                  <UserCheck className="w-3.5 h-3.5" />
-                  Chỉnh lại nhân viên phụ trách
-                </button>
-              )}
-            </div>
-
-            <div className={`grid grid-cols-1 ${inline ? 'gap-2.5' : 'md:grid-cols-3 gap-3'} pt-1`}>
-              {/* Ban 1: Điều phối & Liên kết Vendor */}
-              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 shadow-xs flex flex-col justify-between">
-                <div>
-                  <div className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-400 uppercase flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <Package className="w-3.5 h-3.5 text-indigo-500" />
-                      1. Điều phối &amp; Vendor
-                    </span>
-                    {assignedHandling && <Badge variant="success" size="sm">Đã phân công</Badge>}
-                  </div>
-                  {isMergedGroup && (
-                    <p className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-1 font-medium">
-                      * Dùng chung 1 điều phối viên cho cả {subOrders.length} đơn con
-                    </p>
-                  )}
-                  {assignedHandling ? (
-                    <div className="mt-2.5 flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 flex items-center justify-center font-bold text-xs shrink-0">
-                        {assignedHandling.fullName?.charAt(0) || 'Đ'}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
-                          {assignedHandling.fullName}
-                        </p>
-                        <p className="text-[10px] text-slate-400 font-mono">
-                          {assignedHandling.employeeCode} {assignedHandling.phone ? `• ${assignedHandling.phone}` : ''}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="mt-2.5 text-xs text-slate-400 italic">Chưa chỉ định điều phối</p>
-                  )}
-                </div>
-
-                {order.status !== 'completed' && order.status !== 'cancelled' && (
-                  <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAssignModal(assignedHandling?.id)}
-                      disabled={assigning}
-                      className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:underline inline-flex items-center gap-1"
-                      title="Đổi điều phối viên dùng chung cho cả đơn hàng"
-                    >
-                      <UserCheck className="w-3 h-3" />
-                      Chỉnh điều phối
-                    </button>
-                    <span className="text-slate-300 dark:text-slate-700">•</span>
-                    <button
-                      type="button"
-                      onClick={() => handleAutoAssign('handling')}
-                      disabled={assigning}
-                      className="text-[11px] font-medium text-slate-500 hover:text-indigo-600 dark:text-slate-400 inline-flex items-center gap-1"
-                      title="Tự động phân công 1 điều phối viên cho toàn bộ đơn con"
-                    >
-                      <Sparkles className="w-3 h-3 text-indigo-500" />
-                      Tự động
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Ban 2: Vận chuyển & Giao nhận */}
-              <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 shadow-xs flex flex-col justify-between">
-                <div>
-                  <div className="text-[11px] font-semibold text-blue-700 dark:text-blue-400 uppercase flex items-center justify-between">
-                    <span className="flex items-center gap-1">
-                      <Truck className="w-3.5 h-3.5 text-blue-500" />
-                      2. Bưu tá Giao nhận
-                    </span>
-                    {assignedShipper && <Badge variant="success" size="sm">Đã phân công</Badge>}
-                  </div>
-                  {isMergedGroup && (
-                    <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-1 font-medium">
-                      * Bưu tá riêng cho Đơn #{selectedSubIndex + 1} (chỉ xem đơn này)
-                    </p>
-                  )}
-                  {assignedShipper ? (
-                    <div className="mt-2.5 flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs shrink-0">
-                        {assignedShipper.fullName?.charAt(0) || 'S'}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
-                          {assignedShipper.fullName}
-                        </p>
-                        <p className="text-[10px] text-slate-400 font-mono">
-                          {assignedShipper.employeeCode} {assignedShipper.phone ? `• ${assignedShipper.phone}` : ''}
-                        </p>
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5">
-                          {assignedShipper.department || 'Phòng Vận chuyển & Giao nhận'}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-2.5">
-                      <p className="text-xs text-amber-600 dark:text-amber-400 italic">
-                        Chưa phân công bưu tá
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenAssignModal(assignedShipper?.id)}
-                    disabled={assigning}
-                    className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
-                    title="Admin chỉnh lại bưu tá giao nhận phụ trách đơn này"
-                  >
-                    <UserCheck className="w-3 h-3" />
-                    Chỉnh lại bưu tá
-                  </button>
-                  <span className="text-slate-300 dark:text-slate-700">•</span>
-                  <button
-                    type="button"
-                    onClick={() => handleAutoAssign('shipping')}
-                    disabled={assigning}
-                    className="text-[11px] font-medium text-slate-500 hover:text-blue-600 dark:text-slate-400 inline-flex items-center gap-1"
-                    title="Hệ thống tự động phân công bưu tá từ Phòng Vận chuyển & Giao nhận"
-                  >
-                    <Sparkles className="w-3 h-3 text-blue-500" />
-                    Tự động phân công
-                  </button>
-                </div>
-              </div>
-
-              {/* Ban 3: Xử lý Sự cố & Ngoại lệ */}
-              <div className={`p-3 rounded-xl border shadow-xs ${
-                assignedException 
-                  ? 'border-amber-300 dark:border-amber-800/60 bg-amber-50/40 dark:bg-amber-950/20' 
-                  : (showEscalationAlert || order.status === 'cancelled')
-                    ? 'border-red-300 dark:border-red-800/60 bg-red-50/40 dark:bg-red-950/20'
-                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80'
-              }`}>
-                <div className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 uppercase flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
-                    3. Xử lý Sự cố &amp; Ngoại lệ
-                  </span>
-                  {assignedException && <Badge variant="warning" size="sm">Đang giải quyết</Badge>}
-                </div>
-                {assignedException ? (
-                  <div className="mt-2.5 flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs shrink-0">
-                      {assignedException.fullName?.charAt(0) || 'E'}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-xs text-slate-800 dark:text-slate-100 truncate">
-                        {assignedException.fullName}
-                      </p>
-                      <p className="text-[10px] text-slate-400 font-mono">
-                        {assignedException.employeeCode} {assignedException.phone ? `• ${assignedException.phone}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                ) : (showEscalationAlert || order.status === 'cancelled') ? (
-                  <p className="mt-2.5 text-xs text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    Có sự cố (chờ chỉ định)
-                  </p>
-                ) : (
-                  <p className="mt-2.5 text-xs text-slate-400 italic">Không có sự cố</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Shipments / Internal Shipping info */}
-          {(order.shipments || []).length > 0 && (
-            <div>
-              <h4 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
-                <Truck className="w-4 h-4 text-blue-600" />
-                Kiện hàng &amp; Vận chuyển nội bộ ({order.shipments.length})
-              </h4>
-              <div className="space-y-3">
-                {order.shipments.map((shipment) => (
-                  <div key={shipment.id} className={`p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 flex flex-col ${inline ? 'gap-2' : 'md:flex-row md:items-center justify-between gap-3'}`}>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">
-                          {shipment.trackingNumber || `SP-${shipment.id.slice(0, 8)}`}
-                        </span>
-                        <Badge variant={getShipmentBadgeVariant(shipment.status)}>
-                          {getShipmentStatusText(shipment.status)}
-                        </Badge>
-                      </div>
-                      {shipment.carrier && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Bưu tá phụ trách: <span className="font-medium text-slate-700 dark:text-slate-200">{shipment.carrier.fullName}</span> ({shipment.carrier.employeeCode || shipment.carrier.phone || 'Nội bộ'})
-                        </p>
-                      )}
-                      {shipment.failedReason && (
-                        <p className="text-xs text-red-600 dark:text-red-400 font-medium">
-                          Lý do giao thất bại: {shipment.failedReason}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-400 md:text-right">
-                      Cập nhật: {formatDate(shipment.updatedAt || shipment.createdAt)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Order Items Table (Chi tiết hóa đơn - OrderDetail) */}
-          <div>
-            <h4 className={`${inline ? 'text-sm' : 'text-base'} font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2`}>
-              <Package className="w-4 h-4 text-slate-600 shrink-0" />
-              Chi tiết hóa đơn {isMergedGroup ? `Đơn #${selectedSubIndex + 1}` : ''} — Sản phẩm trong đơn ({orderItems.length} mặt hàng • Tổng SL: {totalQuantity})
-            </h4>
-            {inline ? (
-              <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-                <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {orderItems.map((item, index) => (
-                    <div key={index} className="p-3 flex items-start gap-2.5">
-                      {item.image ? (
-                        <img src={item.image} alt={item.productName} className="w-10 h-10 rounded object-cover border border-slate-200 dark:border-slate-800 shrink-0" />
-                      ) : (
-                        <div className="w-10 h-10 rounded bg-slate-100 border border-slate-200 dark:border-slate-800 shrink-0" />
-                      )}
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <p className="text-xs font-medium text-slate-800 dark:text-slate-100 leading-snug">
-                          <span className="font-mono text-slate-400 mr-1.5">#{index + 1}</span>
-                          {item.productName || 'Sản phẩm'}
-                        </p>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                          {item.colorName} • Size {item.size}
-                          {item.productVariant?.sku ? ` • SKU: ${item.productVariant.sku}` : ''}
-                        </p>
-                        <p className="text-[11px] text-indigo-600 dark:text-indigo-400 flex flex-wrap items-center gap-1">
-                          <Store className="w-3 h-3 shrink-0" />
-                          <span>{item.vendorName}</span>
-                          {item.vendorCode && (
-                            <span className="font-mono font-semibold bg-indigo-50 dark:bg-indigo-950/60 px-1 rounded border border-indigo-200 dark:border-indigo-800">
-                              {item.vendorCode}
-                            </span>
-                          )}
-                        </p>
-                        <div className="flex items-center justify-between pt-1 text-xs">
-                          <span className="text-slate-500 dark:text-slate-400">
-                            {formatCurrency(item.price)} <strong className="text-slate-700 dark:text-slate-200">x{item.quantity}</strong>
-                          </span>
-                          <span className="font-semibold text-slate-800 dark:text-slate-100">
-                            {formatCurrency(item.price * item.quantity)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="px-3 py-2.5 bg-slate-50/80 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs font-semibold">
-                  <span className="text-slate-600 dark:text-slate-300">
-                    Tổng: <span className="text-blue-600 dark:text-blue-400 font-bold">{totalQuantity} SP</span>
-                  </span>
-                  <span className="text-slate-800 dark:text-slate-100 font-bold">
-                    {formatCurrency(order.subtotalAmount ?? order.totalAmount)}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 dark:bg-slate-900/50">
-                    <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                      <th className="px-3 py-3 font-medium text-center w-12">STT</th>
-                      <th className="px-4 py-3 font-medium">Sản phẩm (Màu / Size / SKU)</th>
-                      <th className="px-4 py-3 font-medium text-right">Đơn giá</th>
-                      <th className="px-4 py-3 font-medium text-center">Số lượng</th>
-                      <th className="px-4 py-3 font-medium text-right">Thành tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-slate-900 transition-colors">
-                    {orderItems.map((item, index) => (
-                      <tr key={index} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
-                        <td className="px-3 py-3 text-center text-xs text-slate-400 font-mono">
-                          {index + 1}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            {item.image ? (
-                              <img src={item.image} alt={item.productName} className="w-10 h-10 rounded object-cover border border-slate-200 dark:border-slate-800" />
-                            ) : (
-                              <div className="w-10 h-10 rounded bg-slate-100 border border-slate-200 dark:border-slate-800"></div>
-                            )}
-                            <div>
-                              <p className="font-medium text-slate-800 dark:text-slate-100">{item.productName || 'Sản phẩm'}</p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400">
-                                {item.colorName} • Size {item.size}
-                                {item.productVariant?.sku ? ` • SKU: ${item.productVariant.sku}` : ''}
-                              </p>
-                              <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-0.5 flex items-center gap-1">
-                                <Store className="w-3 h-3 shrink-0" />
-                                <span>{item.vendorName}</span>
-                                {item.vendorCode && (
-                                  <span className="font-mono font-semibold bg-indigo-50 dark:bg-indigo-950/60 px-1 rounded border border-indigo-200 dark:border-indigo-800">
-                                    {item.vendorCode}
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-400 font-medium">{formatCurrency(item.price)}</td>
-                        <td className="px-4 py-3 text-center font-semibold text-slate-800 dark:text-slate-100">x{item.quantity}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-800 dark:text-slate-100">{formatCurrency(item.price * item.quantity)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-slate-50/80 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-800 text-xs font-semibold">
-                    <tr>
-                      <td colSpan={3} className="px-4 py-2.5 text-right text-slate-600 dark:text-slate-300">
-                        Tổng cộng mặt hàng:
-                      </td>
-                      <td className="px-4 py-2.5 text-center text-blue-600 dark:text-blue-400 font-bold">
-                        {totalQuantity} SP
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-slate-800 dark:text-slate-100 font-bold">
-                        {formatCurrency(order.subtotalAmount ?? order.totalAmount)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Totals & Applied Promotions (VoucherDetail) */}
-          <div className={`grid grid-cols-1 ${inline ? 'gap-3' : 'md:grid-cols-2 gap-4 items-start'}`}>
-            {/* Voucher Detail Box */}
-            <div className="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl p-4 border border-emerald-200/70 dark:border-emerald-900/50 space-y-2.5">
-              <h5 className="text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                <TicketPercent className="w-4 h-4 text-emerald-600" />
-                Khuyến mãi áp dụng (Bảng VoucherDetail)
-              </h5>
-              {appliedVouchers.length > 0 ? (
-                <div className="space-y-2">
-                  {appliedVouchers.map((vd, idx) => (
-                    <div
-                      key={vd.id || idx}
-                      className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/70 text-xs flex items-center justify-between gap-2"
-                    >
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-mono font-bold text-[10px]">
-                            #{vd.sequence || idx + 1}
-                          </span>
-                          <span className="font-mono font-bold text-slate-800 dark:text-slate-100">
-                            {vd.voucher?.code || 'VOUCHER'}
-                          </span>
-                          <Badge variant="outline" className="text-[10px] py-0 px-1.5">
-                            {vd.voucher?.scope === 'vendor' ? 'Shop' : 'Sàn'}
-                          </Badge>
-                        </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          {vd.voucher?.description || 'Khuyến mãi đơn hàng'} • Đơn đủ ĐK: {formatCurrency(vd.eligibleAmount || 0)}
-                        </p>
-                      </div>
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
-                        -{formatCurrency(vd.discountAmount || 0)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : Number(order.discountAmount) > 0 ? (
-                <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                  Đơn hàng được giảm giá khuyến mãi trực tiếp: <strong>-{formatCurrency(order.discountAmount)}</strong>
-                </p>
-              ) : (
-                <p className="text-xs text-slate-500 italic">
-                  Đơn hàng này không áp dụng mã khuyến mãi (Voucher).
-                </p>
-              )}
-            </div>
-
-            {/* Summary Totals */}
-            <div className="w-full bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-800 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500 dark:text-slate-400">Tổng số lượng sản phẩm</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-100">{totalQuantity} sản phẩm</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500 dark:text-slate-400">Tạm tính (Subtotal)</span>
-                <span className="font-medium text-slate-800 dark:text-slate-100">{formatCurrency(order.subtotalAmount ?? order.totalAmount)}</span>
-              </div>
-              <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400">
-                <span>Giảm giá khuyến mãi (Voucher)</span>
-                <span className="font-semibold">-{formatCurrency(order.discountAmount || 0)}</span>
-              </div>
-              <div className="flex justify-between text-sm pb-2 border-b border-slate-200 dark:border-slate-800">
-                <span className="text-slate-500 dark:text-slate-400">Phí vận chuyển</span>
-                <span className="font-medium text-slate-800 dark:text-slate-100">
-                  {Number(order.shippingFee) > 0 ? formatCurrency(order.shippingFee) : 'Miễn phí'}
-                </span>
-              </div>
-              <div className="flex justify-between pt-1">
-                <span className="font-semibold text-slate-800 dark:text-slate-100">
-                  {isMergedGroup ? `Tổng đơn #${selectedSubIndex + 1}` : 'Tổng cộng thanh toán'}
-                </span>
-                <span className="font-bold text-blue-600 text-lg">{formatCurrency(order.totalAmount)}</span>
-              </div>
-              {isMergedGroup && (
-                <div className="flex justify-between pt-2 border-t border-indigo-200 dark:border-indigo-800">
-                  <span className="font-bold text-indigo-700 dark:text-indigo-300">
-                    Tổng cộng cả {subOrders.length} đơn hàng gộp
-                  </span>
-                  <span className="font-extrabold text-indigo-600 dark:text-indigo-400 text-lg">
-                    {formatCurrency(groupTotalAmount)}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Order Status History / Audit Trail */}
-          {(order.statusHistory || []).length > 0 && (
-            <div>
-              <h4 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-slate-600" />
-                Lịch sử đơn hàng &amp; Ghi vết xử lý ({order.statusHistory.length})
-              </h4>
-              <div className="space-y-2 border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-slate-50/50 dark:bg-slate-900/30 max-h-56 overflow-y-auto">
-                {order.statusHistory.map((hist, index) => {
-                  const actorLabel = hist.admin 
-                    ? `Admin (${hist.admin.fullName})` 
-                    : hist.employee 
-                      ? `Nhân viên: ${hist.employee.fullName} (${hist.employee.employeeCode || ''})`
-                      : hist.vendor
-                        ? `Vendor: ${hist.vendor.storeName || hist.vendor.fullName}`
-                        : hist.client
-                          ? `Khách hàng: ${hist.client.fullName}`
-                          : 'Hệ thống tự động';
-
-                  return (
-                    <div key={hist.id || index} className="text-xs p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center justify-between text-slate-400 mb-1">
-                        <span className="font-medium text-slate-700 dark:text-slate-300">
-                          {actorLabel}
-                        </span>
-                        <span>{formatDate(hist.createdAt)}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-600 dark:text-slate-400 uppercase">
-                          {hist.fromStatus || 'MỚI'} &rarr; {hist.toStatus}
-                        </span>
-                      </div>
-                      {hist.note && (
-                        <p className="mt-1 text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-1.5 rounded">
-                          {hist.note}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
     </div>
   );
 
   return (
     <>
-      {inline ? (
-        <div className="bg-white dark:bg-slate-900 transition-colors rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:sticky lg:top-0 lg:max-h-[calc(100vh-8rem)]">
-          <div className="flex items-start justify-between gap-3 px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 shrink-0">
-            <h2 className="text-sm font-semibold text-slate-800 dark:text-white leading-snug">
-              {modalTitle}
-            </h2>
-            {onClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors shrink-0"
-                title="Đóng chi tiết đơn hàng"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            {detailContent}
-          </div>
-          <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 rounded-b-xl flex flex-wrap items-center justify-end gap-2 shrink-0">
-            {footerContent}
-          </div>
+      <div className="bg-white dark:bg-slate-900 transition-colors rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col lg:sticky lg:top-0 lg:max-h-[calc(100vh-8rem)]">
+        <div className="flex items-start justify-between gap-3 px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <h2 className="text-sm font-semibold text-slate-800 dark:text-white leading-snug">
+            {modalTitle}
+          </h2>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+              title="Đóng chi tiết đơn hàng"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
-      ) : (
-        <Modal
-          isOpen={isOpen}
-          onClose={onClose}
-          title={modalTitle}
-          maxWidth="max-w-5xl"
-          footer={footerContent}
-        >
+        <div className="flex-1 overflow-y-auto p-4">
           {detailContent}
-        </Modal>
-      )}
+        </div>
+        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 rounded-b-xl flex flex-wrap items-center justify-end gap-2 shrink-0">
+          {footerContent}
+        </div>
+      </div>
 
       {/* Modal: Phân công / Chỉnh lại nhân viên xử lý */}
       {isAssignModalOpen && (
@@ -1189,7 +1178,7 @@ export default function OrderDetailModal({ isOpen, onClose, order: rawOrder, onS
                 <button
                   type="submit"
                   disabled={assigning || !selectedEmpId}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-xs transition"
+                  className="px-4 py-2 bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white rounded-xl font-semibold shadow-xs transition"
                 >
                   {assigning ? 'Đang lưu...' : 'Xác nhận phân công'}
                 </button>

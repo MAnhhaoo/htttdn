@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Button, Input, Select } from '../../components/ui';
-import { Bell, Send, AlertTriangle, Info, AlertOctagon, Zap, CheckCircle2 } from 'lucide-react';
+import { Modal, Button, Input } from '../../components/ui';
+import { Send, AlertTriangle, Info, AlertOctagon, Zap, CheckCircle2 } from 'lucide-react';
 import { employeesApi } from '../../api';
 
 const NOTIF_TYPES = [

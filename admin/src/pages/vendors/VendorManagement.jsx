@@ -14,17 +14,16 @@ import {
   Ticket,
   Calendar,
   Percent,
-  AlertTriangle,
   Building2,
   Mail,
   Phone,
   MapPin,
   ShieldCheck,
-  Clock,
   X,
 } from 'lucide-react';
 import { usersApi, vendorsApi } from '../../api';
-import { Button, Input, Select, Badge, Modal } from '../../components/ui';
+import { Button, Input, Select, Badge, Modal, PaginationFooter } from '../../components/ui';
+import { formatPrice, formatDateOnly } from '../../utils/formatHelpers';
 
 export default function VendorManagement() {
   const [vendors, setVendors] = useState([]);
@@ -157,19 +156,7 @@ export default function VendorManagement() {
     }
   };
 
-  const formatPrice = (val) => {
-    if (!val && val !== 0) return '0 ₫';
-    return Number(val).toLocaleString('vi-VN') + ' ₫';
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'Chưa có';
-    return new Date(dateStr).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
+  const formatDate = (dateStr) => formatDateOnly(dateStr, 'Chưa có');
 
   return (
     <div className="space-y-6">
@@ -317,29 +304,13 @@ export default function VendorManagement() {
         </div>
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Trang {page} / {totalPages} (Tổng số {totalItems} vendor)
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                icon={ChevronLeft}
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                icon={ChevronRight}
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              />
-            </div>
-          </div>
-        )}
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          itemLabel="vendor"
+          onPageChange={setPage}
+        />
       </div>
 
       {/* Comprehensive Vendor Detail Modal */}
@@ -443,17 +414,17 @@ export default function VendorManagement() {
                     }}
                     className={`p-3 rounded-xl border transition-all cursor-pointer select-none ${
                       activeDetailTab === 'orders'
-                        ? 'bg-blue-50/80 dark:bg-blue-950/60 border-blue-500 ring-2 ring-blue-400 dark:ring-blue-600 shadow-sm'
-                        : 'bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-600'
+                        ? 'bg-[#EEF5F1]/80 dark:bg-[#1A3A2C]/60 border-[#2A5C4A] ring-2 ring-[#2A5C4A]/30 shadow-sm'
+                        : 'bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-800 hover:border-[#2A5C4A]/50'
                     }`}
                   >
                     <div className="text-slate-400 text-xs flex items-center justify-between gap-1 mb-1">
                       <span className="flex items-center gap-1">
-                        <ShoppingCart className="w-3.5 h-3.5 text-blue-500" /> Đơn của shop
+                        <ShoppingCart className="w-3.5 h-3.5 text-[#2A5C4A] dark:text-[#6BB392]" /> Đơn của shop
                       </span>
                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
                         activeDetailTab === 'orders'
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-[#1A3A2C] text-white'
                           : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                       }`}>
                         {activeDetailTab === 'orders' ? 'Đang xem' : 'Bấm xem'}
@@ -552,43 +523,6 @@ export default function VendorManagement() {
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-auto">
-                        {/* Tab switcher buttons for quick toggle */}
-                        <div className="flex items-center gap-1 bg-slate-200/60 dark:bg-slate-700/60 p-1 rounded-lg text-xs">
-                          <button
-                            type="button"
-                            onClick={() => { setActiveDetailTab('products'); setDetailPage(1); }}
-                            className={`px-2 py-1 rounded font-medium transition-colors ${
-                              activeDetailTab === 'products'
-                                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                            }`}
-                          >
-                            Sản phẩm ({selectedVendor.products?.length || 0})
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setActiveDetailTab('orders'); setDetailPage(1); }}
-                            className={`px-2 py-1 rounded font-medium transition-colors ${
-                              activeDetailTab === 'orders'
-                                ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
-                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                            }`}
-                          >
-                            Đơn hàng ({selectedVendor.orders?.length || 0})
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setActiveDetailTab('vouchers'); setDetailPage(1); }}
-                            className={`px-2 py-1 rounded font-medium transition-colors ${
-                              activeDetailTab === 'vouchers'
-                                ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-xs'
-                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
-                            }`}
-                          >
-                            Khuyến mãi ({selectedVendor.vouchers?.length || 0})
-                          </button>
-                        </div>
-
                         <button
                           type="button"
                           onClick={() => setActiveDetailTab(null)}
@@ -803,7 +737,7 @@ export default function VendorManagement() {
                                       {v.usedQuantity || 0} / {v.quantity ?? '∞'}
                                     </td>
                                     <td className="px-3 py-2.5 text-slate-500 whitespace-nowrap">
-                                      {formatDate(v.startDate)} - {formatDate(v.endDate)}${formatDate(v.endDate)}
+                                      {formatDate(v.startDate)} - {formatDate(v.endDate)}
                                     </td>
                                     <td className="px-3 py-2.5 text-center">
                                       <Badge variant={badge.variant}>{badge.label}</Badge>

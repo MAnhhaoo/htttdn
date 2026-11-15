@@ -11,6 +11,7 @@ import { ZodExceptionFilter } from 'src/catch-everything/zod-exception/zod-excep
 import { ApiUtilModule } from 'src/common/utils/api-util/api-until.module';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from 'src/common/prisma/prisma.module';
+import { AccountDirectoryModule } from 'src/common/account/account-directory.module';
 import { AuthModule } from './auth/auth.module';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import { AccessControlGuard } from 'src/common/guards/access-control/access-control.guard';
@@ -44,6 +45,7 @@ import { PayrollModule } from './payroll/payroll.module';
       validate: validate,
     }),
     PrismaModule,
+    AccountDirectoryModule,
     AdminModule,
     ClientModule,
     VendorModule,

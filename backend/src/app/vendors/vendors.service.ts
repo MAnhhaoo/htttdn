@@ -16,7 +16,14 @@ import {
   PaginationUtilService,
   formatPaginatedList,
   normalizePagination,
+  paginatePrismaQuery,
 } from '../../common/utils/paginaton-util/pagintion-util.service';
+
+import {
+  SUBSCRIPTION_PLAN_FEES,
+  computeVendorSubscriptionStatus,
+  normalizeSubscriptionPlan,
+} from '../../common/utils/vendor-approval/vendor-approval.util';
 
 import { QueryUtilService } from '../../common/utils/query-util/query-util.service';
 
@@ -67,27 +74,17 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       ...searchCondition,
     };
 
-    const totalItems = await this.extended.count({
-      where,
-    });
-
-    const paging = this.paginationUtilService.paging({
-      page,
-      itemPerPage,
-      totalItems,
-    });
-
-    const list = await this.extended.findMany({
-      omit: { password: true },
-      where,
-      skip: paging.skip,
-      take: paging.itemPerPage,
-      orderBy: {
-        createdAt: 'desc',
+    return paginatePrismaQuery(
+      this.extended,
+      { page, itemPerPage },
+      {
+        omit: { password: true },
+        where,
+        orderBy: {
+          createdAt: 'desc',
+        },
       },
-    });
-
-    return paging.format(list);
+    );
   }
 
   async getVendor(where: Prisma.VendorWhereUniqueInput) {
@@ -192,16 +189,9 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       _sum: { totalAmount: true },
     });
 
-    const now = new Date();
-    const isExpired = vendor.subscriptionExpiresAt
-      ? new Date(vendor.subscriptionExpiresAt) < now
-      : false;
-    const daysRemaining = vendor.subscriptionExpiresAt
-      ? Math.ceil(
-          (new Date(vendor.subscriptionExpiresAt).getTime() - now.getTime()) /
-            (1000 * 3600 * 24),
-        )
-      : null;
+    const { isExpired, daysRemaining } = computeVendorSubscriptionStatus(
+      vendor.subscriptionExpiresAt,
+    );
 
     const formattedProducts = ((vendor as any).products || []).map((p: any) => {
       const allVariants = (p.colors || []).flatMap((c: any) => c.variants || []);
@@ -269,6 +259,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
     }
     return this.extended.create({
       data: vendorData,
+      omit: { password: true },
     });
   }
 
@@ -346,29 +337,20 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       throw new NotFoundException('Không tìm thấy thông tin đối tác');
     }
 
-    const now = new Date();
-    const isExpired = vendor.subscriptionExpiresAt
-      ? new Date(vendor.subscriptionExpiresAt) < now
-      : false;
-    const daysRemaining = vendor.subscriptionExpiresAt
-      ? Math.ceil(
-          (new Date(vendor.subscriptionExpiresAt).getTime() - now.getTime()) /
-            (1000 * 3600 * 24),
-        )
-      : null;
+    const { isExpired, daysRemaining, isExpiringSoon } =
+      computeVendorSubscriptionStatus(vendor.subscriptionExpiresAt);
 
     return {
       ...vendor,
       isExpired,
       daysRemaining,
-      isExpiringSoon:
-        daysRemaining !== null && daysRemaining > 0 && daysRemaining <= 30,
+      isExpiringSoon,
     };
   }
 
   async renewSubscription(vendorId: string, plan: string) {
-    const validPlan = plan === '2_years' ? '2_years' : '1_year';
-    const fee = validPlan === '2_years' ? 2000000 : 1200000;
+    const validPlan = normalizeSubscriptionPlan(plan);
+    const fee = SUBSCRIPTION_PLAN_FEES[validPlan];
 
     await this.extended.update({
       where: { id: vendorId },
@@ -437,15 +419,75 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       ...searchCondition,
     };
 
-    const [
-      totalItems,
-      list,
-      pendingCount,
-      renewalsCount,
-      activeCount,
-      expiredCount,
-      rejectedCount,
-    ] = await Promise.all([
+    const loadTabCounts = async (): Promise<{
+      pending: number;
+      renewals: number;
+      active: number;
+      expired: number;
+      rejected: number;
+    }> => {
+      if (typeof (this.prismaService.extended as any).$queryRaw === 'function') {
+        const rows = await this.prismaService.extended.$queryRaw<
+          Array<{
+            pending: number;
+            renewals: number;
+            active: number;
+            expired: number;
+            rejected: number;
+          }>
+        >`
+          SELECT
+            COUNT(*) FILTER (WHERE "approvalStatus" = 'pending_approval')::int AS pending,
+            COUNT(*) FILTER (WHERE "renewalRequested" = true)::int AS renewals,
+            COUNT(*) FILTER (
+              WHERE "approvalStatus" = 'approved'
+                AND status = 'active'
+                AND ("subscriptionExpiresAt" IS NULL OR "subscriptionExpiresAt" >= ${now})
+            )::int AS active,
+            COUNT(*) FILTER (
+              WHERE "subscriptionExpiresAt" < ${now}
+                OR status = 'inactive'
+            )::int AS expired,
+            COUNT(*) FILTER (WHERE "approvalStatus" = 'rejected')::int AS rejected
+          FROM "Vendor"
+        `;
+        const row = rows[0];
+        return {
+          pending: Number(row?.pending ?? 0),
+          renewals: Number(row?.renewals ?? 0),
+          active: Number(row?.active ?? 0),
+          expired: Number(row?.expired ?? 0),
+          rejected: Number(row?.rejected ?? 0),
+        };
+      }
+
+      const [pending, renewals, active, expired, rejected] = await Promise.all([
+        this.extended.count({ where: { approvalStatus: 'pending_approval' } }),
+        this.extended.count({ where: { renewalRequested: true } }),
+        this.extended.count({
+          where: {
+            approvalStatus: 'approved',
+            status: 'active',
+            OR: [
+              { subscriptionExpiresAt: null },
+              { subscriptionExpiresAt: { gte: now } },
+            ],
+          },
+        }),
+        this.extended.count({
+          where: {
+            OR: [
+              { subscriptionExpiresAt: { lt: now } },
+              { status: 'inactive' },
+            ],
+          },
+        }),
+        this.extended.count({ where: { approvalStatus: 'rejected' } }),
+      ]);
+      return { pending, renewals, active, expired, rejected };
+    };
+
+    const [totalItems, list, counts] = await Promise.all([
       this.extended.count({ where }),
       this.extended.findMany({
         where,
@@ -454,61 +496,24 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
         take: itemPerPage,
         orderBy: { createdAt: 'desc' },
       }),
-      this.extended.count({
-        where: { approvalStatus: 'pending_approval' },
-      }),
-      this.extended.count({
-        where: { renewalRequested: true },
-      }),
-      this.extended.count({
-        where: {
-          approvalStatus: 'approved',
-          status: 'active',
-          OR: [
-            { subscriptionExpiresAt: null },
-            { subscriptionExpiresAt: { gte: now } },
-          ],
-        },
-      }),
-      this.extended.count({
-        where: {
-          OR: [
-            { subscriptionExpiresAt: { lt: now } },
-            { status: 'inactive' },
-          ],
-        },
-      }),
-      this.extended.count({
-        where: { approvalStatus: 'rejected' },
-      }),
+      loadTabCounts(),
     ]);
 
     const formattedList = list.map((v) => {
-      const isExp = v.subscriptionExpiresAt
-        ? new Date(v.subscriptionExpiresAt) < now
-        : false;
-      const daysRem = v.subscriptionExpiresAt
-        ? Math.ceil(
-            (new Date(v.subscriptionExpiresAt).getTime() - now.getTime()) /
-              (1000 * 3600 * 24),
-          )
-        : null;
+      const { isExpired, daysRemaining } = computeVendorSubscriptionStatus(
+        v.subscriptionExpiresAt,
+        now,
+      );
       return {
         ...v,
-        isExpired: isExp,
-        daysRemaining: daysRem,
+        isExpired,
+        daysRemaining,
       };
     });
 
     return {
       ...formatPaginatedList(formattedList, totalItems, { page, itemPerPage }),
-      counts: {
-        pending: pendingCount,
-        renewals: renewalsCount,
-        active: activeCount,
-        expired: expiredCount,
-        rejected: rejectedCount,
-      },
+      counts,
     };
   }
 
@@ -531,13 +536,11 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
     }
 
     const now = new Date();
-    const plan =
-      data?.plan ||
-      vendor.renewalPlan ||
-      vendor.subscriptionPlan ||
-      '1_year';
+    const plan = normalizeSubscriptionPlan(
+      data?.plan || vendor.renewalPlan || vendor.subscriptionPlan,
+    );
     const years = plan === '2_years' ? 2 : 1;
-    const fee = plan === '2_years' ? 2000000 : 1200000;
+    const fee = SUBSCRIPTION_PLAN_FEES[plan];
     const commissionRate =
       data?.commissionRate !== undefined
         ? data.commissionRate
@@ -619,7 +622,9 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
           ? { approvalStatus: 'rejected', status: 'inactive' }
           : {
               subscriptionFee:
-                vendor.subscriptionPlan === '2_years' ? 2000000 : 1200000,
+                SUBSCRIPTION_PLAN_FEES[
+                  normalizeSubscriptionPlan(vendor.subscriptionPlan)
+                ],
             }),
         rejectedReason:
           reason || 'Hồ sơ đăng ký hoặc yêu cầu gia hạn chưa đạt yêu cầu.',
@@ -675,34 +680,61 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
       throw new NotFoundException('Người bán không tồn tại');
     }
 
-    const totalProducts = await this.prismaService.extended.product.count({
-      where: {
-        vendorId: id,
-        deletedAt: null,
-        status: 'active',
-      },
-    });
+    const [totalOrders, reviewsAgg, categories, categoryCounts] =
+      await Promise.all([
+        this.prismaService.extended.vendorOrder.count({
+          where: {
+            vendorId: id,
+          },
+        }),
+        this.prismaService.extended.review.aggregate({
+          where: {
+            product: {
+              vendorId: id,
+              deletedAt: null,
+            },
+          },
+          _avg: {
+            rating: true,
+          },
+          _count: {
+            id: true,
+          },
+        }),
+        this.prismaService.extended.category.findMany({
+          where: {
+            deletedAt: null,
+            products: {
+              some: {
+                vendorId: id,
+                deletedAt: null,
+                status: 'active',
+              },
+            },
+          },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        }),
+        this.prismaService.extended.product.groupBy({
+          by: ['categoryId'],
+          where: {
+            vendorId: id,
+            deletedAt: null,
+            status: 'active',
+          },
+          _count: {
+            id: true,
+          },
+        }),
+      ]);
 
-    const totalOrders = await this.prismaService.extended.vendorOrder.count({
-      where: {
-        vendorId: id,
-      },
-    });
-
-    const reviewsAgg = await this.prismaService.extended.review.aggregate({
-      where: {
-        product: {
-          vendorId: id,
-          deletedAt: null,
-        },
-      },
-      _avg: {
-        rating: true,
-      },
-      _count: {
-        id: true,
-      },
-    });
+    const totalProducts = categoryCounts.reduce(
+      (sum, item) => sum + item._count.id,
+      0,
+    );
 
     const joinDate = new Date(vendor.createdAt);
     const now = new Date();
@@ -715,36 +747,6 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
         : diffMonths > 0
           ? `${diffMonths} tháng trước`
           : 'Gần đây';
-
-    const categories = await this.prismaService.extended.category.findMany({
-      where: {
-        deletedAt: null,
-        products: {
-          some: {
-            vendorId: id,
-            deletedAt: null,
-            status: 'active',
-          },
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-      },
-    });
-
-    const categoryCounts = await this.prismaService.extended.product.groupBy({
-      by: ['categoryId'],
-      where: {
-        vendorId: id,
-        deletedAt: null,
-        status: 'active',
-      },
-      _count: {
-        id: true,
-      },
-    });
 
     const countMap = new Map(
       categoryCounts.map((item) => [item.categoryId, item._count.id]),

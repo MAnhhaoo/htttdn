@@ -9,7 +9,7 @@ export const AuthProvider = ({ children }) => {
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch (e) {
+      } catch {
         return null;
       }
     }
@@ -77,7 +77,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       await authApi.logout();
-    } catch (e) {
+    } catch {
       // ignore
     }
     setUser(null);

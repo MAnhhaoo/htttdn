@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -12,6 +13,7 @@ import { Request } from 'express';
 import { IS_SKIP_AUTH } from '../../../app/auth/auth.decorator';
 import { TokenPayload } from '../../../app/auth/auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AccountDirectoryService } from '../../account/account-directory.service';
 
 import { Actions, ROLE_ACTION } from './access-control.const';
 import { ROLES_KEY } from './roles.decorator';
@@ -27,26 +29,33 @@ type AuthenticatedUser = TokenPayload;
 
 @Injectable()
 export class AccessControlGuard implements CanActivate {
+  private readonly fallbackDirectory: AccountDirectoryService;
+
   constructor(
     private readonly prismaService: PrismaService,
     private readonly reflector: Reflector,
-  ) {}
+    @Optional() private readonly accountDirectory?: AccountDirectoryService,
+  ) {
+    this.fallbackDirectory = new AccountDirectoryService(this.prismaService);
+  }
 
-  private async resolveUser(userID: string): Promise<{ user: any; role: UserRole }> {
-    const select = { status: true, deletedAt: true };
-    let user: any = await this.prismaService.extended.admin.findUnique({ where: { id: userID }, select });
-    let role: UserRole = 'admin';
-    if (!user) { user = await this.prismaService.extended.client.findUnique({ where: { id: userID }, select }); role = 'client'; }
-    if (!user) { user = await this.prismaService.extended.vendor.findUnique({ where: { id: userID }, select: { ...select, approvalStatus: true } }); role = 'vendor'; }
-    if (!user) { user = await this.prismaService.extended.employee.findUnique({ where: { id: userID }, select }); role = 'employee'; }
-    return { user, role };
+  private get directory(): AccountDirectoryService {
+    return this.accountDirectory ?? this.fallbackDirectory;
+  }
+
+  private async resolveUser(
+    userID: string,
+    roleHint?: UserRole,
+  ): Promise<{ user: any; role: UserRole }> {
+    return this.directory.resolveAccountForGuard(userID, roleHint);
   }
 
   private async canAccessResources(
     userID: string,
     action: Actions,
+    roleHint?: UserRole,
   ): Promise<boolean> {
-    const { user, role } = await this.resolveUser(userID);
+    const { user, role } = await this.resolveUser(userID, roleHint);
 
     if (!user || user.status !== 'active' || user.deletedAt) {
       return false;
@@ -112,7 +121,10 @@ export class AccessControlGuard implements CanActivate {
     );
 
     if (requiredRoles?.length) {
-      const { user: currentUser, role } = await this.resolveUser(authenticatedUser.userID);
+      const { user: currentUser, role } = await this.resolveUser(
+        authenticatedUser.userID,
+        authenticatedUser.role,
+      );
       if (
         !currentUser ||
         currentUser.status !== 'active' ||
@@ -142,6 +154,7 @@ export class AccessControlGuard implements CanActivate {
     const canAccess = await this.canAccessResources(
       authenticatedUser.userID,
       action,
+      authenticatedUser.role,
     );
 
     if (!canAccess) {

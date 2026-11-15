@@ -9,11 +9,22 @@ import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, ShipmentStatus } fro
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import {
+  CARRIER_SUMMARY_SELECT,
+  PRODUCT_VARIANT_SUMMARY_SELECT,
+  VENDOR_SUMMARY_SELECT,
+} from 'src/common/prisma/prisma-selects.const';
+import {
   formatPaginatedList,
   normalizePagination,
 } from 'src/common/utils/paginaton-util/pagintion-util.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { DEPARTMENT_KEYWORDS, OrdersService } from '../orders/orders.service';
+import {
+  ACTIVE_SHIPMENT_STATUSES,
+  isShippingDept,
+  loadShipperPoolWithLoads,
+  pickNextShipperFromPool,
+} from '../orders/order-assignment.helper';
 import {
   AssignCarrierDto,
   GetShipmentsQueryDto,
@@ -48,8 +59,7 @@ export class ShippingService {
       }
 
       if (
-        !emp.department?.includes(DEPARTMENT_KEYWORDS.SHIPPING) &&
-        !emp.department?.includes(DEPARTMENT_KEYWORDS.DELIVERY) &&
+        !isShippingDept(emp.department) &&
         emp.assignedOrderScope !== 'all_orders'
       ) {
         throw new ForbiddenException(
@@ -93,73 +103,70 @@ export class ShippingService {
       ...(status ? { status: status as ShipmentStatus } : {}),
     };
 
-    const [countPending, countInTransit, countDelivered, countTotal, totalItems, list] =
-      await Promise.all([
-        this.prisma.extended.shipment.count({ where: { ...baseWhere, status: ShipmentStatus.pending } }),
-        this.prisma.extended.shipment.count({
-          where: {
-            ...baseWhere,
-            status: {
-              in: [
-                ShipmentStatus.assigned,
-                ShipmentStatus.picking_up,
-                ShipmentStatus.in_transit,
-                ShipmentStatus.out_for_delivery,
-              ],
+    const [groupedByStatus, list] = await Promise.all([
+      this.prisma.extended.shipment.groupBy({
+        by: ['status'],
+        where: baseWhere,
+        _count: { _all: true },
+      }),
+      this.prisma.extended.shipment.findMany({
+        where,
+        skip,
+        take: itemPerPage,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          carrier: {
+            select: CARRIER_SUMMARY_SELECT,
+          },
+          order: {
+            select: {
+              id: true,
+              orderCode: true,
+              status: true,
+              totalAmount: true,
+              createdAt: true,
             },
           },
-        }),
-        this.prisma.extended.shipment.count({
-          where: { ...baseWhere, status: ShipmentStatus.delivered },
-        }),
-        this.prisma.extended.shipment.count({ where: baseWhere }),
-        this.prisma.extended.shipment.count({ where }),
-        this.prisma.extended.shipment.findMany({
-          where,
-          skip,
-          take: itemPerPage,
-          orderBy: { createdAt: 'desc' },
-          include: {
-            carrier: {
-              select: {
-                id: true,
-                fullName: true,
-                employeeCode: true,
-                phone: true,
-                department: true,
-              },
-            },
-            order: {
-              select: {
-                id: true,
-                orderCode: true,
-                status: true,
-                totalAmount: true,
-                createdAt: true,
-              },
-            },
-            vendorOrder: {
-              select: {
-                id: true,
-                vendorOrderCode: true,
-                status: true,
-                totalAmount: true,
-                vendor: {
-                  select: {
-                    id: true,
-                    storeName: true,
-                    fullName: true,
-                  },
+          vendorOrder: {
+            select: {
+              id: true,
+              vendorOrderCode: true,
+              status: true,
+              totalAmount: true,
+              vendor: {
+                select: {
+                  id: true,
+                  storeName: true,
+                  fullName: true,
                 },
               },
             },
-            events: {
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-            },
           },
-        }),
-      ]);
+          events: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+      }),
+    ]);
+
+    const statusCountMap = new Map<ShipmentStatus, number>();
+    let countTotal = 0;
+    for (const row of groupedByStatus) {
+      const c = Number(row._count?._all ?? 0);
+      statusCountMap.set(row.status, c);
+      countTotal += c;
+    }
+
+    const countPending = statusCountMap.get(ShipmentStatus.pending) ?? 0;
+    const countInTransit = ACTIVE_SHIPMENT_STATUSES.reduce(
+      (sum, st) => sum + (statusCountMap.get(st) ?? 0),
+      0,
+    );
+    const countDelivered = statusCountMap.get(ShipmentStatus.delivered) ?? 0;
+    const totalItems = status
+      ? (statusCountMap.get(status as ShipmentStatus) ?? 0)
+      : countTotal;
 
     const summary = {
       pending: countPending,
@@ -179,13 +186,7 @@ export class ShippingService {
       where: { id },
       include: {
         carrier: {
-          select: {
-            id: true,
-            fullName: true,
-            employeeCode: true,
-            phone: true,
-            department: true,
-          },
+          select: CARRIER_SUMMARY_SELECT,
         },
         order: {
           include: {
@@ -194,24 +195,7 @@ export class ShippingService {
             details: {
               include: {
                 productVariant: {
-                  include: {
-                    productColor: {
-                      include: {
-                        product: {
-                          include: {
-                            vendor: {
-                              select: {
-                                id: true,
-                                storeName: true,
-                                fullName: true,
-                                phone: true,
-                              },
-                            },
-                          },
-                        },
-                      },
-                    },
-                  },
+                  select: PRODUCT_VARIANT_SUMMARY_SELECT,
                 },
               },
             },
@@ -220,12 +204,7 @@ export class ShippingService {
         vendorOrder: {
           include: {
             vendor: {
-              select: {
-                id: true,
-                storeName: true,
-                fullName: true,
-                phone: true,
-              },
+              select: VENDOR_SUMMARY_SELECT,
             },
           },
         },
@@ -273,9 +252,9 @@ export class ShippingService {
     const shipment = await this.prisma.extended.shipment.findUnique({
       where: { id },
       include: {
-        order: { include: { payment: true, statusHistory: true } },
+        order: { include: { payment: true } },
         vendorOrder: true,
-        carrier: true,
+        carrier: { select: CARRIER_SUMMARY_SELECT },
       },
     });
 
@@ -498,28 +477,67 @@ export class ShippingService {
   }
 
   async assignCarrier(id: string, dto: AssignCarrierDto, user: UserInfo) {
-    const shipment = await this.prisma.extended.shipment.findUnique({
-      where: { id },
-    });
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('Chỉ Admin được phân công vận chuyển');
+    }
+
+    const [shipment, carrier] = await Promise.all([
+      this.prisma.extended.shipment.findUnique({
+        where: { id },
+      }),
+      this.prisma.extended.employee.findUnique({
+        where: { id: dto.carrierId },
+        select: {
+          id: true,
+          fullName: true,
+          employeeCode: true,
+          phone: true,
+          department: true,
+          status: true,
+          deletedAt: true,
+        },
+      }),
+    ]);
+
     if (!shipment) {
       throw new NotFoundException('Không tìm thấy vận đơn');
     }
-
-    const carrier = await this.prisma.extended.employee.findUnique({
-      where: { id: dto.carrierId },
-      select: { id: true, fullName: true, employeeCode: true, phone: true, department: true },
-    });
-
     if (!carrier) {
       throw new NotFoundException('Không tìm thấy nhân viên vận chuyển');
     }
-    if (user.role !== 'admin') throw new ForbiddenException('Chỉ Admin được phân công vận chuyển');
-    if (['in_transit', 'out_for_delivery', 'delivered', 'returned'].includes(shipment.status)) {
-      throw new BadRequestException('Không thể phân công lại vận đơn đang giao hoặc đã kết thúc');
+    if (
+      ['in_transit', 'out_for_delivery', 'delivered', 'returned'].includes(
+        shipment.status,
+      )
+    ) {
+      throw new BadRequestException(
+        'Không thể phân công lại vận đơn đang giao hoặc đã kết thúc',
+      );
     }
-    const activeCarrier = await this.prisma.extended.employee.count({ where: { id: carrier.id, status: 'active', deletedAt: null } });
-    if (!activeCarrier) throw new BadRequestException('Nhân viên không còn hoạt động');
+    if (carrier.status !== 'active' || carrier.deletedAt) {
+      throw new BadRequestException('Nhân viên không còn hoạt động');
+    }
 
+    return this.executeAssignCarrier(shipment, carrier, dto, user);
+  }
+
+  private async executeAssignCarrier(
+    shipment: {
+      id: string;
+      orderId: string;
+      status: ShipmentStatus;
+      notes: string | null;
+    },
+    carrier: {
+      id: string;
+      fullName: string;
+      employeeCode: string;
+      department?: string | null;
+    },
+    dto: AssignCarrierDto,
+    user: UserInfo,
+  ) {
+    const id = shipment.id;
     const updated = await this.prisma.extendedTransaction(async (tx) => {
       const s = await tx.shipment.update({
         where: { id },
@@ -527,7 +545,9 @@ export class ShippingService {
           carrierId: carrier.id,
           carrierType: dto.carrierType || 'employee',
           status: ShipmentStatus.assigned,
-          notes: dto.notes ? `${shipment.notes ? shipment.notes + '\n' : ''}${dto.notes}` : shipment.notes,
+          notes: dto.notes
+            ? `${shipment.notes ? shipment.notes + '\n' : ''}${dto.notes}`
+            : shipment.notes,
         },
       });
 
@@ -569,57 +589,95 @@ export class ShippingService {
   }
 
   async randomAssignCarrier(id: string, user: UserInfo) {
-    if (user.role !== 'admin') throw new ForbiddenException('Chỉ Admin được phân công vận chuyển');
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('Chỉ Admin được phân công vận chuyển');
+    }
 
-    const shipment = await this.prisma.extended.shipment.findUnique({
-      where: { id },
-    });
+    const [shipment, shipperPool] = await Promise.all([
+      this.prisma.extended.shipment.findUnique({
+        where: { id },
+      }),
+      loadShipperPoolWithLoads(this.prisma.extended, {
+        fallbackToAnyActive: true,
+      }),
+    ]);
     if (!shipment) {
       throw new NotFoundException('Không tìm thấy vận đơn');
     }
-    if (['in_transit', 'out_for_delivery', 'delivered', 'returned'].includes(shipment.status)) {
-      throw new BadRequestException('Không thể phân công lại vận đơn đang giao hoặc đã kết thúc');
+    if (
+      ['in_transit', 'out_for_delivery', 'delivered', 'returned'].includes(
+        shipment.status,
+      )
+    ) {
+      throw new BadRequestException(
+        'Không thể phân công lại vận đơn đang giao hoặc đã kết thúc',
+      );
     }
 
-    const bestCarrier = await this.orders.findBestShipperEmployee();
-    if (bestCarrier) {
-      return this.assignCarrier(id, { carrierId: bestCarrier.id, carrierType: 'employee' }, user);
+    const chosen = pickNextShipperFromPool(shipperPool);
+    if (!chosen) {
+      throw new NotFoundException(
+        'Không tìm thấy nhân viên vận chuyển nào đang hoạt động',
+      );
     }
 
-    const shippingEmployees = await this.listShippingEmployees();
-    const randomCarrier = shippingEmployees[Math.floor(Math.random() * shippingEmployees.length)];
-    return this.assignCarrier(id, { carrierId: randomCarrier.id, carrierType: 'employee' }, user);
+    return this.executeAssignCarrier(
+      shipment,
+      chosen,
+      { carrierId: chosen.id, carrierType: 'employee' },
+      user,
+    );
   }
 
   async randomAssignAll(user: UserInfo) {
-    if (user.role !== 'admin') throw new ForbiddenException('Chỉ Admin được phân công vận chuyển');
-
-    const unassignedShipments = await this.prisma.extended.shipment.findMany({
-      where: {
-        carrierId: null,
-        status: { in: [ShipmentStatus.pending, ShipmentStatus.assigned] },
-      },
-    });
-
-    if (!unassignedShipments.length) {
-      return { success: true, count: 0, message: 'Tất cả các vận đơn hợp lệ đã được phân công' };
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('Chỉ Admin được phân công vận chuyển');
     }
 
-    let fallbackEmployees: Array<{ id: string }> | null = null;
+    const [unassignedShipments, shipperPool] = await Promise.all([
+      this.prisma.extended.shipment.findMany({
+        where: {
+          carrierId: null,
+          status: { in: [ShipmentStatus.pending, ShipmentStatus.assigned] },
+        },
+      }),
+      loadShipperPoolWithLoads(this.prisma.extended, {
+        fallbackToAnyActive: true,
+      }),
+    ]);
+
+    if (!unassignedShipments.length) {
+      return {
+        success: true,
+        count: 0,
+        message: 'Tất cả các vận đơn hợp lệ đã được phân công',
+      };
+    }
+
+    if (!shipperPool.candidates.length) {
+      throw new NotFoundException(
+        'Không tìm thấy nhân viên vận chuyển nào đang hoạt động',
+      );
+    }
+
     let count = 0;
     for (const ship of unassignedShipments) {
-      let carrier = await this.orders.findBestShipperEmployee();
-      if (!carrier) {
-        if (!fallbackEmployees) {
-          fallbackEmployees = await this.listShippingEmployees();
-        }
-        carrier = fallbackEmployees[Math.floor(Math.random() * fallbackEmployees.length)] as any;
-      }
-      await this.assignCarrier(ship.id, { carrierId: carrier!.id, carrierType: 'employee' }, user);
+      const carrier = pickNextShipperFromPool(shipperPool);
+      if (!carrier) break;
+      await this.executeAssignCarrier(
+        ship,
+        carrier,
+        { carrierId: carrier.id, carrierType: 'employee' },
+        user,
+      );
       count++;
     }
 
-    return { success: true, count, message: `Đã phân công ngẫu nhiên cho ${count} vận đơn` };
+    return {
+      success: true,
+      count,
+      message: `Đã phân công ngẫu nhiên cho ${count} vận đơn`,
+    };
   }
 
   /**

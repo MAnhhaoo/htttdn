@@ -2,6 +2,13 @@ import { Modal, Badge } from '../../components/ui';
 import { formatDate } from '../../utils/formatHelpers';
 import { Mail, Phone, MapPin, Calendar, Activity } from 'lucide-react';
 
+const ROLE_LABELS = {
+  admin: 'Quản trị viên',
+  vendor: 'Đối tác Vendor',
+  employee: 'Nhân viên',
+  customer: 'Khách hàng',
+};
+
 export default function UserDetailModal({ isOpen, onClose, user }) {
   if (!user) return null;
 
@@ -9,7 +16,7 @@ export default function UserDetailModal({ isOpen, onClose, user }) {
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="User Details"
+      title="Chi tiết Tài khoản Người dùng"
       maxWidth="max-w-md"
     >
       <div className="space-y-6">
@@ -18,7 +25,7 @@ export default function UserDetailModal({ isOpen, onClose, user }) {
             {user.avatarUrl ? (
               <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
             ) : (
-              user.fullName.charAt(0)
+              user.fullName?.charAt(0) || '?'
             )}
           </div>
           <div>
@@ -27,50 +34,50 @@ export default function UserDetailModal({ isOpen, onClose, user }) {
               <span className="font-mono text-xs font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">
                 {user.userCode || (user.role === 'vendor' ? `VND-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'admin' ? `ADM-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'employee' ? (user.employeeCode || `EMP-${user.id.slice(0, 8).toUpperCase()}`) : `CUS-${user.id.slice(0, 8).toUpperCase()}`)}
               </span>
-              <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">• {user.role}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">• {ROLE_LABELS[user.role] || user.role}</p>
             </div>
           </div>
         </div>
 
         <div className="grid gap-4 border-t border-slate-200 dark:border-slate-800 pt-4">
           <div className="flex items-center text-sm">
-            <Mail className="w-5 h-5 text-slate-400 mr-3" />
+            <Mail className="w-5 h-5 text-slate-400 mr-3 shrink-0" />
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Email Address</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Địa chỉ Email</p>
               <p className="font-medium text-slate-800 dark:text-slate-200">{user.email}</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center text-sm">
-            <Phone className="w-5 h-5 text-slate-400 mr-3" />
-            <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Phone Number</p>
-              <p className="font-medium text-slate-800 dark:text-slate-200">{user.phone || 'N/A'}</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center text-sm">
-            <MapPin className="w-5 h-5 text-slate-400 mr-3" />
-            <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Address</p>
-              <p className="font-medium text-slate-800 dark:text-slate-200">{user.address || 'N/A'}</p>
             </div>
           </div>
 
           <div className="flex items-center text-sm">
-            <Calendar className="w-5 h-5 text-slate-400 mr-3" />
+            <Phone className="w-5 h-5 text-slate-400 mr-3 shrink-0" />
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Joined Date</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Số điện thoại</p>
+              <p className="font-medium text-slate-800 dark:text-slate-200">{user.phone || 'Chưa cập nhật'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center text-sm">
+            <MapPin className="w-5 h-5 text-slate-400 mr-3 shrink-0" />
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Địa chỉ liên hệ</p>
+              <p className="font-medium text-slate-800 dark:text-slate-200">{user.address || 'Chưa cập nhật'}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center text-sm">
+            <Calendar className="w-5 h-5 text-slate-400 mr-3 shrink-0" />
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Ngày tham gia</p>
               <p className="font-medium text-slate-800 dark:text-slate-200">{formatDate(user.createdAt)}</p>
             </div>
           </div>
 
           <div className="flex items-center text-sm">
-            <Activity className="w-5 h-5 text-slate-400 mr-3" />
+            <Activity className="w-5 h-5 text-slate-400 mr-3 shrink-0" />
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Status</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Trạng thái tài khoản</p>
               <Badge variant={user.status === 'active' ? 'success' : 'default'} className="mt-1">
-                {user.status.toUpperCase()}
+                {user.status === 'active' ? 'Đang hoạt động' : 'Đã khóa'}
               </Badge>
             </div>
           </div>

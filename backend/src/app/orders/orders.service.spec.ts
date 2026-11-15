@@ -54,7 +54,7 @@ describe('OrdersService', () => {
       shipment: { create: jest.fn().mockResolvedValue({ id: 'shipment' }) },
       payment: { create: jest.fn() },
       orderStatusHistory: { create: jest.fn() },
-      cartItem: { deleteMany: jest.fn() },
+      cartItem: { updateMany: jest.fn() },
       surveyResponse: {
         findMany: jest.fn().mockResolvedValue([prompt])}};
     const prisma = {
@@ -108,6 +108,14 @@ describe('OrdersService', () => {
       orderId,
       'after_checkout',
     );
+    expect(tx.cartItem.updateMany).toHaveBeenCalledWith({
+      where: {
+        cartId,
+        productVariantId: { in: [variantId] },
+        deletedAt: null,
+      },
+      data: { deletedAt: expect.any(Date) },
+    });
     expect(result).toEqual(
       expect.objectContaining({ surveyPrompts: [prompt] }),
     );
@@ -144,7 +152,7 @@ describe('OrdersService', () => {
       productVariant: { update: jest.fn() },
       vendorOrder: { updateMany: jest.fn() },
       shipment: { updateMany: jest.fn() },
-      voucherDetail: { update: jest.fn() },
+      voucherDetail: { updateMany: jest.fn() },
       voucher: { updateMany: jest.fn() },
       payment: { update: jest.fn() },
       order: {
@@ -193,8 +201,8 @@ describe('OrdersService', () => {
     expect(tx.productVariant.update).toHaveBeenCalledWith({
       where: { id: variantId },
       data: { stock: { increment: 2 } }});
-    expect(tx.voucherDetail.update).toHaveBeenCalledWith({
-      where: { id: current.voucherDetails[0].id },
+    expect(tx.voucherDetail.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [current.voucherDetails[0].id] } },
       data: { reversedAt: expect.any(Date) as Date }});
     expect(tx.voucher.updateMany).toHaveBeenCalledWith({
       where: { id: voucherId, usedQuantity: { gt: 0 } },
@@ -271,14 +279,14 @@ describe('OrdersService', () => {
     });
   });
 
-  it('defaults listAll to ASC and paginates by grouped checkout batches when groupByBatch=true', async () => {
+  it('defaults listAll to DESC and paginates by grouped checkout batches when groupByBatch=true', async () => {
     const tBatch = new Date('2026-10-01T10:00:00Z');
     const tSingle = new Date('2026-10-02T10:00:00Z');
     const headers = [
-      { id: 'o1', clientId: 'c1', receiverName: 'A', receiverPhone: '090', shippingAddress: '123 Lê Lợi', createdAt: tBatch },
-      { id: 'o2', clientId: 'c1', receiverName: 'A', receiverPhone: '090', shippingAddress: '123 Lê Lợi', createdAt: new Date(tBatch.getTime() + 1000) },
-      { id: 'o3', clientId: 'c1', receiverName: 'A', receiverPhone: '090', shippingAddress: '123 Lê Lợi', createdAt: new Date(tBatch.getTime() + 2000) },
       { id: 'o4', clientId: 'c2', receiverName: 'B', receiverPhone: '091', shippingAddress: '456 Hai Bà Trưng', createdAt: tSingle },
+      { id: 'o3', clientId: 'c1', receiverName: 'A', receiverPhone: '090', shippingAddress: '123 Lê Lợi', createdAt: new Date(tBatch.getTime() + 2000) },
+      { id: 'o2', clientId: 'c1', receiverName: 'A', receiverPhone: '090', shippingAddress: '123 Lê Lợi', createdAt: new Date(tBatch.getTime() + 1000) },
+      { id: 'o1', clientId: 'c1', receiverName: 'A', receiverPhone: '090', shippingAddress: '123 Lê Lợi', createdAt: tBatch },
     ];
     const fullOrders = headers.map((h) => ({
       ...h,
@@ -321,14 +329,14 @@ describe('OrdersService', () => {
     expect(findManyMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       }),
     );
     expect(findManyMock).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        where: { id: { in: ['o1', 'o2', 'o3', 'o4'] } },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        where: { id: { in: ['o4', 'o3', 'o2', 'o1'] } },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       }),
     );
     expect(result.list).toHaveLength(4);
@@ -410,7 +418,7 @@ describe('OrdersService', () => {
           return data;
         }),
       },
-      cartItem: { deleteMany: jest.fn() },
+      cartItem: { updateMany: jest.fn() },
       surveyResponse: { findMany: jest.fn().mockResolvedValue([]) },
     };
 

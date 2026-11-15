@@ -4,8 +4,11 @@ import { X, Minus, Plus, ShoppingCart, Package, Loader2, Zap } from 'lucide-reac
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useCart } from '../../../hooks/useCart';
+import { useVoucherOffers } from '../../../hooks/useVoucherOffers';
 import { useToast } from '../../common/Toast/Toast';
 import { formatPrice } from '../../../utils/formatPrice';
+import { computeProductVoucherDeal, buildCheckoutVoucherState } from '../../../utils/voucherPrice';
+import { VoucherTicketCheckIcon, DiscountCornerBadge } from '../VoucherBadges';
 
 export default function QuickAddModal({ product, onClose, initialMode = 'add_to_cart' }) {
   const [isBuyingNow, setIsBuyingNow] = useState(false);
@@ -117,9 +120,16 @@ export default function QuickAddModal({ product, onClose, initialMode = 'add_to_
       const targetItem = cartItems.find((i) => i.productVariantId === selectedVariant.id) || cartItems[cartItems.length - 1];
       onClose();
       if (targetItem?.id) {
-        navigate('/checkout', { state: { cartItemIds: [targetItem.id] } });
+        navigate('/checkout', {
+          state: {
+            cartItemIds: [targetItem.id],
+            ...buildCheckoutVoucherState(deal, vendorId),
+          },
+        });
       } else {
-        navigate('/checkout');
+        navigate('/checkout', {
+          state: buildCheckoutVoucherState(deal, vendorId),
+        });
       }
     } catch (error) {
       const status = error.response?.status;
@@ -137,9 +147,13 @@ export default function QuickAddModal({ product, onClose, initialMode = 'add_to_
     }
   };
 
-  const currentImage = selectedColor?.imageUrls?.[0] || null;
+  const fallbackOffers = useVoucherOffers(product?.voucherOffers ? [] : [product?.id]);
+  const activeOffers = product?.voucherOffers || fallbackOffers;
+  const currentImage = selectedColor?.imageUrls?.[0] || product?.thumbnail || null;
   const currentPrice = selectedVariant?.price || 0;
   const isOutOfStock = !selectedVariant || selectedVariant.stock <= 0;
+  const deal = computeProductVoucherDeal(currentPrice, quantity, activeOffers, product?.id);
+  const vendorId = product?.vendor?.id || product?.vendorId || 'platform';
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -167,7 +181,7 @@ export default function QuickAddModal({ product, onClose, initialMode = 'add_to_
           {/* Product header */}
           <div className="flex gap-4 mb-6 pr-8">
             {/* Image */}
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-light-surface dark:bg-dark-surface shrink-0">
+            <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-light-surface dark:bg-dark-surface shrink-0">
               {currentImage && !imgError ? (
                 <img
                   src={currentImage}
@@ -180,21 +194,45 @@ export default function QuickAddModal({ product, onClose, initialMode = 'add_to_
                   <Package className="w-8 h-8 text-primary/30" strokeWidth={1.5} />
                 </div>
               )}
+              {deal.hasDiscount && (
+                <DiscountCornerBadge
+                  percent={deal.discountPercent}
+                  className="absolute top-0 right-0 z-10 text-[10px] px-1.5 py-0.5"
+                />
+              )}
             </div>
 
             {/* Info */}
             <div className="flex-1 min-w-0">
-              {product.category?.name && (
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-primary mb-1 block">
-                  {product.category.name}
-                </span>
-              )}
-              <h3 className="font-semibold text-light-text dark:text-dark-text text-sm sm:text-base leading-snug line-clamp-2 mb-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-primary mb-1 block">
+                {initialMode === 'buy_now'
+                  ? 'Mua ngay với ưu đãi'
+                  : product.category?.name || 'Chọn phân loại'}
+              </span>
+              <h3 className="font-semibold text-light-text dark:text-dark-text text-sm sm:text-base leading-snug line-clamp-2 mb-1.5">
                 {product.name}
               </h3>
-              <p className="font-bold text-primary text-lg">
-                {formatPrice(currentPrice)}
-              </p>
+              {deal.hasDiscount ? (
+                <div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-extrabold text-[#1A3A2C] dark:text-[#DEC47E] text-lg leading-tight">
+                      {formatPrice(deal.unitFinalPrice)}
+                    </span>
+                    <VoucherTicketCheckIcon className="w-4 h-4" />
+                    <span className="text-xs text-light-muted dark:text-dark-muted line-through">
+                      {formatPrice(currentPrice)}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#2A5C4A] dark:text-[#8BBAA1] font-medium mt-0.5">
+                    Tiết kiệm {formatPrice(deal.discountAmount)}
+                    {quantity > 1 ? ` cho ${quantity} SP` : ''}
+                  </p>
+                </div>
+              ) : (
+                <p className="font-bold text-[#1A3A2C] dark:text-[#DEC47E] text-lg">
+                  {formatPrice(currentPrice)}
+                </p>
+              )}
             </div>
           </div>
 
@@ -299,27 +337,41 @@ export default function QuickAddModal({ product, onClose, initialMode = 'add_to_
             <button
               onClick={handleAddToCart}
               disabled={isOutOfStock || isLoading || isBuyingNow}
-              className="flex-1 h-12 border-2 border-primary text-primary hover:bg-primary/10 font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="flex-1 h-12 border border-[#1A3A2C] bg-[#EEF5F1] dark:border-[#579678] dark:bg-[#1A3A2C]/40 text-[#1A3A2C] dark:text-[#DCEAE2] hover:bg-[#DCEAE2] dark:hover:bg-[#1A3A2C]/70 font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <ShoppingCart className="w-4 h-4" />
               )}
-              <span>{isLoading ? 'Đang thêm...' : 'Thêm giỏ hàng'}</span>
+              <span className="text-xs sm:text-sm">
+                {isLoading ? 'Đang thêm...' : 'Thêm Vào Giỏ'}
+              </span>
             </button>
 
             <button
               onClick={handleBuyNow}
               disabled={isOutOfStock || isLoading || isBuyingNow}
-              className="flex-1 h-12 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-primary/25 cursor-pointer"
+              className="flex-1 h-12 bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#1A3A2C]/20 cursor-pointer"
             >
               {isBuyingNow ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-xs sm:text-sm">Đang xử lý...</span>
+                </>
+              ) : isOutOfStock ? (
+                <span className="text-xs sm:text-sm">Hết hàng</span>
+              ) : deal.hasDiscount ? (
+                <div className="flex flex-col items-center leading-tight">
+                  <span className="text-[11px] font-medium text-[#EAD8A6]">Mua Với Voucher</span>
+                  <span className="text-sm font-extrabold">{formatPrice(deal.totalAmount)}</span>
+                </div>
               ) : (
-                <Zap className="w-4 h-4" />
+                <>
+                  <Zap className="w-4 h-4 text-[#DEC47E]" />
+                  <span className="text-xs sm:text-sm">Mua ngay</span>
+                </>
               )}
-              <span>{isOutOfStock ? 'Hết hàng' : isBuyingNow ? 'Đang xử lý...' : 'Mua ngay'}</span>
             </button>
           </div>
         </div>

@@ -1,16 +1,17 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+import {
+  XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   BarChart, Bar, Legend, AreaChart, Area
 } from 'recharts';
-import { 
-  DollarSign, ShoppingBag, Users, TrendingUp, Loader2, Package, 
-  Settings, Sliders, RefreshCw, Check, Percent, Building2, Store, HelpCircle,
-  ArrowUpRight, AlertCircle, Sparkles, Coins, Calendar, Wallet, CheckCircle2,
-  XCircle, Award, Table2, UserCheck, Search, Database
+import {
+  ShoppingBag, Users, Package,
+  Sliders, RefreshCw, Check, Percent, Building2, Store, HelpCircle,
+  Sparkles, Coins, Calendar, Wallet, CheckCircle2,
+  Award, Table2, Search, Database
 } from 'lucide-react';
 import { reportsApi } from '../../api';
 import { Button, Input, Modal, Badge } from '../../components/ui';
+import { formatVND } from '../../utils/formatHelpers';
 
 // Cấu hình tài chính mặc định
 const DEFAULT_FINANCE_CONFIG = {
@@ -20,17 +21,30 @@ const DEFAULT_FINANCE_CONFIG = {
 
 const STORAGE_KEY = 'admin_platform_finance_config';
 
+function toDateInputStr(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export default function Analytics() {
   const [loading, setLoading] = useState(true);
 
+  const now = useMemo(() => new Date(), []);
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const currentQuarter = Math.ceil(currentMonth / 3);
+
   // Period controls: 'all' | 'custom' | 'year' | 'quarter' | 'month' | 'week'
-  const [period, setPeriod] = useState('all'); 
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedMonth, setSelectedMonth] = useState(10);
-  const [selectedQuarter, setSelectedQuarter] = useState(4);
-  const [availableYears, setAvailableYears] = useState([2026, 2025]);
-  const [startDate, setStartDate] = useState('2026-09-19');
-  const [endDate, setEndDate] = useState('2026-09-29');
+  const [period, setPeriod] = useState('all');
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQuarter);
+  const [availableYears, setAvailableYears] = useState([currentYear, currentYear - 1]);
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 29);
+    return toDateInputStr(d);
+  });
+  const [endDate, setEndDate] = useState(() => toDateInputStr(new Date()));
 
   // Tab bảng thống kê đa chiều (Yêu cầu đồ án #5)
   const [statsTab, setStatsTab] = useState('month'); // 'month' | 'quarter' | 'year' | 'employee' | 'product'
@@ -183,9 +197,7 @@ export default function Analytics() {
     setIsConfigOpen(true);
   };
 
-  const formatVND = (val) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0);
-
-  const { summary, chartData, topVendors, topProducts, statisticsTables } = analyticsData;
+  const { summary, chartData, topVendors, statisticsTables } = analyticsData;
 
   // Lọc nhanh trên RAM (useMemo - không gọi lại API) cho bảng Nhân viên & Sản phẩm
   const filteredEmployeesStats = useMemo(() => {
@@ -314,9 +326,9 @@ export default function Analytics() {
 
           <Button 
             onClick={openConfigModal}
-            className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md shadow-indigo-200 dark:shadow-none"
+            className="flex items-center gap-2 bg-gradient-to-r from-[#1A3A2C] to-[#2A5C4A] hover:from-[#234B3A] hover:to-[#35755B] text-white border border-[#C9A84C]/30 shadow-sm"
           >
-            <Sliders className="w-4 h-4" />
+            <Sliders className="w-4 h-4 text-[#C9A84C]" />
             Cấu hình Phí &amp; Thuế Sàn
           </Button>
         </div>
@@ -376,48 +388,68 @@ export default function Analytics() {
                 />
               </div>
 
-              {/* Quick preset buttons */}
-              <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-700 pl-2">
+              {/* Quick dynamic preset buttons */}
+              <div className="flex flex-wrap items-center gap-1 border-l border-slate-200 dark:border-slate-700 pl-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setStartDate('2026-09-19');
-                    setEndDate('2026-09-29');
+                    const today = new Date();
+                    const from = new Date(today);
+                    from.setDate(today.getDate() - 6);
+                    setStartDate(toDateInputStr(from));
+                    setEndDate(toDateInputStr(today));
+                    setPeriod('custom');
                   }}
-                  className="text-[11px] px-2.5 py-1 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 font-semibold transition border border-indigo-200 dark:border-indigo-800"
-                  title="Xem từ ngày 19 tới 29 của tháng trước"
+                  className="text-[11px] px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600 font-medium transition"
                 >
-                  ⚡ 19 - 29 Tháng trước
+                  7 ngày qua
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    setStartDate('2026-10-01');
-                    setEndDate('2026-10-14');
+                    const today = new Date();
+                    const from = new Date(today);
+                    from.setDate(today.getDate() - 29);
+                    setStartDate(toDateInputStr(from));
+                    setEndDate(toDateInputStr(today));
+                    setPeriod('custom');
                   }}
-                  className="text-[11px] px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 font-medium transition"
+                  className="text-[11px] px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600 font-medium transition"
+                >
+                  30 ngày qua
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = new Date();
+                    const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                    setStartDate(toDateInputStr(firstOfMonth));
+                    setEndDate(toDateInputStr(today));
+                    setPeriod('custom');
+                  }}
+                  className="text-[11px] px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600 font-medium transition"
                 >
                   Tháng này
                 </button>
                 <button
                   type="button"
                   onClick={() => {
-                    setStartDate('2026-09-01');
-                    setEndDate('2026-09-30');
+                    const today = new Date();
+                    const firstOfYear = new Date(today.getFullYear(), 0, 1);
+                    setStartDate(toDateInputStr(firstOfYear));
+                    setEndDate(toDateInputStr(today));
+                    setPeriod('custom');
                   }}
-                  className="text-[11px] px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 font-medium transition"
+                  className="text-[11px] px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600 font-medium transition"
                 >
-                  Trọn tháng 9
+                  Năm nay
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setStartDate('2026-10-07');
-                    setEndDate('2026-10-14');
-                  }}
-                  className="text-[11px] px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 font-medium transition"
+                  onClick={() => setPeriod('all')}
+                  className="text-[11px] px-2.5 py-1 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 font-semibold transition border border-indigo-200 dark:border-indigo-800"
                 >
-                  7 ngày qua
+                  Tất cả
                 </button>
               </div>
             </div>
@@ -490,37 +522,25 @@ export default function Analytics() {
       </div>
 
       {/* Admin Revenue Breakdown Banner */}
-      <div className="rounded-2xl p-6 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl relative overflow-hidden border border-indigo-900/50">
-        <div className="absolute -right-8 -top-8 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-8 -bottom-8 w-60 h-60 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="rounded-2xl p-6 bg-gradient-to-br from-[#08130E] via-[#132A20] to-[#0E2219] text-white shadow-xl relative overflow-hidden border border-[#C9A84C]/25">
+        <div className="absolute -right-8 -top-8 w-60 h-60 bg-[#2A5C4A]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-8 -bottom-8 w-60 h-60 bg-[#C9A84C]/15 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10">
-          <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-indigo-900/60 gap-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-[#1E3B2E] gap-4">
             <div>
-              <div className="flex items-center gap-2 text-indigo-300 text-sm font-medium mb-1">
-                <Coins className="w-4 h-4 text-amber-400" />
+              <div className="flex items-center gap-2 text-[#DEC47E] text-sm font-semibold mb-1">
+                <Coins className="w-4 h-4 text-[#C9A84C]" />
                 <span>DOANH THU THỰC TẾ CỦA ADMIN SÀN (PLATFORM REVENUE)</span>
               </div>
               <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
                 {formatVND(summary.totalAdminRevenue)}
               </h2>
-              <p className="text-xs text-indigo-200/70 mt-1">
+              <p className="text-xs text-[#A3B8AE] mt-1">
                 {summary.vendorFeeRevenue > 0
                   ? `Doanh thu nền tảng = Phí ĐK vendor (${formatVND(summary.vendorFeeRevenue)}) + Thuế sàn ${financeConfig.commissionTaxRate}% (${formatVND(summary.orderTaxRevenue)})`
                   : `Doanh thu sàn trong kỳ = Thuế sàn ${financeConfig.commissionTaxRate}% trên đơn hoàn tất (${formatVND(summary.orderTaxRevenue)}) • Lũy kế phí ĐK toàn sàn: ${formatVND(summary.allTimeVendorFeeRevenue ?? 0)}`}
               </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={openConfigModal}
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 backdrop-blur text-xs"
-              >
-                <Settings className="w-3.5 h-3.5 mr-1.5" />
-                Đổi mức phí &amp; thuế
-              </Button>
             </div>
           </div>
 
@@ -528,16 +548,16 @@ export default function Analytics() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-6">
             <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-indigo-200 flex items-center gap-1.5">
-                  <Store className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs font-medium text-[#C5D6CE] flex items-center gap-1.5">
+                  <Store className="w-3.5 h-3.5 text-[#C9A84C]" />
                   Phí Đăng Ký Kinh Doanh
                 </span>
-                <Badge variant="outline" className="border-amber-400/40 text-amber-300 text-[10px] bg-amber-500/10">
+                <Badge variant="outline" className="border-[#C9A84C]/40 text-[#DEC47E] text-[10px] bg-[#C9A84C]/15">
                   {formatVND(financeConfig.vendorRegistrationFee)} / shop
                 </Badge>
               </div>
               <p className="text-xl font-bold text-white">{formatVND(summary.vendorFeeRevenue)}</p>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-[#8AA398] mt-1">
                 {period === 'all'
                   ? `${summary.activeVendorsCount} vendor hoạt động đã nộp phí`
                   : `${summary.newVendorsInPeriod || 0} vendor mới trong kỳ (Lũy kế: ${summary.activeVendorsCount} shop)`}
@@ -546,7 +566,7 @@ export default function Analytics() {
 
             <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-indigo-200 flex items-center gap-1.5">
+                <span className="text-xs font-medium text-[#C5D6CE] flex items-center gap-1.5">
                   <Percent className="w-3.5 h-3.5 text-emerald-400" />
                   Thuế / Hoa Hồng Sàn
                 </span>
@@ -555,39 +575,39 @@ export default function Analytics() {
                 </Badge>
               </div>
               <p className="text-xl font-bold text-white">{formatVND(summary.orderTaxRevenue)}</p>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-[#8AA398] mt-1">
                 Trích từ {summary.completedOrdersCount} đơn hoàn tất trong kỳ
               </p>
             </div>
 
             <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-indigo-200 flex items-center gap-1.5">
-                  <ShoppingBag className="w-3.5 h-3.5 text-sky-400" />
+                <span className="text-xs font-medium text-[#C5D6CE] flex items-center gap-1.5">
+                  <ShoppingBag className="w-3.5 h-3.5 text-teal-400" />
                   Tổng GMV Giao Dịch
                 </span>
-                <Badge variant="outline" className="border-sky-400/40 text-sky-300 text-[10px] bg-sky-500/10">
+                <Badge variant="outline" className="border-teal-400/40 text-teal-300 text-[10px] bg-teal-500/10">
                   Hàng hóa
                 </Badge>
               </div>
               <p className="text-xl font-bold text-white">{formatVND(summary.totalGmv)}</p>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-[#8AA398] mt-1">
                 Tổng giá trị đơn hàng hoàn tất trong kỳ
               </p>
             </div>
 
             <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-indigo-200 flex items-center gap-1.5">
-                  <Wallet className="w-3.5 h-3.5 text-purple-400" />
+                <span className="text-xs font-medium text-[#C5D6CE] flex items-center gap-1.5">
+                  <Wallet className="w-3.5 h-3.5 text-[#DEC47E]" />
                   Thực Thu Sàn (Cash-in)
                 </span>
-                <Badge variant="outline" className="border-purple-400/40 text-purple-300 text-[10px] bg-purple-500/10">
+                <Badge variant="outline" className="border-[#C9A84C]/40 text-[#DEC47E] text-[10px] bg-[#C9A84C]/15">
                   Tiền về ví sàn
                 </Badge>
               </div>
               <p className="text-xl font-bold text-white">{formatVND(summary.totalCashIn)}</p>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-[#8AA398] mt-1">
                 Online đã thanh toán + COD giao thành công
               </p>
             </div>
@@ -595,32 +615,24 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* KPI Cards (6 Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+      {/* KPI Cards (5 Cards — Doanh thu Sàn đã hiển thị nổi bật tại Hero Banner) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { 
-            title: 'Doanh Thu Sàn', 
-            value: formatVND(summary.totalAdminRevenue), 
-            sub: summary.vendorFeeRevenue > 0 ? `Phí ĐK + ${financeConfig.commissionTaxRate}% thuế` : `Thuế sàn ${financeConfig.commissionTaxRate}%`, 
-            icon: DollarSign, 
-            color: 'text-emerald-600', 
-            bg: 'bg-emerald-100 dark:bg-emerald-950/60' 
-          },
           { 
             title: 'Thu Nhập Vendor', 
             value: formatVND(summary.vendorNetRevenue), 
             sub: 'GMV trừ thuế sàn', 
             icon: Building2, 
-            color: 'text-indigo-600', 
-            bg: 'bg-indigo-100 dark:bg-indigo-950/60' 
+            color: 'text-[#1A3A2C] dark:text-[#6BB392]', 
+            bg: 'bg-[#EEF5F1] dark:bg-[#1A3A2C]/50' 
           },
           { 
             title: 'Tổng Sản Phẩm', 
             value: (summary.totalProductsCount || 0).toLocaleString(), 
             sub: 'Đang lưu hành trên sàn', 
             icon: Package, 
-            color: 'text-purple-600', 
-            bg: 'bg-purple-100 dark:bg-purple-950/60' 
+            color: 'text-[#B08A2E] dark:text-[#DEC47E]', 
+            bg: 'bg-[#FBF7EC] dark:bg-[#C9A84C]/15' 
           },
           { 
             title: 'Tổng Đơn Hàng', 
@@ -629,23 +641,23 @@ export default function Analytics() {
               ? `${summary.completedOrdersCount} hoàn tất / ${summary.totalSystemOrdersCount} đơn toàn sàn` 
               : `${summary.completedOrdersCount} đơn hoàn tất`, 
             icon: ShoppingBag, 
-            color: 'text-blue-600', 
-            bg: 'bg-blue-100 dark:bg-blue-950/60' 
+            color: 'text-[#2A5C4A] dark:text-[#579678]', 
+            bg: 'bg-[#EEF5F1] dark:bg-[#2A5C4A]/30' 
           },
           { 
             title: 'Khách Hàng', 
             value: (summary.activeClientsCount || 0).toLocaleString(), 
             sub: `${summary.activeClientsCount ?? 0} hoạt động / ${summary.totalClientsCount ?? 0} tài khoản`, 
             icon: Users, 
-            color: 'text-cyan-600', 
-            bg: 'bg-cyan-100 dark:bg-cyan-950/60' 
+            color: 'text-teal-700 dark:text-teal-400', 
+            bg: 'bg-teal-50 dark:bg-teal-950/60' 
           },
           { 
             title: 'Tỷ Lệ Hoàn Tất', 
             value: `${summary.conversionRate}%`, 
             sub: `${summary.cancelledOrdersCount} đơn bị hủy`, 
             icon: CheckCircle2, 
-            color: 'text-amber-600', 
+            color: 'text-amber-600 dark:text-amber-400', 
             bg: 'bg-amber-100 dark:bg-amber-950/60' 
           },
         ].map((card, idx) => (
@@ -705,7 +717,7 @@ export default function Analytics() {
                 }}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                   statsTab === tab.id
-                    ? 'bg-indigo-600 text-white shadow-xs'
+                    ? 'bg-[#1A3A2C] dark:bg-[#2A5C4A] text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-700'
                 }`}
               >
@@ -978,7 +990,7 @@ export default function Analytics() {
                       <td className="px-4 py-3 text-center font-semibold text-slate-700 dark:text-slate-200">
                         {Number(prod.orderCount || 0).toLocaleString()}
                       </td>
-                      <td className="px-4 py-3 text-center font-bold text-blue-600 dark:text-blue-400">
+                      <td className="px-4 py-3 text-center font-bold text-[#2A5C4A] dark:text-[#6BB392]">
                         {Number(prod.totalQuantity || prod.allQuantity || 0).toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-300">
@@ -1003,7 +1015,7 @@ export default function Analytics() {
                     <td className="px-4 py-3 text-center">
                       {productTableTotals.orderCount.toLocaleString()} lượt HĐ
                     </td>
-                    <td className="px-4 py-3 text-center text-blue-600 dark:text-blue-400">
+                    <td className="px-4 py-3 text-center text-[#2A5C4A] dark:text-[#6BB392]">
                       {productTableTotals.totalQuantity.toLocaleString()} SP
                     </td>
                     <td className="px-4 py-3 text-right text-slate-400">—</td>
@@ -1048,19 +1060,19 @@ export default function Analytics() {
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorGmv" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#2A5C4A" stopOpacity={0.25}/>
+                    <stop offset="95%" stopColor="#2A5C4A" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorCashIn" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#a855f7" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#a855f7" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#C9A84C" stopOpacity={0.25}/>
+                    <stop offset="95%" stopColor="#C9A84C" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorTax" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#0D9488" stopOpacity={0.25}/>
+                    <stop offset="95%" stopColor="#0D9488" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" strokeOpacity={0.4} />
                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} dy={10} />
                 <YAxis 
                   axisLine={false} 
@@ -1072,35 +1084,35 @@ export default function Analytics() {
                 />
                 <RechartsTooltip 
                   formatter={(val, name) => [formatVND(val), name]}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
+                  contentStyle={{ borderRadius: '10px', border: '1px solid rgba(201,168,76,0.25)', boxShadow: '0 8px 20px -4px rgb(0 0 0 / 0.12)' }} 
                 />
                 <Legend />
                 <Area 
                   type="monotone" 
                   dataKey="gmv" 
                   name="Tổng GMV Hàng Hóa" 
-                  stroke="#6366f1" 
+                  stroke="#2A5C4A" 
                   fillOpacity={1}
                   fill="url(#colorGmv)"
-                  strokeWidth={2} 
+                  strokeWidth={2.25} 
                 />
                 <Area 
                   type="monotone" 
                   dataKey="cashIn" 
                   name="Thực Thu Sàn (Cash-in)" 
-                  stroke="#a855f7" 
+                  stroke="#C9A84C" 
                   fillOpacity={1}
                   fill="url(#colorCashIn)"
-                  strokeWidth={2} 
+                  strokeWidth={2.25} 
                 />
                 <Area 
                   type="monotone" 
                   dataKey="adminTax" 
                   name={`Thuế sàn thu được (${financeConfig.commissionTaxRate}%)`} 
-                  stroke="#10b981" 
+                  stroke="#0D9488" 
                   fillOpacity={1}
                   fill="url(#colorTax)"
-                  strokeWidth={2} 
+                  strokeWidth={2.25} 
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -1118,149 +1130,87 @@ export default function Analytics() {
                 Số lượng đơn hàng phân theo mốc thời gian
               </p>
             </div>
-            <ShoppingBag className="w-5 h-5 text-indigo-500" />
+            <ShoppingBag className="w-5 h-5 text-[#2A5C4A] dark:text-[#C9A84C]" />
           </div>
 
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#cbd5e1" strokeOpacity={0.4} />
                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} width={30} />
                 <RechartsTooltip 
                   formatter={(val, name) => [`${val} đơn`, name]}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
+                  contentStyle={{ borderRadius: '10px', border: '1px solid rgba(201,168,76,0.25)', boxShadow: '0 8px 20px -4px rgb(0 0 0 / 0.12)' }} 
                 />
                 <Legend />
-                <Bar dataKey="completedOrders" name="Hoàn tất" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="cancelledOrders" name="Bị hủy" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="completedOrders" name="Hoàn tất" fill="#2A5C4A" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="cancelledOrders" name="Bị hủy" fill="#E11D48" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      {/* Leaderboards: Top Vendors & Top Products */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Vendors */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Store className="w-5 h-5 text-indigo-600" />
-                Top 5 Gian Hàng Đạt Doanh Số Cao Nhất
-              </h3>
-              <p className="text-xs text-slate-400">
-                Thống kê theo GMV hoàn tất và số thuế đã nộp về sàn
-              </p>
-            </div>
-            <Award className="w-5 h-5 text-amber-500" />
+      {/* Leaderboard: Top Vendors */}
+      <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Store className="w-5 h-5 text-indigo-600" />
+              Top 5 Gian Hàng Đạt Doanh Số Cao Nhất
+            </h3>
+            <p className="text-xs text-slate-400">
+              Thống kê theo GMV hoàn tất và số thuế đã nộp về sàn
+            </p>
           </div>
-
-          {topVendors.length === 0 ? (
-            <div className="h-60 flex flex-col items-center justify-center text-slate-400 text-sm">
-              <Store className="w-10 h-10 mb-2 stroke-1 text-slate-300" />
-              Chưa có dữ liệu giao dịch trong kỳ đã chọn
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500 font-semibold uppercase">
-                    <th className="pb-2.5">Gian hàng</th>
-                    <th className="pb-2.5 text-center">Đơn hàng</th>
-                    <th className="pb-2.5 text-right">Doanh số GMV</th>
-                    <th className="pb-2.5 text-right">Thuế nộp sàn ({financeConfig.commissionTaxRate}%)</th>
-                    <th className="pb-2.5 text-right">Thực nhận</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {topVendors.map((v, i) => (
-                    <tr key={v.id || i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="py-3 font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 font-bold flex items-center justify-center text-[10px]">
-                          {i + 1}
-                        </span>
-                        {v.name}
-                      </td>
-                      <td className="py-3 text-center text-slate-600 dark:text-slate-400 font-semibold">
-                        {v.orderCount}
-                      </td>
-                      <td className="py-3 text-right font-semibold text-slate-800 dark:text-slate-100">
-                        {formatVND(v.sales)}
-                      </td>
-                      <td className="py-3 text-right font-semibold text-emerald-600">
-                        {formatVND(v.tax)}
-                      </td>
-                      <td className="py-3 text-right font-medium text-slate-600 dark:text-slate-300">
-                        {formatVND(v.netEarnings)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <Award className="w-5 h-5 text-amber-500" />
         </div>
 
-        {/* Top Products */}
-        <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <Package className="w-5 h-5 text-purple-600" />
-                Top 5 Sản Phẩm Bán Chạy Nhất
-              </h3>
-              <p className="text-xs text-slate-400">
-                Thống kê theo số lượng sản phẩm bán ra và tổng doanh thu
-              </p>
-            </div>
-            <Sparkles className="w-5 h-5 text-amber-500" />
+        {topVendors.length === 0 ? (
+          <div className="h-48 flex flex-col items-center justify-center text-slate-400 text-sm">
+            <Store className="w-10 h-10 mb-2 stroke-1 text-slate-300" />
+            Chưa có dữ liệu giao dịch trong kỳ đã chọn
           </div>
-
-          {topProducts.length === 0 ? (
-            <div className="h-60 flex flex-col items-center justify-center text-slate-400 text-sm">
-              <Package className="w-10 h-10 mb-2 stroke-1 text-slate-300" />
-              Chưa có dữ liệu sản phẩm trong kỳ đã chọn
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500 font-semibold uppercase">
-                    <th className="pb-2.5">Sản phẩm</th>
-                    <th className="pb-2.5">Danh mục</th>
-                    <th className="pb-2.5 text-center">Đã bán</th>
-                    <th className="pb-2.5 text-right">Doanh số</th>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500 font-semibold uppercase">
+                  <th className="pb-2.5">Gian hàng</th>
+                  <th className="pb-2.5 text-center">Đơn hàng</th>
+                  <th className="pb-2.5 text-right">Doanh số GMV</th>
+                  <th className="pb-2.5 text-right">Thuế nộp sàn ({financeConfig.commissionTaxRate}%)</th>
+                  <th className="pb-2.5 text-right">Thực nhận</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {topVendors.map((v, i) => (
+                  <tr key={v.id || i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td className="py-3 font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 font-bold flex items-center justify-center text-[10px]">
+                        {i + 1}
+                      </span>
+                      {v.name}
+                    </td>
+                    <td className="py-3 text-center text-slate-600 dark:text-slate-400 font-semibold">
+                      {v.orderCount}
+                    </td>
+                    <td className="py-3 text-right font-semibold text-slate-800 dark:text-slate-100">
+                      {formatVND(v.sales)}
+                    </td>
+                    <td className="py-3 text-right font-semibold text-emerald-600">
+                      {formatVND(v.tax)}
+                    </td>
+                    <td className="py-3 text-right font-medium text-slate-600 dark:text-slate-300">
+                      {formatVND(v.netEarnings)}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {topProducts.map((p, i) => (
-                    <tr key={p.id || i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="py-3 font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2 max-w-[200px] truncate">
-                        <span className="w-5 h-5 rounded-full bg-purple-50 dark:bg-purple-950/60 text-purple-600 font-bold flex items-center justify-center text-[10px]">
-                          {i + 1}
-                        </span>
-                        <span className="truncate">{p.name}</span>
-                      </td>
-                      <td className="py-3 text-slate-500">
-                        <Badge variant="outline" className="text-[10px] py-0 px-2">
-                          {p.category}
-                        </Badge>
-                      </td>
-                      <td className="py-3 text-center font-bold text-slate-800 dark:text-slate-100">
-                        {p.quantity.toLocaleString()}
-                      </td>
-                      <td className="py-3 text-right font-semibold text-indigo-600">
-                        {formatVND(p.revenue)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Modal Tùy chỉnh Phí Đăng ký & Thuế Sàn */}
@@ -1290,7 +1240,7 @@ export default function Analytics() {
               <Button
                 size="sm"
                 onClick={handleSaveConfig}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                className="bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white"
               >
                 Lưu cấu hình
               </Button>

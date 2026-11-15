@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Star, Loader2, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { Star, Loader2, Trash2 } from 'lucide-react';
 import { reviewsApi } from '../../api';
 import { formatDate } from '../../utils/formatHelpers';
-import { Button } from '../../components/ui';
+import { PaginationFooter } from '../../components/ui';
 
 export default function ReviewManagement() {
   const [reviews, setReviews] = useState([]);
@@ -49,8 +49,8 @@ export default function ReviewManagement() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Quản lý Đánh giá (Reviews)</h1>
-        <p className="text-slate-500 dark:text-slate-400">{totalItems} đánh giá</p>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Kiểm duyệt Đánh giá Sao</h1>
+        <p className="text-slate-500 dark:text-slate-400">{totalItems} đánh giá sản phẩm</p>
       </div>
 
       <div className="bg-white dark:bg-slate-900 transition-colors rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -110,30 +110,13 @@ export default function ReviewManagement() {
           )}
         </div>
 
-        {/* Server Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Trang {page} / {totalPages}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                icon={ChevronLeft} 
-                disabled={page <= 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-              />
-              <Button 
-                variant="outline" 
-                size="sm" 
-                icon={ChevronRight}
-                disabled={page >= totalPages}
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              />
-            </div>
-          </div>
-        )}
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          itemLabel="đánh giá"
+        />
       </div>
     </div>
   );

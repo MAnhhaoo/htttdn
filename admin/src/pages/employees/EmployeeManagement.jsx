@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { 
   Users, UserPlus, Search,
   Lock, Unlock, Edit, TrendingUp, CheckCircle,
-  Clock, Briefcase, RefreshCw, Loader2, ChevronLeft, ChevronRight,
+  Clock, Briefcase, RefreshCw, Loader2,
   ShieldCheck, Bell
 } from 'lucide-react';
 import { employeesApi } from '../../api';
-import { Button, Input, Badge } from '../../components/ui';
+import { formatVND } from '../../utils/formatHelpers';
+import { Button, Input, Badge, PaginationFooter } from '../../components/ui';
 import EmployeeFormModal from './EmployeeFormModal';
 import SalaryHistoryModal from './SalaryHistoryModal';
 import AssignScheduleModal from './AssignScheduleModal';
@@ -100,8 +101,6 @@ export default function EmployeeManagement() {
       alert('Không thể cập nhật trạng thái nhân viên');
     }
   };
-
-  const formatVND = (val) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0);
 
   return (
     <div className="space-y-6 pb-12">
@@ -357,27 +356,9 @@ export default function EmployeeManagement() {
                         )}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <button
-                          onClick={() => handleToggleStatus(emp)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
-                            emp.status === 'active'
-                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
-                              : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
-                          }`}
-                          title={emp.status === 'active' ? 'Nhấn để khóa tài khoản' : 'Nhấn để mở khóa tài khoản'}
-                        >
-                          {emp.status === 'active' ? (
-                            <>
-                              <CheckCircle className="w-3 h-3 text-emerald-600" />
-                              Hoạt động
-                            </>
-                          ) : (
-                            <>
-                              <Lock className="w-3 h-3 text-rose-600" />
-                              Đã khóa
-                            </>
-                          )}
-                        </button>
+                        <Badge variant={emp.status === 'active' ? 'success' : 'error'}>
+                          {emp.status === 'active' ? 'Hoạt động' : 'Đã khóa'}
+                        </Badge>
                       </td>
                       <td className="py-3 px-4 text-center">
                         <Badge variant="outline" className="border-slate-200 text-slate-600 bg-slate-50 text-[10px]">
@@ -448,34 +429,13 @@ export default function EmployeeManagement() {
           </div>
         )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
-            <span>
-              Trang {page} / {totalPages} (Tổng số {totalItems} nhân viên)
-            </span>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="p-1.5"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="p-1.5"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        )}
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          itemLabel="nhân viên"
+        />
       </div>
 
       {/* Form Modal */}

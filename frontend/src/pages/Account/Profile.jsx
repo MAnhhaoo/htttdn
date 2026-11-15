@@ -175,8 +175,7 @@ export default function Profile() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 lg:px-8 py-12">
-      <div className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl p-8">
+    <div className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl p-6 sm:p-8 shadow-luxury dark:shadow-luxury-dark">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-8 border-b border-light-border dark:border-dark-border pb-6">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary overflow-hidden shrink-0">
@@ -300,7 +299,6 @@ export default function Profile() {
             </div>
           </form>
         )}
-      </div>
     </div>
   );
 }

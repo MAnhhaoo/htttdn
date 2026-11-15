@@ -161,4 +161,157 @@ describe('ReportsService', () => {
       }),
     ]);
   });
+
+  it('customerReport avoids unbounded clientId IN (...) in platform view and aggregates accurately', async () => {
+    const prisma = {
+      order: {
+        findMany: jest.fn(),
+      },
+      client: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'c-1', dateOfBirth: new Date('2000-05-10'), gender: 'female' },
+          { id: 'c-2', dateOfBirth: null, gender: null },
+        ]),
+      },
+      productFavorite: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            product: {
+              id: 'p-1',
+              name: 'Đầm Lụa',
+              category: { id: 'cat-1', name: 'Đầm' },
+            },
+          },
+        ]),
+      },
+      orderDetail: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    Object.assign(prisma, { extended: prisma });
+
+    const service = new ReportsService(prisma as unknown as PrismaService);
+    const report = await service.customerReport(
+      { userID: 'admin-1', role: 'admin' } as any,
+      { limit: 5 } as any,
+    );
+
+    expect(prisma.order.findMany).not.toHaveBeenCalled();
+    expect(prisma.productFavorite.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          client: { deletedAt: null },
+        }),
+      }),
+    );
+    expect(report.customerCount).toBe(2);
+    expect(report.interests.favoriteProducts).toEqual([
+      { id: 'p-1', name: 'Đầm Lụa', count: 1 },
+    ]);
+  });
+
+  it('customerDemographicsAndPreferences computes ageGroupAnalysis in single O(F + D) pass', async () => {
+    const dob25 = new Date();
+    dob25.setFullYear(dob25.getFullYear() - 28);
+
+    const prisma = {
+      client: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'c-1',
+            fullName: 'Trần Thị B',
+            email: 'b@example.com',
+            phone: '0901234567',
+            gender: 'female',
+            dateOfBirth: dob25,
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            status: 'active',
+          },
+        ]),
+      },
+      productFavorite: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            clientId: 'c-1',
+            productId: 'p-1',
+            product: {
+              id: 'p-1',
+              name: 'Áo Sơ Mi',
+              categoryId: 'cat-1',
+              category: { name: 'Áo' },
+              vendorId: 'v-1',
+              vendor: {
+                id: 'v-1',
+                storeName: 'Routine Official',
+                fullName: 'Routine',
+                avatarUrl: null,
+              },
+            },
+          },
+        ]),
+      },
+      orderDetail: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            quantity: 2,
+            price: 250000,
+            order: {
+              id: 'ord-1',
+              clientId: 'c-1',
+              status: 'completed',
+              subtotalAmount: 500000,
+              discountAmount: 50000,
+            },
+            productVariant: {
+              productColor: {
+                product: {
+                  id: 'p-1',
+                  name: 'Áo Sơ Mi',
+                  categoryId: 'cat-1',
+                  category: { name: 'Áo' },
+                  vendorId: 'v-1',
+                  vendor: {
+                    id: 'v-1',
+                    storeName: 'Routine Official',
+                    fullName: 'Routine',
+                    avatarUrl: null,
+                  },
+                },
+              },
+            },
+          },
+        ]),
+      },
+      cartItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+    };
+    Object.assign(prisma, { extended: prisma });
+
+    const service = new ReportsService(prisma as unknown as PrismaService);
+    const res = await service.customerDemographicsAndPreferences({
+      page: 1,
+      itemPerPage: 10,
+    });
+
+    const group25 = res.ageGroupAnalysis.find((g) => g.key === '25_34');
+    expect(group25).toEqual({
+      key: '25_34',
+      label: '25 - 34 tuổi',
+      clientCount: 1,
+      percentage: 100,
+      topFavoriteVendor: { name: 'Routine Official', count: 1 },
+      topPurchasedVendor: { name: 'Routine Official', count: 2 },
+      totalSpent: 450000,
+    });
+    expect(res.clients.list[0]).toEqual(
+      expect.objectContaining({
+        id: 'c-1',
+        totalOrders: 1,
+        totalSpent: 450000,
+        topStorePurchased: 'Routine Official',
+        favoritesCount: 1,
+      }),
+    );
+  });
 });

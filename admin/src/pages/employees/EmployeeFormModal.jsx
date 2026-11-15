@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Modal, Button, Input, Select, AvatarUploadField } from '../../components/ui';
+import { Modal, Button, Input, AvatarUploadField } from '../../components/ui';
 import { employeesApi } from '../../api';
-import { 
-  User, Mail, Phone, Lock, DollarSign, Clock, ShieldCheck, 
-  Building2, Briefcase, Calendar, MapPin, CreditCard, AlertCircle
-} from 'lucide-react';
+import { formatVND } from '../../utils/formatHelpers';
+import { User, ShieldCheck, Briefcase, AlertCircle } from 'lucide-react';
 
 const PERMISSION_OPTIONS = [
   { key: 'orders_read', label: 'Xem danh sách & chi tiết đơn hàng', desc: 'Cho phép nhân viên xem danh sách các đơn hàng được phân quyền' },
@@ -164,8 +162,6 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
     }
   };
 
-  const formatVND = (val) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0);
-
   return (
     <Modal
       isOpen={isOpen}
@@ -188,7 +184,7 @@ export default function EmployeeFormModal({ isOpen, onClose, onSave, employeeToE
         </div>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-6 max-h-[75vh] overflow-y-auto pr-1">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {errorMsg && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />

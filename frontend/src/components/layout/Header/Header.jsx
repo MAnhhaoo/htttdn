@@ -1,6 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, ShoppingBag, User, Menu, X, ChevronRight, ChevronDown, ArrowRight, Bell, Heart } from 'lucide-react';
+import {
+  Search,
+  ShoppingBag,
+  User,
+  Menu,
+  X,
+  ChevronRight,
+  ChevronDown,
+  ArrowRight,
+  Heart,
+  ClipboardList,
+} from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 import { useCart } from '../../../hooks/useCart';
 import { useCategories } from '../../../hooks/useCategories';
@@ -15,6 +26,13 @@ export default function Header() {
   const { categories } = useCategories();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Stable YYYY-MM-DD date string for "Sản phẩm mới" so React Query's cache is preserved across renders
+  const newArrivalsDate = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  }, []);
+
   // Close mobile menu when route changes
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -27,14 +45,16 @@ export default function Header() {
     } else {
       document.body.style.overflow = '';
     }
-    return () => { document.body.style.overflow = ''; };
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isMobileMenuOpen]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     const query = e.target.search.value;
     if (query) {
-      navigate(`/products?q=${query}`);
+      navigate(`/products?q=${encodeURIComponent(query)}`);
       setIsMobileMenuOpen(false);
     }
   };
@@ -51,17 +71,20 @@ export default function Header() {
 
       <header className="sticky top-0 z-40 bg-[#FAF7F2]/90 dark:bg-dark-card/90 backdrop-blur-xl border-b border-light-border dark:border-dark-border shadow-sm transition-colors duration-500">
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 h-16 md:h-20 flex items-center justify-between gap-4 md:gap-6">
-
           {/* Mobile Menu Button & Logo */}
           <div className="flex items-center gap-3">
             <button
+              type="button"
               className="p-1.5 -ml-1.5 lg:hidden text-light-text dark:text-dark-text hover:text-primary transition-colors"
               onClick={() => setIsMobileMenuOpen(true)}
+              aria-label="Mở menu điều hướng"
             >
               <Menu className="w-6 h-6" />
             </button>
             <Link to="/" className="flex items-center gap-2">
-              <span className="text-2xl md:text-3xl font-black tracking-[0.2em] text-[#1A3A2C] dark:text-white font-sans mt-1 uppercase">MIVA</span>
+              <span className="text-2xl md:text-3xl font-black tracking-[0.2em] text-[#1A3A2C] dark:text-white font-sans mt-1 uppercase">
+                MIVA
+              </span>
             </Link>
           </div>
 
@@ -74,7 +97,11 @@ export default function Header() {
                 placeholder="Tìm kiếm sản phẩm..."
                 className="w-full pl-5 pr-12 py-2.5 bg-light-surface dark:bg-dark-surface border border-light-border dark:border-dark-border focus:border-primary focus:bg-white dark:focus:bg-dark-card rounded-full text-sm outline-none transition-all text-light-text dark:text-dark-text placeholder-light-muted dark:placeholder-dark-muted"
               />
-              <button type="submit" className="absolute right-3 p-1.5 text-light-muted dark:text-dark-muted hover:text-primary dark:hover:text-primary transition-colors">
+              <button
+                type="submit"
+                className="absolute right-3 p-1.5 text-light-muted dark:text-dark-muted hover:text-primary dark:hover:text-primary transition-colors"
+                aria-label="Tìm kiếm"
+              >
                 <Search className="w-5 h-5" />
               </button>
             </form>
@@ -84,18 +111,28 @@ export default function Header() {
           <div className="flex items-center gap-2 sm:gap-4">
             <ThemeToggle />
 
-            <NotificationBellDropdown />
+            {isAuthenticated && <NotificationBellDropdown />}
 
-            <Link to="/favorites" className="p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors">
+            <Link
+              to="/favorites"
+              className="p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors"
+              title="Sản phẩm yêu thích"
+            >
               <Heart className="w-5 h-5 text-[#1A3A2C] dark:text-white" strokeWidth={2.5} />
             </Link>
 
             {isAuthenticated ? (
               <div className="flex items-center gap-4">
-                <Link to="/orders" className="text-sm font-medium text-light-muted hover:text-primary transition-colors hidden sm:block">
+                <Link
+                  to="/orders"
+                  className="text-sm font-medium text-light-muted hover:text-primary transition-colors hidden sm:block"
+                >
                   Đơn hàng
                 </Link>
-                <Link to="/profile" className="flex items-center gap-2 text-[#1A3A2C] dark:text-dark-text hover:text-primary transition-colors p-2">
+                <Link
+                  to="/profile"
+                  className="flex items-center gap-2 text-[#1A3A2C] dark:text-dark-text hover:text-primary transition-colors p-2"
+                >
                   {user?.avatarUrl ? (
                     <img
                       src={user.avatarUrl}
@@ -105,19 +142,29 @@ export default function Header() {
                   ) : (
                     <User className="w-5 h-5" strokeWidth={2.5} />
                   )}
-                  <span className="text-sm font-medium hidden sm:block truncate max-w-[120px]">{user?.fullName?.split(' ').pop()}</span>
+                  <span className="text-sm font-medium hidden sm:block truncate max-w-[120px]">
+                    {user?.fullName?.split(' ').pop()}
+                  </span>
                 </Link>
               </div>
             ) : (
-              <Link to="/login" className="flex items-center gap-2 text-[#1A3A2C] dark:text-dark-text hover:text-primary transition-colors p-2">
+              <Link
+                to="/login"
+                className="flex items-center gap-2 text-[#1A3A2C] dark:text-dark-text hover:text-primary transition-colors p-2"
+                title="Đăng nhập"
+              >
                 <User className="w-5 h-5" strokeWidth={2.5} />
               </Link>
             )}
 
-            <Link to="/cart" className="relative p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors">
+            <Link
+              to="/cart"
+              className="relative p-2 text-light-muted dark:text-dark-muted hover:text-[#1A3A2C] dark:hover:text-primary transition-colors"
+              title="Giỏ hàng"
+            >
               <ShoppingBag className="w-5 h-5 text-[#1A3A2C] dark:text-white" strokeWidth={2.5} />
               {isAuthenticated && totalItems > 0 && (
-                <span className="absolute 0 top-0.5 right-0.5 w-4 h-4 bg-[#1A3A2C] text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-[#FAF7F2] dark:border-dark-card">
+                <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-[#1A3A2C] text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-[#FAF7F2] dark:border-dark-card">
                   {totalItems > 99 ? '99+' : totalItems}
                 </span>
               )}
@@ -131,11 +178,14 @@ export default function Header() {
             <Link to="/products" className="hover:text-primary transition-colors whitespace-nowrap uppercase">
               Tất cả sản phẩm
             </Link>
-            <div className="w-1 h-1 rounded-full bg-light-border dark:bg-dark-border"></div>
-            
+            <div className="w-1 h-1 rounded-full bg-light-border dark:bg-dark-border" />
+
             {/* Danh mục Dropdown */}
             <div className="relative group">
-              <button className="hover:text-primary transition-colors whitespace-nowrap uppercase flex items-center gap-1">
+              <button
+                type="button"
+                className="hover:text-primary transition-colors whitespace-nowrap uppercase flex items-center gap-1"
+              >
                 Danh mục
                 <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />
               </button>
@@ -151,16 +201,21 @@ export default function Header() {
                     </Link>
                   ))}
                   {(!categories || categories.length === 0) && (
-                    <div className="px-5 py-3 text-xs text-light-muted text-center uppercase font-bold">Không có danh mục</div>
+                    <div className="px-5 py-3 text-xs text-light-muted text-center uppercase font-bold">
+                      Không có danh mục
+                    </div>
                   )}
                 </div>
               </div>
             </div>
-            <div className="w-1 h-1 rounded-full bg-light-border dark:bg-dark-border"></div>
-            <Link to={`/products?createdAfter=${new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString()}`} className="hover:text-primary transition-colors whitespace-nowrap uppercase">
+            <div className="w-1 h-1 rounded-full bg-light-border dark:bg-dark-border" />
+            <Link
+              to={`/products?createdAfter=${newArrivalsDate}`}
+              className="hover:text-primary transition-colors whitespace-nowrap uppercase"
+            >
               Sản phẩm mới
             </Link>
-            <div className="w-1 h-1 rounded-full bg-light-border dark:bg-dark-border"></div>
+            <div className="w-1 h-1 rounded-full bg-light-border dark:bg-dark-border" />
             <Link to="/about" className="hover:text-primary transition-colors whitespace-nowrap uppercase">
               Về MIVA
             </Link>
@@ -180,10 +235,14 @@ export default function Header() {
           {/* Drawer */}
           <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white dark:bg-dark-card shadow-2xl flex flex-col animate-slide-in-left">
             <div className="flex items-center justify-between p-4 border-b border-light-border dark:border-dark-border">
-              <span className="text-2xl font-black tracking-tighter text-primary font-serif uppercase mt-1">Miva</span>
+              <span className="text-2xl font-black tracking-tighter text-primary font-serif uppercase mt-1">
+                Miva
+              </span>
               <button
+                type="button"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="p-2 text-light-muted hover:text-light-text dark:text-dark-muted dark:hover:text-dark-text transition-colors"
+                aria-label="Đóng menu"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -206,25 +265,54 @@ export default function Header() {
               {/* Mobile User/Auth Menu */}
               <div className="p-4 border-b border-light-border dark:border-dark-border">
                 {isAuthenticated ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 px-2 py-1">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
-                        {user?.fullName?.charAt(0) || <User className="w-5 h-5" />}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-3 px-2 py-1.5 mb-1">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg overflow-hidden shrink-0">
+                        {user?.avatarUrl ? (
+                          <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+                        ) : (
+                          user?.fullName?.charAt(0) || <User className="w-5 h-5" />
+                        )}
                       </div>
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-light-text dark:text-dark-text">{user?.fullName}</span>
-                        <span className="text-xs text-light-muted dark:text-dark-muted">{user?.email}</span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-semibold text-light-text dark:text-dark-text truncate">
+                          {user?.fullName}
+                        </span>
+                        <span className="text-xs text-light-muted dark:text-dark-muted truncate">
+                          {user?.email}
+                        </span>
                       </div>
                     </div>
-                    <Link to="/profile" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-text dark:text-dark-text font-medium transition-colors">
+                    <Link
+                      to="/profile"
+                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-text dark:text-dark-text font-medium transition-colors"
+                    >
                       <User className="w-5 h-5 text-light-muted dark:text-dark-muted" /> Tài khoản của tôi
                     </Link>
-                    <Link to="/orders" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-text dark:text-dark-text font-medium transition-colors">
+                    <Link
+                      to="/orders"
+                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-text dark:text-dark-text font-medium transition-colors"
+                    >
                       <ShoppingBag className="w-5 h-5 text-light-muted dark:text-dark-muted" /> Đơn mua
+                    </Link>
+                    <Link
+                      to="/favorites"
+                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-text dark:text-dark-text font-medium transition-colors"
+                    >
+                      <Heart className="w-5 h-5 text-light-muted dark:text-dark-muted" /> Sản phẩm yêu thích
+                    </Link>
+                    <Link
+                      to="/surveys"
+                      className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-text dark:text-dark-text font-medium transition-colors"
+                    >
+                      <ClipboardList className="w-5 h-5 text-light-muted dark:text-dark-muted" /> Khảo sát
                     </Link>
                   </div>
                 ) : (
-                  <Link to="/login" className="flex items-center justify-center w-full py-3 bg-primary text-white rounded-xl font-bold">
+                  <Link
+                    to="/login"
+                    className="flex items-center justify-center w-full py-3 bg-primary text-white rounded-xl font-bold"
+                  >
                     Đăng nhập / Đăng ký
                   </Link>
                 )}
@@ -236,11 +324,24 @@ export default function Header() {
                   Danh mục
                 </h4>
                 <div className="space-y-1">
-                  <Link to="/products" className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-text dark:text-dark-text font-medium transition-colors">
+                  <Link
+                    to="/products"
+                    className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-text dark:text-dark-text font-medium transition-colors"
+                  >
                     Tất cả sản phẩm <ChevronRight className="w-4 h-4 text-light-muted" />
                   </Link>
-                  {categories?.map(cat => (
-                    <Link key={cat.id} to={`/products?category=${cat.slug}`} className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-muted dark:text-dark-muted hover:text-primary transition-colors">
+                  <Link
+                    to={`/products?createdAfter=${newArrivalsDate}`}
+                    className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-text dark:text-dark-text font-medium transition-colors"
+                  >
+                    Sản phẩm mới <ChevronRight className="w-4 h-4 text-light-muted" />
+                  </Link>
+                  {categories?.map((cat) => (
+                    <Link
+                      key={cat.id}
+                      to={`/products?category=${cat.slug}`}
+                      className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-muted dark:text-dark-muted hover:text-primary transition-colors"
+                    >
                       {cat.name} <ChevronRight className="w-4 h-4 text-light-muted opacity-50" />
                     </Link>
                   ))}
@@ -250,7 +351,10 @@ export default function Header() {
               {/* Mobile Footer Links */}
               <div className="p-4 border-t border-light-border dark:border-dark-border">
                 <div className="space-y-1">
-                  <Link to="/about" className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-muted dark:text-dark-muted hover:text-primary transition-colors">
+                  <Link
+                    to="/about"
+                    className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-light-surface dark:hover:bg-dark-surface text-light-muted dark:text-dark-muted hover:text-primary transition-colors"
+                  >
                     Về MIVA
                   </Link>
                 </div>

@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { UserStatus } from '@prisma/client';
 import {
   OnGatewayConnection,
@@ -8,6 +8,8 @@ import {
 import { Server, Socket } from 'socket.io';
 
 import { AuthService } from 'src/app/auth/auth.service';
+import { AccountDirectoryService } from 'src/common/account/account-directory.service';
+import type { UserRole } from 'src/common/guards/access-control/access-control.const';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import { RealtimeService } from './realtime.service';
 import { TokenKeys } from '../auth/consts/jwt.const';
@@ -38,11 +40,20 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
   @WebSocketServer() server: Server;
   private readonly logger = new Logger(RealtimeGateway.name);
 
+  private readonly fallbackDirectory: AccountDirectoryService;
+
   constructor(
     private readonly authService: AuthService,
     private readonly prismaService: PrismaService,
     private readonly realtimeService: RealtimeService,
-  ) {}
+    @Optional() private readonly accountDirectory?: AccountDirectoryService,
+  ) {
+    this.fallbackDirectory = new AccountDirectoryService(this.prismaService);
+  }
+
+  private get directory(): AccountDirectoryService {
+    return this.accountDirectory ?? this.fallbackDirectory;
+  }
 
   afterInit(server: Server) {
     this.realtimeService.bind(server);
@@ -72,11 +83,22 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
         typeof raw === 'string' ? raw.replace(/^Bearer\s+/i, '') : '';
       const payload = await this.authService.verifyToken(token);
       if (role && role !== payload.role) throw new Error('Role mismatch');
-      let user: any;
-      if (payload.role === 'admin') user = await this.prismaService.extended.admin.findUnique({where: {id: payload.userID}});
-      if (payload.role === 'client') user = await this.prismaService.extended.client.findUnique({where: {id: payload.userID}});
-      if (payload.role === 'vendor') user = await this.prismaService.extended.vendor.findUnique({where: {id: payload.userID}});
-      if (payload.role === 'employee') user = await this.prismaService.extended.employee.findUnique({where: {id: payload.userID}});
+      const roleHint = (role || payload.role) as UserRole | undefined;
+      const leanSelect = { id: true, status: true, deletedAt: true } as const;
+      let user: any = null;
+      if (
+        roleHint &&
+        ['admin', 'client', 'vendor', 'employee'].includes(roleHint)
+      ) {
+        user = await (this.prismaService.extended as any)[roleHint].findUnique({
+          where: { id: payload.userID },
+          select: leanSelect,
+        });
+      } else {
+        user = (
+          await this.directory.resolveAccountForGuard(payload.userID, roleHint)
+        ).user;
+      }
       if (!user || user.status !== UserStatus.active || user.deletedAt) {
         throw new Error('Inactive user');
       }

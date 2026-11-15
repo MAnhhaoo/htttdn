@@ -1,21 +1,4 @@
 @import "tailwindcss";
+@source "../../shared";
+@import "../../shared/styles/miva-theme.css";
 @custom-variant dark (&:where(.dark, .dark *));
-
-@theme {
-}
-
-/* Custom sleek scrollbar for sidebar and admin pages */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.35);
-  border-radius: 9999px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.6);
-}

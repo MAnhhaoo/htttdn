@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@source "../../shared";
+@import "../../shared/styles/miva-theme.css";
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {

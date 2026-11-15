@@ -1,0 +1,19 @@
+# Dependencies & Build outputs
+node_modules/
+dist/
+.vite/
+
+# Automation video/screenshot recordings (local demo output)
+test-recordings/
+
+# Logs & OS metadata
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Environment variables (keep example templates)
+.env
+.env.local
+.env.*.local
+!.env.example

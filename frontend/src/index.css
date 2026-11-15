@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "../../shared/styles/miva-theme.css";
+@source "../../shared";
 
 @theme {
   /* ── Brand ── */
@@ -7,7 +9,7 @@
   --color-primary-light: #F5ECD7;
 
   /* ── Light Mode ── */
-  --color-light-bg: #F7F7F5;
+  --color-light-bg: #FAF7F2;
   --color-light-surface: #F0EFEC;
   --color-light-card: #FFFFFF;
   --color-light-border: #E5E3DD;
@@ -15,12 +17,12 @@
   --color-light-muted: #6B6B6B;
 
   /* ── Dark Mode ── */
-  --color-dark-bg: #111113;
-  --color-dark-surface: #1C1C1F;
-  --color-dark-card: #1A1A1D;
-  --color-dark-border: #2C2C30;
+  --color-dark-bg: #0B110E;
+  --color-dark-surface: #131B17;
+  --color-dark-card: #15201B;
+  --color-dark-border: #223029;
   --color-dark-text: #F0EDE6;
-  --color-dark-muted: #8E8E93;
+  --color-dark-muted: #94A89E;
 
   /* ── Typography ── */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;

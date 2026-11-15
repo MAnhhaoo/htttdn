@@ -1,14 +1,6 @@
-export const formatShortOrderCode = (codeOrId, length = 6) => {
-  const raw = String(codeOrId || '').replace(/^#/, '').trim();
-  if (!raw) return '—';
-  return raw.length > length ? raw.slice(-length) : raw;
-};
+import { formatShortOrderCode, formatVendorCode } from '@shared/utils/formatHelpers';
 
-export const formatVendorCode = (vendorId, existingCode) => {
-  if (existingCode) return existingCode;
-  if (!vendorId) return 'VND-SYSTEM';
-  return `VND-${String(vendorId).slice(0, 8).toUpperCase()}`;
-};
+export { formatShortOrderCode, formatVendorCode };
 
 // Map real backend order to employee UI representation
 export const formatOrder = (item) => {
@@ -24,7 +16,7 @@ export const formatOrder = (item) => {
       orderVendorsMap.set(vId, {
         id: vId,
         name: v?.storeName || v?.fullName || `Gian hàng đối tác (${vId.slice(0, 8)})`,
-        storeName: v?.storeName || v?.fullName || `Gian hàng đối tác`,
+        storeName: v?.storeName || v?.fullName || 'Gian hàng đối tác',
         code: formatVendorCode(vId, v?.vendorCode),
         phone: v?.phone || '0900000000',
         region: v?.address || 'Kho hàng đối tác MIVA',
@@ -41,7 +33,7 @@ export const formatOrder = (item) => {
       orderVendorsMap.set(vId, {
         id: vId,
         name: v?.storeName || v?.fullName || `Gian hàng đối tác (${vId.slice(0, 8)})`,
-        storeName: v?.storeName || v?.fullName || `Gian hàng đối tác`,
+        storeName: v?.storeName || v?.fullName || 'Gian hàng đối tác',
         code: formatVendorCode(vId, v?.vendorCode),
         vendorOrderCode: vo.vendorOrderCode || null,
         phone: v?.phone || '0900000000',
@@ -55,6 +47,16 @@ export const formatOrder = (item) => {
   const orderVendors = Array.from(orderVendorsMap.values());
   const primaryVendor = orderVendors[0] || null;
 
+  const processingEntry = (item.statusHistory || [])
+    .slice()
+    .reverse()
+    .find((h) => h.toStatus === 'processing');
+  const transferredAt = processingEntry?.createdAt || item.updatedAt || item.createdAt;
+  const vendorElapsedHours = transferredAt
+    ? Math.max(0, (Date.now() - new Date(transferredAt).getTime()) / (1000 * 3600))
+    : 0;
+  const isVendorSlaWarning = item.status === 'processing' && vendorElapsedHours > 6;
+
   const assignedVendor = primaryVendor
     ? {
         ...primaryVendor,
@@ -62,10 +64,15 @@ export const formatOrder = (item) => {
           item.status === 'processing'
             ? 'Đang chuẩn bị kiện hàng'
             : item.status === 'shipping'
-            ? 'Đã bàn giao vận chuyển'
-            : 'Đang xử lý xuất kho',
-        transferredAt: item.updatedAt,
-        slaDeadline: new Date(new Date(item.createdAt).getTime() + 24 * 3600 * 1000).toISOString(),
+              ? 'Đã bàn giao vận chuyển'
+              : 'Đang xử lý xuất kho',
+        transferredAt,
+        elapsedHours: vendorElapsedHours,
+        isSlaWarning: isVendorSlaWarning,
+        slaDeadline: new Date(
+          new Date(transferredAt || item.createdAt).getTime() +
+            (primaryVendor.slaHours || 12) * 3600 * 1000,
+        ).toISOString(),
       }
     : null;
 
@@ -75,18 +82,18 @@ export const formatOrder = (item) => {
     address.includes('hà nội') || address.includes('hải phòng') || address.includes('bắc')
       ? 'region_north'
       : address.includes('đà nẵng') || address.includes('huế') || address.includes('nha trang')
-      ? 'region_central'
-      : 'region_south';
+        ? 'region_central'
+        : 'region_south';
 
   return {
     id: item.id,
-    orderCode: item.orderCode,
+    orderCode: item.orderCode || item.id,
     shortOrderCode: formatShortOrderCode(item.orderCode || item.id),
     clientId: item.clientId,
     receiverName: item.receiverName || 'Khách hàng',
     receiverPhone: item.receiverPhone || '0900000000',
     shippingAddress: item.shippingAddress || 'Việt Nam',
-    region: region,
+    region,
     status: item.status,
     subtotalAmount: Number(item.subtotalAmount) || 0,
     discountAmount: Number(item.discountAmount) || 0,
@@ -96,14 +103,15 @@ export const formatOrder = (item) => {
     paymentStatus: item.payment?.status || 'pending',
     notes: item.notes || '',
     createdAt: item.createdAt,
-    orderVendors: orderVendors,
-    assignedVendor: assignedVendor,
+    orderVendors,
+    assignedVendor,
+    vendorElapsedHours,
+    isVendorSlaWarning,
     vendorSlaDeadline: assignedVendor?.slaDeadline || null,
     shipments: item.shipments || [],
     handlingEmployee:
-      item.statusHistory?.find(
-        (h) => h.employee && h.employee?.department?.includes('Điều phối'),
-      )?.employee || null,
+      item.statusHistory?.find((h) => h.employee && h.employee?.department?.includes('Điều phối'))
+        ?.employee || null,
     assignedCarrier:
       item.shipments?.find((s) => s.carrier)?.carrier ||
       item.statusHistory
@@ -126,7 +134,7 @@ export const formatOrder = (item) => {
         (h) =>
           h.note?.includes('[Sự cố') ||
           h.note?.includes('[Chuyển Ban Xử lý Sự cố]') ||
-          h.note?.includes('[Chuyển tiếp Admin]') ||
+          h.note?.includes('[Chuyển tiếp Admin') ||
           h.note?.includes('[Xử lý sự cố'),
       );
       const hasFailedShipment = item.shipments?.some(
@@ -143,13 +151,13 @@ export const formatOrder = (item) => {
           type: isCancelled
             ? 'ORDER_CANCELLED'
             : hasFailedShipment
-            ? 'DELIVERY_FAILED'
-            : 'ORDER_INCIDENT',
+              ? 'DELIVERY_FAILED'
+              : 'ORDER_INCIDENT',
           title: isCancelled
             ? 'Đơn hàng đã bị hủy / Cần xử lý hoàn'
             : hasFailedShipment
-            ? 'Sự cố vận đơn / Giao hàng thất bại'
-            : 'Sự cố phát sinh cần xử lý',
+              ? 'Sự cố vận đơn / Giao hàng thất bại'
+              : 'Sự cố phát sinh cần xử lý',
           severity: 'high',
           reportedBy: excEmp ? `${excEmp.fullName} (${excEmp.employeeCode})` : 'Hệ thống MIVA',
           status: isCancelled ? 'cancelled' : 'incident',
@@ -186,16 +194,23 @@ export const formatOrder = (item) => {
         id: h.id,
         fromStatus: h.fromStatus,
         toStatus: h.toStatus,
-        actorRole: h.note?.includes('[Nhân viên')
-          ? 'Nhân viên'
-          : h.adminId
-          ? 'Admin'
-          : h.vendorId
-          ? 'Vendor'
-          : h.clientId
-          ? 'Khách hàng'
-          : 'Hệ thống',
-        actorName: h.note?.includes('[Nhân viên') ? 'Nhân viên xử lý' : 'Thành viên hệ thống',
+        employeeId: h.employeeId || h.employee?.id || null,
+        employee: h.employee || null,
+        actorRole:
+          h.employeeId || h.employee || h.note?.includes('[Nhân viên')
+            ? 'Nhân viên'
+            : h.adminId
+              ? 'Admin'
+              : h.vendorId
+                ? 'Vendor'
+                : h.clientId
+                  ? 'Khách hàng'
+                  : 'Hệ thống',
+        actorName: h.employee?.fullName
+          ? `${h.employee.fullName}${h.employee.employeeCode ? ` (${h.employee.employeeCode})` : ''}`
+          : h.note?.includes('[Nhân viên')
+            ? 'Nhân viên xử lý'
+            : 'Thành viên hệ thống',
         note: h.note || '',
         createdAt: h.createdAt,
       })) || [],

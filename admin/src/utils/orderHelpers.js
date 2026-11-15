@@ -1,4 +1,19 @@
 import { Truck, Package, AlertTriangle } from 'lucide-react';
+import { formatVendorCode } from '@shared/utils/formatHelpers';
+
+export {
+  computeBatchOrderFinancials,
+  groupOrdersByCheckoutBatch,
+} from '@shared/utils/orderBatchHelpers';
+export {
+  ORDER_STATUS_META,
+  SHIPMENT_STATUS_META,
+  getOrderStatusLabel,
+  getOrderStatusBadgeVariant,
+  getShipmentStatusText,
+  getShipmentBadgeVariant,
+} from '@shared/utils/statusConfig';
+export { formatShortOrderCode, formatVendorCode } from '@shared/utils/formatHelpers';
 
 /**
  * Trích xuất nhân viên Điều phối, Bưu tá và Sự cố của một đơn hàng từ statusHistory & shipments.
@@ -13,7 +28,7 @@ export function extractOrderEmployees(order) {
       h.employee &&
       (h.employee.department?.toLowerCase().includes('điều phối') ||
         h.employee.department?.toLowerCase().includes('vendor') ||
-        h.note?.toLowerCase().includes('điều phối'))
+        h.note?.toLowerCase().includes('điều phối')),
   );
   const handlingEmp = handlingHistory?.employee || null;
 
@@ -24,7 +39,7 @@ export function extractOrderEmployees(order) {
       (h.employee.department?.toLowerCase().includes('vận chuyển') ||
         h.employee.department?.toLowerCase().includes('giao nhận') ||
         h.note?.toLowerCase().includes('bưu tá') ||
-        h.note?.toLowerCase().includes('giao nhận'))
+        h.note?.toLowerCase().includes('giao nhận')),
   );
   const shippingEmp = directCarrier || shippingHistory?.employee || null;
 
@@ -35,7 +50,7 @@ export function extractOrderEmployees(order) {
         h.employee.department?.toLowerCase().includes('ngoại lệ') ||
         h.note?.toLowerCase().includes('sự cố') ||
         h.note?.toLowerCase().includes('khiếu nại') ||
-        h.note?.toLowerCase().includes('tranh chấp'))
+        h.note?.toLowerCase().includes('tranh chấp')),
   );
   const exceptionEmp = exceptionHistory?.employee || null;
 
@@ -113,154 +128,6 @@ export function categorizeEmployeesByDepartment(employees = []) {
 }
 
 /**
- * Gộp các đơn hàng được đặt cùng 1 lượt thanh toán (cùng khách hàng, cùng địa chỉ nhận,
- * thời gian tạo cách nhau <= 60 giây) thành 1 dòng Hóa đơn tổng trên giao diện.
- */
-export function groupOrdersByCheckoutBatch(rawOrders) {
-  if (!Array.isArray(rawOrders) || rawOrders.length === 0) return [];
-
-  const groups = [];
-
-  for (const order of rawOrders) {
-    const clientKey =
-      order.clientId ||
-      order.client?.id ||
-      order.client?.email ||
-      `${order.receiverName || ''}_${order.receiverPhone || ''}`;
-    const addressKey = (order.shippingAddress || '').trim().toLowerCase();
-    const orderTime = new Date(order.createdAt).getTime();
-
-    const existingGroup = groups.find((g) => {
-      if (g.clientKey !== clientKey) return false;
-      if (g.addressKey !== addressKey) return false;
-      const timeDiff = Math.abs(g.firstCreatedAtTime - orderTime);
-      return timeDiff <= 60 * 1000;
-    });
-
-    if (existingGroup) {
-      existingGroup.subOrders.push(order);
-    } else {
-      groups.push({
-        groupId: order.id,
-        clientKey,
-        addressKey,
-        firstCreatedAtTime: orderTime,
-        subOrders: [order],
-      });
-    }
-  }
-
-  return groups.map((g) => {
-    const subOrders = g.subOrders;
-    const primary = subOrders[0];
-    if (subOrders.length === 1) {
-      return {
-        ...primary,
-        isMergedGroup: false,
-        subOrders: [primary],
-      };
-    }
-
-    const mergedDetails = subOrders.flatMap((so) =>
-      (so.details || []).map((d) => ({
-        ...d,
-        _subOrderId: so.id,
-        _subOrderCode: so.orderCode || so.id,
-      }))
-    );
-    const mergedVouchers = subOrders.flatMap((so) =>
-      (so.voucherDetails || []).map((vd) => ({
-        ...vd,
-        _subOrderId: so.id,
-        _subOrderCode: so.orderCode || so.id,
-      }))
-    );
-    const mergedSubtotal = subOrders.reduce(
-      (sum, so) => sum + Number(so.subtotalAmount ?? so.totalAmount ?? 0),
-      0
-    );
-    const mergedDiscount = subOrders.reduce(
-      (sum, so) => sum + Number(so.discountAmount || 0),
-      0
-    );
-    const mergedShippingFee = subOrders.reduce(
-      (sum, so) => sum + Number(so.shippingFee || 0),
-      0
-    );
-    const mergedTotal = subOrders.reduce(
-      (sum, so) => sum + Number(so.totalAmount || 0),
-      0
-    );
-
-    return {
-      ...primary,
-      isMergedGroup: true,
-      subOrders,
-      subtotalAmount: mergedSubtotal,
-      discountAmount: mergedDiscount,
-      shippingFee: mergedShippingFee,
-      totalAmount: mergedTotal,
-      details: mergedDetails,
-      voucherDetails: mergedVouchers,
-    };
-  });
-}
-
-export function getOrderStatusBadgeVariant(status) {
-  switch (status) {
-    case 'completed':
-      return 'success';
-    case 'pending':
-      return 'warning';
-    case 'shipping':
-      return 'info';
-    case 'cancelled':
-      return 'error';
-    default:
-      return 'default';
-  }
-}
-
-export function getShipmentBadgeVariant(status) {
-  switch (status) {
-    case 'delivered':
-      return 'success';
-    case 'out_for_delivery':
-    case 'in_transit':
-      return 'info';
-    case 'failed':
-      return 'error';
-    case 'returned':
-      return 'warning';
-    default:
-      return 'default';
-  }
-}
-
-export function getShipmentStatusText(status) {
-  switch (status) {
-    case 'delivered':
-      return 'Giao thành công';
-    case 'out_for_delivery':
-      return 'Đang đi giao';
-    case 'in_transit':
-      return 'Đang trung chuyển';
-    case 'failed':
-      return 'Giao thất bại';
-    case 'returned':
-      return 'Đã hoàn hàng về kho';
-    case 'picking_up':
-      return 'Đang lấy hàng';
-    case 'assigned':
-      return 'Đã phân công bưu tá';
-    case 'pending':
-      return 'Chờ phân phối';
-    default:
-      return status;
-  }
-}
-
-/**
  * Kiểm tra xem một đơn hàng có được phân công cho nhân viên cụ thể hay không
  * (theo ID nhân viên hoặc mã nhân viên).
  */
@@ -274,11 +141,10 @@ export function isOrderAssignedToEmployee(order, empIdentifier, isCourierOnly = 
       (s) =>
         String(s.carrierId || '').toLowerCase() === target ||
         String(s.carrier?.id || '').toLowerCase() === target ||
-        String(s.carrier?.employeeCode || '').toLowerCase() === target
+        String(s.carrier?.employeeCode || '').toLowerCase() === target,
     );
   }
 
-  // 1. Kiểm tra qua extractOrderEmployees
   const emps = extractOrderEmployees(order);
   const matchedDisplay =
     emps.displayEmp &&
@@ -301,43 +167,23 @@ export function isOrderAssignedToEmployee(order, empIdentifier, isCourierOnly = 
     return true;
   }
 
-  // 2. Kiểm tra trực tiếp qua shipments
   const matchedShipment = (order.shipments || []).some(
     (s) =>
       String(s.carrierId || '').toLowerCase() === target ||
       String(s.carrier?.id || '').toLowerCase() === target ||
-      String(s.carrier?.employeeCode || '').toLowerCase() === target
+      String(s.carrier?.employeeCode || '').toLowerCase() === target,
   );
   if (matchedShipment) return true;
 
-  // 3. Kiểm tra trực tiếp qua statusHistory
   const matchedHistory = (order.statusHistory || []).some(
     (h) =>
       String(h.employeeId || '').toLowerCase() === target ||
       String(h.employee?.id || '').toLowerCase() === target ||
-      String(h.employee?.employeeCode || '').toLowerCase() === target
+      String(h.employee?.employeeCode || '').toLowerCase() === target,
   );
   if (matchedHistory) return true;
 
   return false;
-}
-
-/**
- * Rút gọn mã đơn hàng / mã chi tiết hóa đơn dài (cuid/uuid) chỉ lấy 6 ký tự cuối.
- */
-export function formatShortOrderCode(codeOrId, length = 6) {
-  const raw = String(codeOrId || '').replace(/^#/, '').trim();
-  if (!raw) return '—';
-  return raw.length > length ? raw.slice(-length) : raw;
-}
-
-/**
- * Chuẩn hóa mã Vendor hiển thị (VND-XXXXXXXX).
- */
-export function formatVendorCode(vendorId, existingCode) {
-  if (existingCode) return existingCode;
-  if (!vendorId) return 'VND-SYSTEM';
-  return `VND-${String(vendorId).slice(0, 8).toUpperCase()}`;
 }
 
 /**

@@ -30,7 +30,7 @@ function setup(status: VendorOrderStatus = 'confirmed', parentStatus: OrderStatu
     },
     shipment: { update: jest.fn(), findFirst: jest.fn().mockResolvedValue(parcel.shipment), create: jest.fn() },
     shipmentEvent: { create: jest.fn() }, orderStatusHistory: { create: jest.fn() },
-    orderDetail: { update: jest.fn() }, productVariant: { update: jest.fn() },
+    orderDetail: { update: jest.fn(), updateMany: jest.fn() }, productVariant: { update: jest.fn() },
     employee: { findMany: jest.fn().mockResolvedValue([]) },
   };
   const prisma = {

@@ -69,9 +69,10 @@ describe('Vendor approval before login', () => {
 
   it('does not refresh tokens for a pending vendor', async () => {
     jwt.verifyAsync.mockResolvedValue({ userID: account.id, role: 'vendor', tokenType: 'refresh' });
-    vendors.getVendor.mockResolvedValue({ ...account, approvalStatus: 'pending_approval' });
+    db.vendor.findUnique.mockResolvedValue({ ...account, approvalStatus: 'pending_approval' });
     await expect(service.refreshToken('old-token')).rejects.toBeInstanceOf(ForbiddenException);
     expect(jwt.signAsync).not.toHaveBeenCalled();
+    expect(vendors.getVendor).not.toHaveBeenCalled();
   });
 
   it('blocks a pending vendor with an old session from reading protected pages', async () => {

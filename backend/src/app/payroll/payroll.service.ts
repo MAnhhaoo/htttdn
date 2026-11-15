@@ -37,33 +37,63 @@ export class PayrollService {
       },
     });
 
+    if (employees.length === 0) {
+      return {
+        message: `Đã tính toán bảng lương tháng ${month}/${year} cho 0 nhân viên`,
+        count: 0,
+        payrolls: [],
+      };
+    }
+
     const startOfMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
     const endOfMonth = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
-    const results: any[] = [];
-
-    for (const emp of employees) {
-      const isFullTime = emp.employmentType === EmploymentType.full_time;
-      let baseSalary = 0;
-      let hourlyRate: number | null = null;
-      let totalHours: number | null = null;
-      let allowances = isFullTime ? 500000 : 200000;
-      let deductions = 0;
-      let bonus = 0;
-      let netSalary = 0;
-      let lateSummaryNote = '';
-
-      // Fetch attendance hours for the month
-      const attendances = await this.prisma.extended.employeeAttendance.findMany({
+    const empIds = employees.map((emp) => emp.id);
+    const allAttendances =
+      await this.prisma.extended.employeeAttendance.findMany({
         where: {
-          employeeId: emp.id,
+          employeeId: { in: empIds },
           date: {
             gte: startOfMonth,
             lte: endOfMonth,
           },
         },
+        select: {
+          employeeId: true,
+          hoursWorked: true,
+          status: true,
+        },
       });
 
+    const attendanceByEmployeeId = new Map<
+      string,
+      Array<{
+        employeeId: string;
+        hoursWorked: Prisma.Decimal | number | null;
+        status: string;
+      }>
+    >();
+    for (const att of allAttendances) {
+      let bucket = attendanceByEmployeeId.get(att.employeeId);
+      if (!bucket) {
+        bucket = [];
+        attendanceByEmployeeId.set(att.employeeId, bucket);
+      }
+      bucket.push(att);
+    }
+
+    const upsertOperations = employees.map((emp) => {
+      const isFullTime = emp.employmentType === EmploymentType.full_time;
+      let baseSalary = 0;
+      let hourlyRate: number | null = null;
+      let totalHours: number | null = null;
+      const allowances = isFullTime ? 500000 : 200000;
+      let deductions = 0;
+      const bonus = 0;
+      let netSalary = 0;
+      let lateSummaryNote = '';
+
+      const attendances = attendanceByEmployeeId.get(emp.id) ?? [];
       const recordedHours = attendances.reduce(
         (sum, a) => sum + Number(a.hoursWorked || 0),
         0,
@@ -71,7 +101,7 @@ export class PayrollService {
 
       if (isFullTime) {
         baseSalary = Number(emp.salary || 0);
-        const hourlyEquivalent = baseSalary > 0 ? (baseSalary / 26) / 8 : 0;
+        const hourlyEquivalent = baseSalary > 0 ? baseSalary / 26 / 8 : 0;
 
         let totalMissingHours = 0;
         for (const att of attendances) {
@@ -93,12 +123,13 @@ export class PayrollService {
       } else {
         hourlyRate = Number(emp.hourlyRate || 35000);
         totalHours = recordedHours > 0 ? recordedHours : 88;
-        netSalary = Math.round(totalHours * hourlyRate) + allowances - deductions + bonus;
+        netSalary =
+          Math.round(totalHours * hourlyRate) + allowances - deductions + bonus;
       }
 
       const notes = `Bảng tính lương tháng ${month}/${year}${lateSummaryNote}`;
 
-      const payroll = await this.prisma.extended.employeePayroll.upsert({
+      return this.prisma.extended.employeePayroll.upsert({
         where: {
           employeeId_month_year: {
             employeeId: emp.id,
@@ -143,9 +174,12 @@ export class PayrollService {
           },
         },
       });
+    });
 
-      results.push(payroll);
-    }
+    const results =
+      typeof (this.prisma.extended as any).$transaction === 'function'
+        ? await this.prisma.extended.$transaction(upsertOperations)
+        : await Promise.all(upsertOperations);
 
     return {
       message: `Đã tính toán bảng lương tháng ${month}/${year} cho ${results.length} nhân viên`,

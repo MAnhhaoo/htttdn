@@ -38,6 +38,41 @@ export function formatPaginatedList<T>(
   };
 }
 
+export async function paginatePrismaQuery<
+  TItem,
+  TWhere = Record<string, unknown>,
+  TFindManyArgs extends Record<string, unknown> = Record<string, unknown>,
+>(
+  delegate: {
+    count(args: { where?: TWhere }): Promise<number>;
+    findMany(
+      args: TFindManyArgs & { where?: TWhere; skip: number; take: number },
+    ): Promise<TItem[]>;
+  },
+  params?: {
+    page?: number | string;
+    itemPerPage?: number | string;
+    defaultItemPerPage?: number;
+    maxItemPerPage?: number;
+  },
+  queryArgs?: TFindManyArgs & { where?: TWhere },
+) {
+  const { page, itemPerPage, skip } = normalizePagination(params);
+  const { where, ...rest } = (queryArgs ?? {}) as TFindManyArgs & {
+    where?: TWhere;
+  };
+  const [totalItems, items] = await Promise.all([
+    delegate.count({ where }),
+    delegate.findMany({
+      ...(rest as TFindManyArgs),
+      where,
+      skip,
+      take: itemPerPage,
+    }),
+  ]);
+  return formatPaginatedList(items, totalItems, { page, itemPerPage });
+}
+
 @Injectable()
 export class PaginationUtilService extends Pagination {
   paging({ page = 1, itemPerPage = 5, totalItems = 0 }) {

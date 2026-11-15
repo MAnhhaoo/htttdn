@@ -1,10 +1,9 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  formatPaginatedList,
   normalizePagination,
 } from 'src/common/utils/paginaton-util/pagintion-util.service';
-import { OrderStatus, Prisma} from '@prisma/client';
+import { Gender, OrderStatus, Prisma } from '@prisma/client';
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -24,8 +23,9 @@ export interface FinanceConfigTier {
 
 @Injectable()
 export class ReportsService {
-
   private readonly logger = new Logger(ReportsService.name);
+  private financeConfigCache: FinanceConfigTier[] | null = null;
+
   constructor(private readonly prisma: PrismaService) {}
 
   private getFinanceConfigFile(): string {
@@ -33,22 +33,29 @@ export class ReportsService {
   }
 
   getFinanceConfigHistory(): FinanceConfigTier[] {
+    if (this.financeConfigCache) {
+      return this.financeConfigCache.map((tier) => ({ ...tier }));
+    }
+
     try {
       const filePath = this.getFinanceConfigFile();
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf-8');
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed?.history) && parsed.history.length > 0) {
-          return parsed.history.sort(
+          const sorted = [...parsed.history].sort(
             (a: FinanceConfigTier, b: FinanceConfigTier) =>
               new Date(a.effectiveFrom).getTime() - new Date(b.effectiveFrom).getTime(),
           );
+          this.financeConfigCache = sorted;
+          return sorted.map((tier) => ({ ...tier }));
         }
       }
     } catch (e) {
       this.logger.warn(`Error reading finance config history: ${(e as Error).message}`);
     }
-    return [
+
+    const fallback: FinanceConfigTier[] = [
       {
         id: 'init-config-2020',
         effectiveFrom: '2020-01-01T00:00:00.000Z',
@@ -57,6 +64,8 @@ export class ReportsService {
         note: 'Cấu hình tài chính khởi tạo ban đầu (8% thuế sàn, 2tr phí đăng ký vendor)',
       },
     ];
+    this.financeConfigCache = fallback;
+    return fallback.map((tier) => ({ ...tier }));
   }
 
   getCurrentFinanceConfig(): FinanceConfigTier {
@@ -99,7 +108,6 @@ export class ReportsService {
     };
 
     history.push(newTier);
-    // Hàm dirname có nhiệm vụ bóc tách và lấy phần tên thư mục, bỏ đi phần tên file ở đuôi.
     const dir = path.dirname(this.getFinanceConfigFile());
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -108,8 +116,8 @@ export class ReportsService {
       this.getFinanceConfigFile(),
       JSON.stringify({ history }, null, 2),
       'utf-8',
-      // Ghi toàn bộ dữ liệu mới đó xuống file finance-config.json bằng hàm fs.writeFileSync
     );
+    this.financeConfigCache = history.map((tier) => ({ ...tier }));
 
     return {
       current: newTier,
@@ -117,85 +125,191 @@ export class ReportsService {
     };
   }
 
+  private computeOrderNetRatio(
+    subtotalAmount: unknown,
+    discountAmount: unknown,
+  ): number {
+    const orderSubtotal = Number(subtotalAmount || 0);
+    const orderDiscount = Number(discountAmount || 0);
+    return orderSubtotal > 0 && orderDiscount > 0
+      ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal
+      : 1;
+  }
+
+  private aggregateQuartersFromMonths(
+    months: Array<{
+      month: number;
+      quarter: number;
+      totalOrders: number;
+      completedOrders: number;
+      cancelledOrders: number;
+      subtotalAmount: number;
+      discountAmount: number;
+      totalAmount: number;
+      allOrdersAmount: number;
+    }>,
+    targetYear: number,
+  ) {
+    return [1, 2, 3, 4].map((q) => {
+      const monthsInQ = months.filter((m) => m.quarter === q);
+      return {
+        quarter: q,
+        label: `Quý ${q}/${targetYear} (T${(q - 1) * 3 + 1} - T${q * 3})`,
+        totalOrders: monthsInQ.reduce((s, m) => s + m.totalOrders, 0),
+        completedOrders: monthsInQ.reduce((s, m) => s + m.completedOrders, 0),
+        cancelledOrders: monthsInQ.reduce((s, m) => s + m.cancelledOrders, 0),
+        subtotalAmount: monthsInQ.reduce((s, m) => s + m.subtotalAmount, 0),
+        discountAmount: monthsInQ.reduce((s, m) => s + m.discountAmount, 0),
+        totalAmount: monthsInQ.reduce((s, m) => s + m.totalAmount, 0),
+        allOrdersAmount: monthsInQ.reduce((s, m) => s + m.allOrdersAmount, 0),
+      };
+    });
+  }
+
   async customerReport(user: UserInfo, query: CustomerReportQueryDto) {
     const vendorId = user.role === 'vendor' ? user.userID : undefined;
     const dateWhere = {
       ...(query.from ? { gte: new Date(query.from) } : {}),
-      ...(query.to ? { lte: new Date(query.to) } : {})
+      ...(query.to ? { lte: new Date(query.to) } : {}),
     };
+    const hasDateWhere = Object.keys(dateWhere).length > 0;
     const orderScope: Prisma.OrderWhereInput = {
       status: OrderStatus.completed,
-      ...(Object.keys(dateWhere).length ? { createdAt: dateWhere } : {}),
+      ...(hasDateWhere ? { createdAt: dateWhere } : {}),
       ...(vendorId
         ? {
-
             details: {
               some: {
                 productVariant: {
-                  productColor: { product: { vendorId } }}}}}
-        : {})};
-    const buyers = await this.prisma.extended.order.findMany({
+                  productColor: { product: { vendorId } },
+                },
+              },
+            },
+          }
+        : {}),
+    };
 
-      where: orderScope,
-      select: { clientId: true },
-      distinct: ['clientId']
-    });
-    const customerIds = buyers.map((buyer) => buyer.clientId);
-    const customers = await this.prisma.extended.client.findMany({
-      where: {
-
-        deletedAt: null,
-        ...(vendorId ? { id: { in: customerIds } } : {})
+    const favoriteSelect = {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          category: { select: { id: true, name: true } },
+        },
       },
-      select: { id: true, dateOfBirth: true, gender: true }
-    });
-    const reportCustomerIds = customers.map((customer) => customer.id);
-    const favorites = await this.prisma.extended.productFavorite.findMany({
-      where: {
-        clientId: { in: reportCustomerIds },
-        ...(Object.keys(dateWhere).length ? { createdAt: dateWhere } : {}),
-        ...(vendorId ? { product: { vendorId } } : {})
+    } satisfies Prisma.ProductFavoriteSelect;
+
+    const detailSelect = {
+      quantity: true,
+      price: true,
+      orderId: true,
+      productVariant: {
+        select: {
+          productColor: {
+            select: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  category: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
       },
-      select: {
-        product: {
-          select: {
-            id: true,
-            name: true,
+    } satisfies Prisma.OrderDetailSelect;
 
-            category: { select: { id: true, name: true } }}}}});
-    const details = await this.prisma.extended.orderDetail.findMany({
+    let customers: Array<{
+      id: string;
+      dateOfBirth: Date | null;
+      gender: Gender | null;
+    }>;
+    let favorites: Array<{
+      product: {
+        id: string;
+        name: string;
+        category: { id: string; name: string };
+      };
+    }>;
+    let details: Array<{
+      quantity: number;
+      price: Prisma.Decimal;
+      orderId: string;
+      productVariant: {
+        productColor: {
+          product: {
+            id: string;
+            name: string;
+            category: { id: string; name: string };
+          };
+        };
+      };
+    }>;
 
-      where: {
-        order: orderScope,
-        ...(vendorId
-          ? {
+    if (vendorId) {
+      const [buyers, fetchedDetails] = await Promise.all([
+        this.prisma.extended.order.findMany({
+          where: orderScope,
+          select: { clientId: true },
+          distinct: ['clientId'],
+        }),
+        this.prisma.extended.orderDetail.findMany({
+          where: {
+            order: orderScope,
             productVariant: {
-              productColor: { product: { vendorId } }
-            }
-          }
-          : {})
-      },
-      select: {
-        quantity: true,
-        price: true,
-        orderId: true,
-        productVariant: {
-          select: {
-            productColor: {
-              select: {
-                product: {
-                  select: {
-                    id: true,
-                    name: true,
-                    category: { select: { id: true, name: true } }
-                  }
-                }
-              }
-            }
-          }
-        }
+              productColor: { product: { vendorId } },
+            },
+          },
+          select: detailSelect,
+        }),
+      ]);
+      details = fetchedDetails;
+      const customerIds = buyers.map((buyer) => buyer.clientId);
+      if (customerIds.length === 0) {
+        customers = [];
+        favorites = [];
+      } else {
+        [customers, favorites] = await Promise.all([
+          this.prisma.extended.client.findMany({
+            where: {
+              deletedAt: null,
+              id: { in: customerIds },
+            },
+            select: { id: true, dateOfBirth: true, gender: true },
+          }),
+          this.prisma.extended.productFavorite.findMany({
+            where: {
+              deletedAt: null,
+              clientId: { in: customerIds },
+              client: { deletedAt: null },
+              ...(hasDateWhere ? { createdAt: dateWhere } : {}),
+              product: { vendorId },
+            },
+            select: favoriteSelect,
+          }),
+        ]);
       }
-    });
+    } else {
+      [customers, favorites, details] = await Promise.all([
+        this.prisma.extended.client.findMany({
+          where: { deletedAt: null },
+          select: { id: true, dateOfBirth: true, gender: true },
+        }),
+        this.prisma.extended.productFavorite.findMany({
+          where: {
+            deletedAt: null,
+            client: { deletedAt: null },
+            ...(hasDateWhere ? { createdAt: dateWhere } : {}),
+          },
+          select: favoriteSelect,
+        }),
+        this.prisma.extended.orderDetail.findMany({
+          where: { order: orderScope },
+          select: detailSelect,
+        }),
+      ]);
+    }
 
     const favoriteProducts = new Map<string, { name: string; count: number }>();
     const favoriteCategories = new Map<
@@ -472,6 +586,8 @@ export class ReportsService {
       totalProductsCount,
       totalSystemOrdersCount,
       newVendorsInPeriod,
+      orders,
+      allVendors,
     ] = await Promise.all([
       this.prisma.extended.vendor.count({
         where: { deletedAt: null, status: 'active' },
@@ -492,36 +608,51 @@ export class ReportsService {
           createdAt: { gte: startDate, lte: endDate },
         },
       }),
-    ]);
-
-    const orders = await this.prisma.extended.order.findMany({
-      where: {
-        createdAt: {
-          gte: startDate,
-          lte: endDate,
+      this.prisma.extended.order.findMany({
+        where: {
+          createdAt: {
+            gte: startDate,
+            lte: endDate,
+          },
         },
-      },
-      include: {
-        payment: true,
-        details: {
-          include: {
-            productVariant: {
-              include: {
-                productColor: {
-                  include: {
-                    product: {
-                      include: {
-                        vendor: {
-                          select: {
-                            id: true,
-                            storeName: true,
-                            fullName: true,
+        select: {
+          id: true,
+          createdAt: true,
+          status: true,
+          subtotalAmount: true,
+          discountAmount: true,
+          totalAmount: true,
+          payment: {
+            select: {
+              status: true,
+              method: true,
+              amount: true,
+            },
+          },
+          details: {
+            select: {
+              price: true,
+              quantity: true,
+              productVariant: {
+                select: {
+                  productColor: {
+                    select: {
+                      product: {
+                        select: {
+                          id: true,
+                          name: true,
+                          vendor: {
+                            select: {
+                              id: true,
+                              storeName: true,
+                              fullName: true,
+                            },
                           },
-                        },
-                        category: {
-                          select: {
-                            id: true,
-                            name: true,
+                          category: {
+                            select: {
+                              id: true,
+                              name: true,
+                            },
                           },
                         },
                       },
@@ -532,8 +663,16 @@ export class ReportsService {
             },
           },
         },
-      },
-    });
+      }),
+      this.prisma.extended.vendor.findMany({
+        where: {
+          deletedAt: null,
+          status: 'active',
+          approvalStatus: 'approved',
+        },
+        select: { id: true, createdAt: true, subscriptionFee: true },
+      }),
+    ]);
 
     let totalGmv = 0;
     let totalCashIn = 0;
@@ -614,12 +753,10 @@ export class ReportsService {
           bucket.adminTax += tax;
         }
 
-        const orderSubtotal = Number(order.subtotalAmount || 0);
-        const orderDiscount = Number(order.discountAmount || 0);
-        const netRatio =
-          orderSubtotal > 0 && orderDiscount > 0
-            ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal
-            : 1;
+        const netRatio = this.computeOrderNetRatio(
+          order.subtotalAmount,
+          order.discountAmount,
+        );
 
         for (const detail of order.details) {
           const product = detail.productVariant?.productColor?.product;
@@ -669,36 +806,20 @@ export class ReportsService {
     }
 
     const isAllTime = period === 'all';
-    const periodVendors = await this.prisma.extended.vendor.findMany({
-      where: {
-        deletedAt: null,
-        status: 'active',
-        approvalStatus: 'approved',
-        ...(isAllTime ? {} : { createdAt: { gte: startDate, lte: endDate } }),
-      },
-      select: { id: true, createdAt: true, subscriptionFee: true },
-    });
-
     let vendorFeeRevenue = 0;
-    for (const v of periodVendors) {
-      const vTier = this.getFinanceTierForDate(v.createdAt, financeHistory);
-      const fee = Number(v.subscriptionFee) || vTier.vendorRegistrationFee;
-      vendorFeeRevenue += fee;
-    }
-
-    const allVendors = await this.prisma.extended.vendor.findMany({
-      where: {
-        deletedAt: null,
-        status: 'active',
-        approvalStatus: 'approved',
-      },
-      select: { id: true, createdAt: true, subscriptionFee: true },
-    });
     let allTimeVendorFeeRevenue = 0;
     for (const v of allVendors) {
       const vTier = this.getFinanceTierForDate(v.createdAt, financeHistory);
       const fee = Number(v.subscriptionFee) || vTier.vendorRegistrationFee;
       allTimeVendorFeeRevenue += fee;
+      if (isAllTime) {
+        vendorFeeRevenue += fee;
+      } else {
+        const createdAt = new Date(v.createdAt);
+        if (createdAt >= startDate && createdAt <= endDate) {
+          vendorFeeRevenue += fee;
+        }
+      }
     }
 
     const orderTaxRevenue = orderTaxRevenueTotal;
@@ -989,20 +1110,10 @@ export class ReportsService {
         }
 
         // Suy ra Bảng Quý (Quý 1..4) trực tiếp từ 12 tháng trong O(1), không tốn thêm truy vấn DB
-        const byQuarter = [1, 2, 3, 4].map((q) => {
-          const monthsInQ = defaultMonths.filter((m) => m.quarter === q);
-          return {
-            quarter: q,
-            label: `Quý ${q}/${targetYear} (T${(q - 1) * 3 + 1} - T${q * 3})`,
-            totalOrders: monthsInQ.reduce((s, m) => s + m.totalOrders, 0),
-            completedOrders: monthsInQ.reduce((s, m) => s + m.completedOrders, 0),
-            cancelledOrders: monthsInQ.reduce((s, m) => s + m.cancelledOrders, 0),
-            subtotalAmount: monthsInQ.reduce((s, m) => s + m.subtotalAmount, 0),
-            discountAmount: monthsInQ.reduce((s, m) => s + m.discountAmount, 0),
-            totalAmount: monthsInQ.reduce((s, m) => s + m.totalAmount, 0),
-            allOrdersAmount: monthsInQ.reduce((s, m) => s + m.allOrdersAmount, 0),
-          };
-        });
+        const byQuarter = this.aggregateQuartersFromMonths(
+          defaultMonths,
+          targetYear,
+        );
 
         const yearMap = new Map(
           availableYears.map((y) => [
@@ -1087,20 +1198,10 @@ export class ReportsService {
         }
       }
     }
-    const byQuarter = [1, 2, 3, 4].map((q) => {
-      const monthsInQ = defaultMonths.filter((m) => m.quarter === q);
-      return {
-        quarter: q,
-        label: `Quý ${q}/${targetYear} (T${(q - 1) * 3 + 1} - T${q * 3})`,
-        totalOrders: monthsInQ.reduce((s, m) => s + m.totalOrders, 0),
-        completedOrders: monthsInQ.reduce((s, m) => s + m.completedOrders, 0),
-        cancelledOrders: monthsInQ.reduce((s, m) => s + m.cancelledOrders, 0),
-        subtotalAmount: monthsInQ.reduce((s, m) => s + m.subtotalAmount, 0),
-        discountAmount: monthsInQ.reduce((s, m) => s + m.discountAmount, 0),
-        totalAmount: monthsInQ.reduce((s, m) => s + m.totalAmount, 0),
-        allOrdersAmount: monthsInQ.reduce((s, m) => s + m.allOrdersAmount, 0),
-      };
-    });
+    const byQuarter = this.aggregateQuartersFromMonths(
+      defaultMonths,
+      targetYear,
+    );
 
     return {
       byMonth: defaultMonths,
@@ -1196,28 +1297,109 @@ export class ReportsService {
       { key: '55_plus', label: 'Từ 55 tuổi trở lên', min: 55, max: 150 },
     ];
 
-    // 1. Fetch all clients
-    const clients = await this.prisma.extended.client.findMany({
-      where: { deletedAt: null },
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        phone: true,
-        gender: true,
-        dateOfBirth: true,
-        createdAt: true,
-        status: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // 1. Fetch clients, favorites, completed order details, and cart items in parallel
+    const [clients, favorites, orderDetails, cartItems] = await Promise.all([
+      this.prisma.extended.client.findMany({
+        where: { deletedAt: null },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          phone: true,
+          gender: true,
+          dateOfBirth: true,
+          createdAt: true,
+          status: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.extended.productFavorite.findMany({
+        where: { deletedAt: null },
+        select: {
+          clientId: true,
+          productId: true,
+          product: {
+            select: {
+              id: true,
+              name: true,
+              categoryId: true,
+              category: { select: { name: true } },
+              vendorId: true,
+              vendor: { select: { id: true, storeName: true, fullName: true, avatarUrl: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.extended.orderDetail.findMany({
+        where: {
+          order: {
+            status: OrderStatus.completed,
+          },
+        },
+        select: {
+          quantity: true,
+          price: true,
+          order: {
+            select: {
+              id: true,
+              clientId: true,
+              status: true,
+              subtotalAmount: true,
+              discountAmount: true,
+            },
+          },
+          productVariant: {
+            select: {
+              productColor: {
+                select: {
+                  product: {
+                    select: {
+                      id: true,
+                      name: true,
+                      categoryId: true,
+                      category: { select: { name: true } },
+                      vendorId: true,
+                      vendor: { select: { id: true, storeName: true, fullName: true, avatarUrl: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.extended.cartItem.findMany({
+        where: { deletedAt: null },
+        select: {
+          quantity: true,
+          cart: { select: { clientId: true } },
+          productVariant: {
+            select: {
+              productColor: {
+                select: {
+                  product: {
+                    select: {
+                      vendorId: true,
+                      vendor: { select: { id: true, storeName: true, fullName: true, avatarUrl: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
 
     const ageGroups = groupsConfig.map((g) => ({
       ...g,
       count: 0,
       percentage: 0,
-      clientIds: new Set<string>(),
+      vendorFavInGroup: new Map<string, number>(),
+      vendorBuyInGroup: new Map<string, number>(),
+      totalSpentInGroup: 0,
     }));
+    const ageGroupByKey = new Map(ageGroups.map((g) => [g.key, g]));
 
     let totalAgeSum = 0;
     let ageCount = 0;
@@ -1239,7 +1421,6 @@ export class ReportsService {
       const grp = ageGroups.find((g) => age >= g.min && age <= g.max);
       if (grp) {
         grp.count++;
-        grp.clientIds.add(c.id);
         clientAgeMap.set(c.id, { age, groupKey: grp.key, groupLabel: grp.label });
       }
     }
@@ -1271,24 +1452,7 @@ export class ReportsService {
       percentage: Number(((count / (clients.length || 1)) * 100).toFixed(1)),
     }));
 
-    // 2. Favorites: ProductFavorite -> Product -> Vendor
-    const favorites = await this.prisma.extended.productFavorite.findMany({
-      select: {
-        clientId: true,
-        productId: true,
-        product: {
-          select: {
-            id: true,
-            name: true,
-            categoryId: true,
-            category: { select: { name: true } },
-            vendorId: true,
-            vendor: { select: { id: true, storeName: true, fullName: true, avatarUrl: true } },
-          },
-        },
-      },
-    });
-
+    // 2. Single O(F) pass over favorites: vendor stats + per-client count + age-group favorite vendor stats
     const vendorFavMap = new Map<string, any>();
     const clientFavCountMap = new Map<string, number>();
 
@@ -1297,10 +1461,12 @@ export class ReportsService {
 
       const v = f.product?.vendor;
       if (!v) continue;
+      const storeName = v.storeName || v.fullName;
+
       if (!vendorFavMap.has(v.id)) {
         vendorFavMap.set(v.id, {
           vendorId: v.id,
-          storeName: v.storeName || v.fullName,
+          storeName,
           avatarUrl: v.avatarUrl,
           favoriteCount: 0,
           clients: new Set<string>(),
@@ -1312,6 +1478,17 @@ export class ReportsService {
       item.clients.add(f.clientId);
       const prodCount = (item.topProducts.get(f.product.name) || 0) + 1;
       item.topProducts.set(f.product.name, prodCount);
+
+      const ageInfo = clientAgeMap.get(f.clientId);
+      if (ageInfo) {
+        const grp = ageGroupByKey.get(ageInfo.groupKey);
+        if (grp) {
+          grp.vendorFavInGroup.set(
+            storeName,
+            (grp.vendorFavInGroup.get(storeName) || 0) + 1,
+          );
+        }
+      }
     }
 
     const topFavoriteVendors = Array.from(vendorFavMap.values())
@@ -1326,46 +1503,7 @@ export class ReportsService {
       .sort((a, b) => b.favoriteCount - a.favoriteCount)
       .slice(0, 10);
 
-    // 3. Purchases: OrderDetail -> ProductVariant -> ProductColor -> Product -> Vendor
-    const orderDetails = await this.prisma.extended.orderDetail.findMany({
-      where: {
-        order: {
-          status: OrderStatus.completed,
-        },
-      },
-      select: {
-        quantity: true,
-        price: true,
-        order: {
-          select: {
-            id: true,
-            clientId: true,
-            status: true,
-            subtotalAmount: true,
-            discountAmount: true,
-          },
-        },
-        productVariant: {
-          select: {
-            productColor: {
-              select: {
-                product: {
-                  select: {
-                    id: true,
-                    name: true,
-                    categoryId: true,
-                    category: { select: { name: true } },
-                    vendorId: true,
-                    vendor: { select: { id: true, storeName: true, fullName: true, avatarUrl: true } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
+    // 3. Single O(D) pass over completed order details: vendor stats + client stats + age-group purchase stats
     const vendorPurchaseMap = new Map<string, any>();
     const clientPurchaseMap = new Map<string, any>();
 
@@ -1375,19 +1513,18 @@ export class ReportsService {
       if (!v) continue;
 
       const clientId = d.order.clientId;
-      const orderSubtotal = Number(d.order.subtotalAmount || 0);
-      const orderDiscount = Number(d.order.discountAmount || 0);
-      const netRatio =
-        orderSubtotal > 0 && orderDiscount > 0
-          ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal
-          : 1;
+      const netRatio = this.computeOrderNetRatio(
+        d.order.subtotalAmount,
+        d.order.discountAmount,
+      );
       const lineTotal = Math.round(Number(d.price) * d.quantity * netRatio);
+      const storeName = v.storeName || v.fullName;
 
       // Vendor stats
       if (!vendorPurchaseMap.has(v.id)) {
         vendorPurchaseMap.set(v.id, {
           vendorId: v.id,
-          storeName: v.storeName || v.fullName,
+          storeName,
           avatarUrl: v.avatarUrl,
           ordersSet: new Set<string>(),
           totalUnits: 0,
@@ -1412,9 +1549,21 @@ export class ReportsService {
       const cItem = clientPurchaseMap.get(clientId);
       cItem.ordersSet.add(d.order.id);
       cItem.totalSpent += lineTotal;
-      const storeName = v.storeName || v.fullName;
       const vCount = (cItem.vendorCounts.get(storeName) || 0) + d.quantity;
       cItem.vendorCounts.set(storeName, vCount);
+
+      // Age-group stats (accumulated in the same O(D) pass instead of 6x re-scans)
+      const ageInfo = clientAgeMap.get(clientId);
+      if (ageInfo) {
+        const grp = ageGroupByKey.get(ageInfo.groupKey);
+        if (grp) {
+          grp.vendorBuyInGroup.set(
+            storeName,
+            (grp.vendorBuyInGroup.get(storeName) || 0) + d.quantity,
+          );
+          grp.totalSpentInGroup += lineTotal;
+        }
+      }
     }
 
     const topPurchasedVendors = Array.from(vendorPurchaseMap.values())
@@ -1431,27 +1580,6 @@ export class ReportsService {
       .slice(0, 10);
 
     // 4. Cart stats
-    const cartItems = await this.prisma.extended.cartItem.findMany({
-      select: {
-        quantity: true,
-        cart: { select: { clientId: true } },
-        productVariant: {
-          select: {
-            productColor: {
-              select: {
-                product: {
-                  select: {
-                    vendorId: true,
-                    vendor: { select: { id: true, storeName: true, fullName: true, avatarUrl: true } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
     const vendorCartMap = new Map<string, any>();
     for (const ci of cartItems) {
       const v = ci.productVariant?.productColor?.product?.vendor;
@@ -1484,36 +1612,10 @@ export class ReportsService {
       .sort((a, b) => b.cartCount - a.cartCount)
       .slice(0, 10);
 
-    // 5. Cross-analysis: Age groups vs Vendor Preferences
+    // 5. Cross-analysis: Age groups vs Vendor Preferences (derived from O(F + D) group maps)
     const ageGroupAnalysis = ageGroups.map((grp) => {
-      const clientIds = grp.clientIds;
-      const vendorFavInGroup = new Map<string, number>();
-      const vendorBuyInGroup = new Map<string, number>();
-      let totalSpentInGroup = 0;
-
-      for (const f of favorites) {
-        if (clientIds.has(f.clientId) && f.product?.vendor) {
-          const name = f.product.vendor.storeName || f.product.vendor.fullName;
-          vendorFavInGroup.set(name, (vendorFavInGroup.get(name) || 0) + 1);
-        }
-      }
-
-      for (const d of orderDetails) {
-        if (clientIds.has(d.order.clientId) && d.productVariant?.productColor?.product?.vendor) {
-          const name = d.productVariant.productColor.product.vendor.storeName || d.productVariant.productColor.product.vendor.fullName;
-          const orderSubtotal = Number(d.order.subtotalAmount || 0);
-          const orderDiscount = Number(d.order.discountAmount || 0);
-          const netRatio =
-            orderSubtotal > 0 && orderDiscount > 0
-              ? Math.max(0, orderSubtotal - orderDiscount) / orderSubtotal
-              : 1;
-          vendorBuyInGroup.set(name, (vendorBuyInGroup.get(name) || 0) + d.quantity);
-          totalSpentInGroup += Math.round(Number(d.price) * d.quantity * netRatio);
-        }
-      }
-
-      const topFav = Array.from(vendorFavInGroup.entries()).sort((a, b) => b[1] - a[1])[0];
-      const topBuy = Array.from(vendorBuyInGroup.entries()).sort((a, b) => b[1] - a[1])[0];
+      const topFav = Array.from(grp.vendorFavInGroup.entries()).sort((a, b) => b[1] - a[1])[0];
+      const topBuy = Array.from(grp.vendorBuyInGroup.entries()).sort((a, b) => b[1] - a[1])[0];
 
       return {
         key: grp.key,
@@ -1522,7 +1624,7 @@ export class ReportsService {
         percentage: grp.percentage,
         topFavoriteVendor: topFav ? { name: topFav[0], count: topFav[1] } : null,
         topPurchasedVendor: topBuy ? { name: topBuy[0], count: topBuy[1] } : null,
-        totalSpent: Math.round(totalSpentInGroup),
+        totalSpent: Math.round(grp.totalSpentInGroup),
       };
     });
 

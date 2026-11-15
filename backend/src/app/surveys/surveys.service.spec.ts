@@ -188,4 +188,67 @@ describe('SurveysService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(tx.surveyResponse.update).not.toHaveBeenCalled();
   });
+
+  it('soft-deletes replaced draft questions and options while shifting old positions negative to preserve unique constraint', async () => {
+    const oldQ1 = '88888888-8888-4888-8888-888888888881';
+    const oldQ2 = '88888888-8888-4888-8888-888888888882';
+    const tx = {
+      surveyQuestion: {
+        findMany: jest.fn().mockResolvedValue([{ id: oldQ1 }, { id: oldQ2 }]),
+        aggregate: jest.fn().mockResolvedValue({ _min: { position: -2 } }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      surveyOption: {
+        updateMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+      survey: {
+        update: jest.fn().mockResolvedValue(managementSurvey()),
+      },
+    };
+    const prisma = {
+      survey: {
+        findFirst: jest.fn().mockResolvedValue(managementSurvey()),
+      },
+      $transaction: jest.fn(
+        (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
+      ),
+    };
+    Object.assign(prisma, {
+      extended: prisma,
+      extendedTransaction: prisma.$transaction,
+    });
+    const service = new SurveysService(prisma as unknown as PrismaService);
+
+    await service.update(
+      surveyId,
+      {
+        questions: [
+          {
+            question: 'Câu hỏi mới?',
+            type: SurveyQuestionType.rating,
+            required: true,
+            position: 0,
+            options: [],
+          },
+        ],
+      },
+      user(vendorId, 'vendor'),
+    );
+
+    expect(tx.surveyOption.updateMany).toHaveBeenCalledWith({
+      where: {
+        questionId: { in: [oldQ1, oldQ2] },
+        deletedAt: null,
+      },
+      data: { deletedAt: expect.any(Date) },
+    });
+    expect(tx.surveyQuestion.update).toHaveBeenNthCalledWith(1, {
+      where: { id: oldQ1 },
+      data: { deletedAt: expect.any(Date), position: -3 },
+    });
+    expect(tx.surveyQuestion.update).toHaveBeenNthCalledWith(2, {
+      where: { id: oldQ2 },
+      data: { deletedAt: expect.any(Date), position: -4 },
+    });
+  });
 });

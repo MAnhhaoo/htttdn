@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { productService } from '../services/productService';
 import { useMemo } from 'react';
 import { useVoucherOffers } from './useVoucherOffers';
+import { isOfferApplicableToProduct } from '../utils/voucherPrice';
 
 export const useProducts = (params = {}) => {
   const query = useQuery({
@@ -30,12 +31,12 @@ export const useProducts = (params = {}) => {
       }
       return productService.getProducts(apiParams);
     },
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   });
 
   const offers = useVoucherOffers((query.data?.list || []).map(product => product.id));
   const products = useMemo(() => (query.data?.list || []).map(product => ({ ...product,
-    voucherOffers: offers.filter(offer => offer.scope === 'platform' || offer.productIds.includes(product.id)),
+    voucherOffers: offers.filter(offer => isOfferApplicableToProduct(offer, product.id)),
   })), [query.data, offers]);
   return {
     products,
@@ -58,7 +59,7 @@ export const useBestSellingProducts = (params = {}) => {
 
   const offers = useVoucherOffers((query.data || []).map(product => product.id));
   const products = useMemo(() => (query.data || []).map(product => ({ ...product,
-    voucherOffers: offers.filter(offer => offer.scope === 'platform' || offer.productIds.includes(product.id)),
+    voucherOffers: offers.filter(offer => isOfferApplicableToProduct(offer, product.id)),
   })), [query.data, offers]);
   return {
     products,

@@ -246,19 +246,26 @@ export class ProductColorService extends PrismaBaseService<'productColor'> {
   }
 
   /**
-   * Xóa mềm màu sản phẩm.
+   * Xóa mềm màu sản phẩm và toàn bộ biến thể con thuộc màu đó.
    *
    * Chỉ cập nhật deletedAt.
    * imageUrls vẫn được giữ nguyên trong database.
    */
   async deleteProductColor(id: string, vendorId: string) {
     const productColor = await this.getOwnedActiveColor(id, vendorId);
+    const now = new Date();
 
-    const deleted = await this.extended.update({
-      where: { id, productId: productColor.productId, deletedAt: null },
-      data: {
-        deletedAt: new Date(),
-      },
+    const deleted = await this.prismaDb.extendedTransaction(async (tx) => {
+      await tx.productVariant.updateMany({
+        where: { productColorId: id, deletedAt: null },
+        data: { deletedAt: now },
+      });
+      return tx.productColor.update({
+        where: { id, productId: productColor.productId, deletedAt: null },
+        data: {
+          deletedAt: now,
+        },
+      });
     });
     this.realtime.emitProductUpdated(productColor.productId, vendorId);
     return deleted;

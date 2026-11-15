@@ -1,31 +1,73 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Truck, Search, Filter, RefreshCw, CheckCircle2, Clock, 
-  MapPin, Phone, User, Package, AlertTriangle, ArrowRight, 
-  ChevronRight, Calendar, FileText, Check, ShieldAlert, X
+import { useState, useEffect, useCallback } from 'react';
+import {
+  Truck,
+  Search,
+  RefreshCw,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  User,
+  ShieldAlert,
+  X,
 } from 'lucide-react';
+import { useToast } from '@shared/components/ui';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
 import { shippingApi, ordersApi } from '../../api/axiosClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatShortOrderCode, formatVendorCode } from '../../utils/orderFormat';
 
 const STATUS_CONFIG = {
-  pending: { label: 'Chờ tiếp nhận', badge: 'bg-amber-100 text-amber-800 border-amber-200' },
-  assigned: { label: 'Đã phân công', badge: 'bg-blue-100 text-blue-800 border-blue-200' },
-  picking_up: { label: 'Đang lấy hàng', badge: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
-  in_transit: { label: 'Đang luân chuyển', badge: 'bg-purple-100 text-purple-800 border-purple-200' },
-  out_for_delivery: { label: 'Đang giao hàng', badge: 'bg-cyan-100 text-cyan-800 border-cyan-200' },
-  delivered: { label: 'Giao thành công', badge: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-  failed: { label: 'Giao thất bại', badge: 'bg-rose-100 text-rose-800 border-rose-200' },
-  returned: { label: 'Đã hoàn hàng', badge: 'bg-slate-100 text-slate-700 border-slate-200' },
+  pending: {
+    label: 'Chờ tiếp nhận',
+    badge:
+      'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30',
+  },
+  assigned: {
+    label: 'Đã phân công',
+    badge:
+      'bg-[#EEF5F1] text-[#1A3A2C] border-[#B9D6C6] dark:bg-[#1A3A2C]/50 dark:text-[#8BBAA1] dark:border-[#2A5C4A]',
+  },
+  picking_up: {
+    label: 'Đang lấy hàng',
+    badge:
+      'bg-[#FBF7EC] text-[#8C6B1F] border-[#E6D39A] dark:bg-[#C9A84C]/15 dark:text-[#DEC47E] dark:border-[#C9A84C]/35',
+  },
+  in_transit: {
+    label: 'Đang luân chuyển',
+    badge:
+      'bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-500/30',
+  },
+  out_for_delivery: {
+    label: 'Đang giao hàng',
+    badge:
+      'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-500/15 dark:text-cyan-300 dark:border-cyan-500/30',
+  },
+  delivered: {
+    label: 'Giao thành công',
+    badge:
+      'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30',
+  },
+  failed: {
+    label: 'Giao thất bại',
+    badge:
+      'bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30',
+  },
+  returned: {
+    label: 'Đã hoàn hàng',
+    badge:
+      'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+  },
 };
 
 export const InternalShippingPage = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [shipments, setShipments] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
 
   // Modals state
   const [selectedShipment, setSelectedShipment] = useState(null);
@@ -50,7 +92,7 @@ export const InternalShippingPage = () => {
       const params = {
         page: 1,
         itemPerPage: 50,
-        ...(search ? { q: search } : {}),
+        ...(debouncedSearch.trim() ? { q: debouncedSearch.trim() } : {}),
         ...(activeTab !== 'all' ? { status: activeTab } : {}),
       };
 
@@ -70,7 +112,7 @@ export const InternalShippingPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [search, activeTab, user]);
+  }, [debouncedSearch, activeTab, user]);
 
   useEffect(() => {
     fetchShipments();
@@ -97,7 +139,9 @@ export const InternalShippingPage = () => {
       defaultLoc = 'Hub Logistics Phân loại MIVA';
       defaultDesc = 'Đã lấy hàng thành công từ Vendor, đang luân chuyển qua Hub phân loại';
     } else if (targetStatus === 'out_for_delivery') {
-      defaultLoc = shipment.shippingAddress ? `Tuyến: ${shipment.shippingAddress.split(',').slice(-2).join(',').trim()}` : 'Tuyến giao hàng';
+      defaultLoc = shipment.shippingAddress
+        ? `Tuyến: ${shipment.shippingAddress.split(',').slice(-2).join(',').trim()}`
+        : 'Tuyến giao hàng';
       defaultDesc = 'Đã xuất kho Hub, bưu tá đang trên đường đi giao đến người nhận';
     } else if (targetStatus === 'delivered') {
       defaultLoc = shipment.shippingAddress || 'Địa chỉ khách hàng';
@@ -124,9 +168,12 @@ export const InternalShippingPage = () => {
         failedReason: nextStatus === 'failed' ? failedReason : undefined,
       });
       setIsUpdateOpen(false);
+      toast.success('Đã cập nhật trạng thái vận đơn thành công!');
       fetchShipments();
     } catch (err) {
-      alert(`Lỗi cập nhật trạng thái vận chuyển: ${err.response?.data?.message || err.message}`);
+      toast.error(
+        `Lỗi cập nhật trạng thái vận chuyển: ${err.response?.data?.message || err.message}`,
+      );
     } finally {
       setUpdating(false);
     }
@@ -143,7 +190,7 @@ export const InternalShippingPage = () => {
   const handleEscalateSubmit = async (e) => {
     e.preventDefault();
     if (!escalateShipment?.orderId) {
-      alert('Không tìm thấy thông tin đơn hàng gốc của kiện hàng này');
+      toast.error('Không tìm thấy thông tin đơn hàng gốc của kiện hàng này');
       return;
     }
     try {
@@ -155,11 +202,11 @@ export const InternalShippingPage = () => {
         notifyTarget: 'admin',
         title: `[Báo cáo sự cố bưu tá] Vận đơn #${escalateShipment.trackingNumber || escalateShipment.id}`,
       });
-      alert('Đã lập báo cáo sự cố & gửi thông báo thành công đến Admin!');
+      toast.success('Đã lập báo cáo sự cố & gửi thông báo thành công đến Admin!');
       setEscalateShipment(null);
       fetchShipments();
     } catch (err) {
-      alert(`Lỗi chuyển tiếp sự cố: ${err.response?.data?.message || err.message}`);
+      toast.error(`Lỗi chuyển tiếp sự cố: ${err.response?.data?.message || err.message}`);
     } finally {
       setEscalating(false);
     }
@@ -171,14 +218,13 @@ export const InternalShippingPage = () => {
       const full = await shippingApi.getShipment(shipment.id);
       setSelectedShipment(full);
       setIsDetailOpen(true);
-    } catch (err) {
-      alert('Không thể tải chi tiết vận đơn');
+    } catch {
+      toast.error('Không thể tải chi tiết vận đơn');
     }
   };
 
   // Quick Stats from server summary or loaded array
-  const pendingCount =
-    summary?.pending ?? shipments.filter((s) => s.status === 'pending').length;
+  const pendingCount = summary?.pending ?? shipments.filter((s) => s.status === 'pending').length;
   const inTransitCount =
     summary?.inTransit ??
     shipments.filter(
@@ -196,18 +242,20 @@ export const InternalShippingPage = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Truck className="w-7 h-7 text-blue-600" />
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Truck className="w-7 h-7 text-[#1A3A2C] dark:text-[#DEC47E]" />
             Quản Lý Giao Hàng Bưu Tá (MIVA Logistics)
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            Tiếp nhận kiện hàng từ kho Vendor, luân chuyển qua Hub phân loại và trực tiếp giao tận tay khách hàng
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">
+            Tiếp nhận kiện hàng từ kho Vendor, luân chuyển qua Hub phân loại và trực tiếp giao tận
+            tay khách hàng
           </p>
         </div>
 
         <button
+          type="button"
           onClick={fetchShipments}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 shadow-xs transition"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-[#131B17] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 shadow-xs transition cursor-pointer"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Làm mới
@@ -216,39 +264,51 @@ export const InternalShippingPage = () => {
 
       {/* Stats Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white dark:bg-[#131B17] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Chờ điều phối</p>
-            <p className="text-2xl font-bold text-amber-600 mt-1">{pendingCount}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Chờ điều phối
+            </p>
+            <p className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">
+              {pendingCount}
+            </p>
           </div>
-          <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
+          <div className="p-3 bg-amber-50 dark:bg-amber-500/15 rounded-xl text-amber-600 dark:text-amber-400">
             <Clock className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white dark:bg-[#131B17] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Đang luân chuyển / Giao</p>
-            <p className="text-2xl font-bold text-blue-600 mt-1">{inTransitCount}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Đang luân chuyển / Giao
+            </p>
+            <p className="text-2xl font-bold text-[#1A3A2C] dark:text-[#DEC47E] mt-1">
+              {inTransitCount}
+            </p>
           </div>
-          <div className="p-3 bg-blue-50 rounded-xl text-blue-600">
+          <div className="p-3 bg-[#EEF5F1] dark:bg-[#1A3A2C]/50 rounded-xl text-[#1A3A2C] dark:text-[#DEC47E]">
             <Truck className="w-6 h-6" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white dark:bg-[#131B17] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Giao thành công</p>
-            <p className="text-2xl font-bold text-emerald-600 mt-1">{deliveredCount}</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Giao thành công
+            </p>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              {deliveredCount}
+            </p>
           </div>
-          <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+          <div className="p-3 bg-emerald-50 dark:bg-emerald-500/15 rounded-xl text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="w-6 h-6" />
           </div>
         </div>
       </div>
 
       {/* Tabs & Search */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="bg-white dark:bg-[#131B17] p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
           {[
             { key: 'all', label: 'Tất cả' },
@@ -261,11 +321,12 @@ export const InternalShippingPage = () => {
           ].map((tab) => (
             <button
               key={tab.key}
+              type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap cursor-pointer ${
                 activeTab === tab.key
-                  ? 'bg-blue-600 text-white font-semibold'
-                  : 'text-slate-600 hover:bg-slate-100'
+                  ? 'bg-[#1A3A2C] dark:bg-[#2A5C4A] text-white font-semibold shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
               {tab.label}
@@ -280,7 +341,7 @@ export const InternalShippingPage = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm mã vận đơn, người nhận, ĐT..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+            className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs focus:outline-none focus:ring-2 focus:ring-[#2A5C4A]/25 focus:border-[#2A5C4A] dark:focus:border-[#C9A84C] bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white placeholder-slate-400"
           />
         </div>
       </div>
@@ -288,46 +349,61 @@ export const InternalShippingPage = () => {
       {/* Shipments List */}
       <div className="space-y-3">
         {loading ? (
-          <div className="p-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
+          <div className="p-12 text-center text-slate-400 bg-white dark:bg-[#131B17] rounded-2xl border border-slate-200 dark:border-slate-800">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1A3A2C] dark:text-[#DEC47E]" />
             Đang tải danh sách vận đơn...
           </div>
         ) : shipments.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
-            <Truck className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+          <div className="p-12 text-center text-slate-400 bg-white dark:bg-[#131B17] rounded-2xl border border-slate-200 dark:border-slate-800">
+            <Truck className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
             Không có kiện hàng nào trong danh mục này.
           </div>
         ) : (
           shipments.map((s) => {
-            const conf = STATUS_CONFIG[s.status] || { label: s.status, badge: 'bg-slate-100 text-slate-600' };
+            const conf = STATUS_CONFIG[s.status] || {
+              label: s.status,
+              badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+            };
 
             return (
               <div
                 key={s.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 hover:border-blue-300 transition space-y-4"
+                className="bg-white dark:bg-[#131B17] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-5 hover:border-[#2A5C4A]/50 dark:hover:border-[#C9A84C]/40 transition space-y-4"
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono font-bold text-sm text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="font-mono font-bold text-sm text-[#1A3A2C] dark:text-[#DEC47E] bg-[#EEF5F1] dark:bg-[#1A3A2C]/50 border border-[#B9D6C6]/60 dark:border-[#2A5C4A]/60 px-2.5 py-1 rounded-lg">
                       {s.trackingNumber}
                     </span>
-                    <span className="text-xs text-slate-500" title={s.order?.orderCode}>
-                      Đơn hàng: <span className="font-mono font-semibold text-slate-800">#{formatShortOrderCode(s.order?.orderCode || s.orderId)}</span>
+                    <span
+                      className="text-xs text-slate-500 dark:text-slate-400"
+                      title={s.order?.orderCode}
+                    >
+                      Đơn hàng:{' '}
+                      <span className="font-mono font-semibold text-slate-800 dark:text-white">
+                        #{formatShortOrderCode(s.order?.orderCode || s.orderId)}
+                      </span>
                     </span>
                     {s.vendorOrder && (
                       <span className="text-xs text-slate-400">
-                        Kiện: <span className="font-medium text-slate-600">{s.vendorOrder.vendorOrderCode}</span>
+                        Kiện:{' '}
+                        <span className="font-medium text-slate-600 dark:text-slate-300">
+                          {s.vendorOrder.vendorOrderCode}
+                        </span>
                       </span>
                     )}
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${conf.badge}`}>
+                    <span
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${conf.badge}`}
+                    >
                       {conf.label}
                     </span>
                     <button
+                      type="button"
                       onClick={() => handleOpenDetail(s)}
-                      className="text-xs text-slate-500 hover:text-blue-600 font-medium px-2 py-1 rounded-lg hover:bg-slate-50 transition"
+                      className="text-xs text-slate-500 dark:text-slate-400 hover:text-[#1A3A2C] dark:hover:text-[#DEC47E] font-medium px-2 py-1 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
                     >
                       Chi tiết &amp; Nhật ký
                     </button>
@@ -337,45 +413,49 @@ export const InternalShippingPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                   {/* Vendor / Pickup info */}
                   <div className="space-y-1">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">1. Điểm lấy hàng (Vendor)</p>
-                    <p className="font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                      1. Điểm lấy hàng (Vendor)
+                    </p>
+                    <p className="font-semibold text-slate-800 dark:text-white flex items-center gap-1.5 flex-wrap">
                       <span>{s.vendorOrder?.vendor?.storeName || 'Kho Tổng Miva'}</span>
                       {s.vendorOrder?.vendor?.id && (
-                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#FBF7EC] dark:bg-[#C9A84C]/15 text-[#8C6B1F] dark:text-[#DEC47E] border border-[#E6D39A] dark:border-[#C9A84C]/35">
                           {formatVendorCode(s.vendorOrder.vendor.id)}
                         </span>
                       )}
                     </p>
-                    <p className="text-slate-500">{s.vendorOrder?.vendor?.fullName || 'Nhà cung cấp đối tác'}</p>
+                    <p className="text-slate-500 dark:text-slate-400">
+                      {s.vendorOrder?.vendor?.fullName || 'Nhà cung cấp đối tác'}
+                    </p>
                     {s.vendorOrder && (
                       <div className="pt-0.5">
                         {s.vendorOrder.status === 'ready_for_pickup' && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/35 px-2 py-0.5 rounded-full">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                             Đã đóng gói - Sẵn sàng bàn giao
                           </span>
                         )}
                         {s.vendorOrder.status === 'processing' && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                            <Clock className="w-3 h-3 text-blue-600" />
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#1A3A2C] dark:text-[#8BBAA1] bg-[#EEF5F1] dark:bg-[#1A3A2C]/45 border border-[#B9D6C6] dark:border-[#2A5C4A] px-2 py-0.5 rounded-full">
+                            <Clock className="w-3 h-3" />
                             Vendor đang đóng gói hàng
                           </span>
                         )}
                         {s.vendorOrder.status === 'confirmed' && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                            <Clock className="w-3 h-3 text-amber-600" />
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/35 px-2 py-0.5 rounded-full">
+                            <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                             Vendor đã nhận đơn (Chờ đóng gói)
                           </span>
                         )}
                         {s.vendorOrder.status === 'pending' && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full">
                             <Clock className="w-3 h-3 text-slate-500" />
                             Chờ Vendor tiếp nhận
                           </span>
                         )}
                         {s.vendorOrder.status === 'shipping' && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
-                            <Truck className="w-3 h-3 text-purple-600" />
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-500/15 border border-teal-200 dark:border-teal-500/35 px-2 py-0.5 rounded-full">
+                            <Truck className="w-3 h-3" />
                             Đã bàn giao bưu tá
                           </span>
                         )}
@@ -385,42 +465,52 @@ export const InternalShippingPage = () => {
 
                   {/* Customer / Delivery info */}
                   <div className="space-y-1">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">2. Người nhận &amp; Địa chỉ giao</p>
-                    <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                      2. Người nhận &amp; Địa chỉ giao
+                    </p>
+                    <p className="font-semibold text-slate-800 dark:text-white flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5 text-slate-400" />
                       <span>{s.receiverName || 'Khách hàng'}</span>
                       <span className="text-slate-400 font-normal">({s.receiverPhone})</span>
                     </p>
-                    <p className="text-slate-500 truncate" title={s.shippingAddress}>
+                    <p className="text-slate-500 dark:text-slate-400 truncate" title={s.shippingAddress}>
                       {s.shippingAddress}
                     </p>
                   </div>
 
                   {/* Assigned Carrier */}
                   <div className="space-y-1">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">3. Nhân viên phụ trách</p>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                      3. Nhân viên phụ trách
+                    </p>
                     {s.carrier ? (
                       <div>
-                        <p className="font-semibold text-slate-800">{s.carrier.fullName}</p>
-                        <p className="text-slate-500 font-mono text-[11px]">
+                        <p className="font-semibold text-slate-800 dark:text-white">
+                          {s.carrier.fullName}
+                        </p>
+                        <p className="text-slate-500 dark:text-slate-400 font-mono text-[11px]">
                           {s.carrier.employeeCode} {s.carrier.phone ? `• ${s.carrier.phone}` : ''}
                         </p>
                       </div>
                     ) : (
-                      <p className="text-amber-600 font-medium">Chưa có người tiếp nhận</p>
+                      <p className="text-amber-600 dark:text-amber-400 font-medium">
+                        Chưa có người tiếp nhận
+                      </p>
                     )}
                   </div>
                 </div>
 
                 {/* Workflow Actions */}
-                <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
                   <div className="text-[11px] text-slate-400 flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" />
-                    <span>Sự kiện gần nhất: {s.events?.[0]?.description || 'Chưa có cập nhật'}</span>
+                    <span>
+                      Sự kiện gần nhất: {s.events?.[0]?.description || 'Chưa có cập nhật'}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {(s.status === 'pending' || s.status === 'assigned') && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(s.status === 'pending' || s.status === 'assigned') &&
                       (() => {
                         const isVendorReady =
                           !s.vendorOrder ||
@@ -431,37 +521,39 @@ export const InternalShippingPage = () => {
                         if (isVendorReady) {
                           return (
                             <button
+                              type="button"
                               onClick={() => handleOpenUpdate(s, 'picking_up')}
-                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-1.5"
+                              className="px-3 py-1.5 bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                             >
-                              <Truck className="w-3.5 h-3.5" />
+                              <Truck className="w-3.5 h-3.5 text-[#DEC47E]" />
                               Tiếp nhận &amp; Bắt đầu lấy hàng (Vendor)
                             </button>
                           );
                         }
 
                         return (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/35 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400 animate-pulse" />
                               Chờ Vendor xác nhận đóng gói
                             </span>
                             <button
+                              type="button"
                               disabled
-                              className="px-3 py-1.5 bg-slate-100 text-slate-400 text-xs font-medium rounded-xl cursor-not-allowed border border-slate-200"
+                              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 text-xs font-medium rounded-xl cursor-not-allowed border border-slate-200 dark:border-slate-700"
                               title="Vendor chưa xác nhận đóng gói xong (Sẵn sàng bàn giao). Bưu tá chỉ có thể tiếp nhận sau khi Vendor hoàn tất."
                             >
                               Chưa thể tiếp nhận
                             </button>
                           </div>
                         );
-                      })()
-                    )}
+                      })()}
 
                     {s.status === 'picking_up' && (
                       <button
+                        type="button"
                         onClick={() => handleOpenUpdate(s, 'in_transit')}
-                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl shadow-xs transition"
+                        className="px-3 py-1.5 bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white text-xs font-semibold rounded-xl shadow-xs transition cursor-pointer"
                       >
                         Nhập kho Hub &amp; Luân chuyển
                       </button>
@@ -469,8 +561,9 @@ export const InternalShippingPage = () => {
 
                     {s.status === 'in_transit' && (
                       <button
+                        type="button"
                         onClick={() => handleOpenUpdate(s, 'out_for_delivery')}
-                        className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-semibold rounded-xl shadow-xs transition"
+                        className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-xl shadow-xs transition cursor-pointer"
                       >
                         Xuất kho giao cho khách
                       </button>
@@ -478,8 +571,9 @@ export const InternalShippingPage = () => {
 
                     {s.status === 'out_for_delivery' && (
                       <button
+                        type="button"
                         onClick={() => handleOpenUpdate(s, 'delivered')}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition"
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition cursor-pointer"
                       >
                         Xác nhận giao thành công
                       </button>
@@ -487,8 +581,9 @@ export const InternalShippingPage = () => {
 
                     {s.status !== 'delivered' && s.status !== 'failed' && s.status !== 'returned' && (
                       <button
+                        type="button"
                         onClick={() => handleOpenUpdate(s, 'failed')}
-                        className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl transition"
+                        className="px-3 py-1.5 bg-rose-50 dark:bg-rose-500/15 hover:bg-rose-100 dark:hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/35 text-xs font-semibold rounded-xl transition cursor-pointer"
                       >
                         Báo sự cố giao
                       </button>
@@ -496,8 +591,9 @@ export const InternalShippingPage = () => {
 
                     {s.status === 'failed' && (
                       <button
+                        type="button"
                         onClick={() => handleOpenUpdate(s, 'returned')}
-                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-xs transition"
+                        className="px-3 py-1.5 bg-slate-700 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-semibold rounded-xl shadow-xs transition cursor-pointer"
                       >
                         Hoàn hàng về kho
                       </button>
@@ -505,8 +601,9 @@ export const InternalShippingPage = () => {
 
                     {(s.status === 'failed' || s.status === 'returned') && (
                       <button
+                        type="button"
                         onClick={() => handleOpenEscalate(s)}
-                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-1"
+                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer"
                         title="Báo cáo sự cố và chuyển tiếp lên Admin phê duyệt hủy đơn"
                       >
                         <ShieldAlert className="w-3.5 h-3.5" />
@@ -523,83 +620,99 @@ export const InternalShippingPage = () => {
 
       {/* Modal: Update Status */}
       {isUpdateOpen && selectedShipment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-base">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-[#131B17] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-bold text-slate-900 dark:text-white text-base">
                 Cập nhật Trạng thái Kiện hàng: {selectedShipment.trackingNumber}
               </h3>
-              <button onClick={() => setIsUpdateOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                onClick={() => setIsUpdateOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleUpdateSubmit} className="space-y-3.5 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Trạng thái mới:</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Trạng thái mới:
+                </label>
                 <select
                   value={nextStatus}
                   onChange={(e) => setNextStatus(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#2A5C4A]"
                 >
                   <option value="picking_up">1. Đang lấy hàng tại kho Vendor (Picking up)</option>
                   <option value="in_transit">2. Đang luân chuyển qua Hub MIVA (In transit)</option>
-                  <option value="out_for_delivery">3. Đang giao tới người nhận (Out for delivery)</option>
-                  <option value="delivered">4. Đã giao thành công (Delivered - Tự động quyết toán COD nếu có)</option>
+                  <option value="out_for_delivery">
+                    3. Đang giao tới người nhận (Out for delivery)
+                  </option>
+                  <option value="delivered">
+                    4. Đã giao thành công (Delivered - Tự động quyết toán COD nếu có)
+                  </option>
                   <option value="failed">5. Giao thất bại / Báo sự cố (Failed)</option>
                   <option value="returned">6. Đã hoàn hàng về Hub/Kho (Returned)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Vị trí hiện tại:</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Vị trí hiện tại:
+                </label>
                 <input
                   type="text"
                   value={locationText}
                   onChange={(e) => setLocationText(e.target.value)}
                   placeholder="VD: Hub phân loại Tân Bình, Kho Vendor..."
                   required
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs focus:outline-none focus:ring-2 focus:ring-[#2A5C4A]"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Mô tả chi tiết / Ghi chú:</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Mô tả chi tiết / Ghi chú:
+                </label>
                 <input
                   type="text"
                   value={descriptionText}
                   onChange={(e) => setDescriptionText(e.target.value)}
                   placeholder="Ghi chú thêm nếu có..."
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs focus:outline-none focus:ring-2 focus:ring-[#2A5C4A]"
                 />
               </div>
 
               {nextStatus === 'failed' && (
                 <div>
-                  <label className="block font-semibold text-rose-600 mb-1">Lý do giao hàng không thành công:</label>
+                  <label className="block font-semibold text-rose-600 dark:text-rose-400 mb-1">
+                    Lý do giao hàng không thành công:
+                  </label>
                   <input
                     type="text"
                     value={failedReason}
                     onChange={(e) => setFailedReason(e.target.value)}
                     placeholder="VD: Người nhận không nghe máy 3 lần, hẹn lại..."
                     required
-                    className="w-full px-3 py-2 rounded-xl border border-rose-300 text-xs focus:ring-2 focus:ring-rose-500"
+                    className="w-full px-3 py-2 rounded-xl border border-rose-300 dark:border-rose-500/50 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs focus:outline-none focus:ring-2 focus:ring-rose-500"
                   />
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsUpdateOpen(false)}
-                  className="px-3.5 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-semibold transition"
+                  className="px-3.5 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl font-semibold transition"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={updating}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-xs transition"
+                  className="px-4 py-2 bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white rounded-xl font-semibold shadow-xs transition cursor-pointer"
                 >
                   {updating ? 'Đang lưu...' : 'Xác nhận cập nhật'}
                 </button>
@@ -611,24 +724,33 @@ export const InternalShippingPage = () => {
 
       {/* Modal: Timeline & Details */}
       {isDetailOpen && selectedShipment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-base">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-[#131B17] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-xl space-y-4 max-h-[85vh] overflow-y-auto custom-scrollbar">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="font-bold text-slate-900 dark:text-white text-base">
                 Hành trình Vận đơn: {selectedShipment.trackingNumber}
               </h3>
-              <button onClick={() => setIsDetailOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                onClick={() => setIsDetailOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl text-xs">
+            <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/70 p-3.5 rounded-xl text-xs">
               <div>
-                <p className="text-slate-400 font-semibold uppercase text-[10px]">Đơn hàng &amp; Vendor</p>
-                <p className="font-mono font-semibold text-slate-800 mt-0.5" title={selectedShipment.order?.orderCode}>
+                <p className="text-slate-400 font-semibold uppercase text-[10px]">
+                  Đơn hàng &amp; Vendor
+                </p>
+                <p
+                  className="font-mono font-semibold text-[#1A3A2C] dark:text-[#DEC47E] mt-0.5"
+                  title={selectedShipment.order?.orderCode}
+                >
                   #{formatShortOrderCode(selectedShipment.order?.orderCode || selectedShipment.orderId)}
                 </p>
-                <p className="text-slate-500">
+                <p className="text-slate-500 dark:text-slate-400">
                   {selectedShipment.vendorOrder?.vendor?.storeName || 'Miva Direct'}
                   {selectedShipment.vendorOrder?.vendor?.id
                     ? ` (${formatVendorCode(selectedShipment.vendorOrder.vendor.id)})`
@@ -636,29 +758,40 @@ export const InternalShippingPage = () => {
                 </p>
               </div>
               <div>
-                <p className="text-slate-400 font-semibold uppercase text-[10px]">Người nhận &amp; Địa chỉ</p>
-                <p className="font-semibold text-slate-800 mt-0.5">{selectedShipment.receiverName} ({selectedShipment.receiverPhone})</p>
-                <p className="text-slate-500 truncate" title={selectedShipment.shippingAddress}>{selectedShipment.shippingAddress}</p>
+                <p className="text-slate-400 font-semibold uppercase text-[10px]">
+                  Người nhận &amp; Địa chỉ
+                </p>
+                <p className="font-semibold text-slate-800 dark:text-white mt-0.5">
+                  {selectedShipment.receiverName} ({selectedShipment.receiverPhone})
+                </p>
+                <p
+                  className="text-slate-500 dark:text-slate-400 truncate"
+                  title={selectedShipment.shippingAddress}
+                >
+                  {selectedShipment.shippingAddress}
+                </p>
               </div>
             </div>
 
             <div>
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+              <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
                 Lịch sử các mốc sự kiện ({selectedShipment.events?.length || 0})
               </h4>
-              <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+              <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-700">
                 {selectedShipment.events?.map((ev, idx) => (
                   <div key={ev.id || idx} className="relative">
-                    <div className="absolute -left-6 top-1 w-3 h-3 rounded-full bg-blue-600 ring-4 ring-white" />
-                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-xs">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="font-semibold text-slate-800">{ev.description}</span>
+                    <div className="absolute -left-6 top-1 w-3 h-3 rounded-full bg-[#1A3A2C] dark:bg-[#C9A84C] ring-4 ring-white dark:ring-[#131B17]" />
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/70 text-xs">
+                      <div className="flex flex-wrap justify-between items-center gap-1 mb-1">
+                        <span className="font-semibold text-slate-800 dark:text-white">
+                          {ev.description}
+                        </span>
                         <span className="text-[11px] text-slate-400 font-mono">
                           {new Date(ev.createdAt).toLocaleString('vi-VN')}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                        <MapPin className="w-3.5 h-3.5 text-[#2A5C4A] dark:text-[#DEC47E]" />
                         <span>{ev.location || 'Hub MIVA'}</span>
                       </div>
                     </div>
@@ -667,10 +800,11 @@ export const InternalShippingPage = () => {
               </div>
             </div>
 
-            <div className="flex justify-end pt-3 border-t border-slate-100">
+            <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
               <button
+                type="button"
                 onClick={() => setIsDetailOpen(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition"
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition cursor-pointer"
               >
                 Đóng
               </button>
@@ -681,62 +815,102 @@ export const InternalShippingPage = () => {
 
       {/* Modal: Escalation to Admin */}
       {escalateShipment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2 text-rose-600">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-[#131B17] border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
                 <ShieldAlert className="w-5 h-5" />
-                <h3 className="font-bold text-slate-900 text-base">
+                <h3 className="font-bold text-slate-900 dark:text-white text-base">
                   Báo cáo Sự cố &amp; Chuyển tiếp Admin
                 </h3>
               </div>
-              <button onClick={() => setEscalateShipment(null)} className="text-slate-400 hover:text-slate-600">
+              <button
+                type="button"
+                onClick={() => setEscalateShipment(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
-              <p className="font-semibold">Kiện hàng: {escalateShipment.trackingNumber || escalateShipment.id}</p>
-              <p className="text-[11px] text-amber-700 mt-0.5" title={escalateShipment.order?.orderCode || escalateShipment.orderId}>
-                Đơn hàng gốc: #{formatShortOrderCode(escalateShipment.order?.orderCode || escalateShipment.orderId)}
+            <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl p-3 text-xs text-amber-800 dark:text-amber-200">
+              <p className="font-semibold">
+                Kiện hàng: {escalateShipment.trackingNumber || escalateShipment.id}
               </p>
-              <p className="text-[11px] text-amber-600 mt-1">
-                * Báo cáo này sẽ được chuyển trực tiếp vào hồ sơ đơn hàng để Admin phê duyệt hủy đơn, tự động hoàn kho và hoàn trả tiền cho khách hàng.
+              <p
+                className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5"
+                title={escalateShipment.order?.orderCode || escalateShipment.orderId}
+              >
+                Đơn hàng gốc: #
+                {formatShortOrderCode(escalateShipment.order?.orderCode || escalateShipment.orderId)}
+              </p>
+              <p className="text-[11px] text-amber-600 dark:text-amber-300/90 mt-1">
+                * Báo cáo này sẽ được chuyển trực tiếp vào hồ sơ đơn hàng để Admin phê duyệt hủy
+                đơn, tự động hoàn kho và hoàn trả tiền cho khách hàng.
               </p>
             </div>
 
             <form onSubmit={handleEscalateSubmit} className="space-y-3.5 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Lý do sự cố:</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Lý do sự cố:
+                </label>
                 <select
                   value={escalateReason}
                   onChange={(e) => setEscalateReason(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-rose-500"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500"
                 >
-                  <option value="Khách từ chối nhận / Bom hàng">1. Khách từ chối nhận / Bom hàng</option>
-                  <option value="Không liên lạc được người nhận (gọi quá 3 lần)">2. Không liên lạc được người nhận (gọi quá 3 lần)</option>
-                  <option value="Hàng hóa bị bể vỡ / hư hỏng trong luân chuyển">3. Hàng hóa bị bể vỡ / hư hỏng trong luân chuyển</option>
-                  <option value="Địa chỉ nhận hàng không tồn tại">4. Địa chỉ nhận hàng không tồn tại</option>
-                  <option value="Khách hẹn lại quá số lần quy định">5. Khách hẹn lại quá số lần quy định</option>
+                  <option value="Khách từ chối nhận / Bom hàng">
+                    1. Khách từ chối nhận / Bom hàng
+                  </option>
+                  <option value="Không liên lạc được người nhận (gọi quá 3 lần)">
+                    2. Không liên lạc được người nhận (gọi quá 3 lần)
+                  </option>
+                  <option value="Hàng hóa bị bể vỡ / hư hỏng trong luân chuyển">
+                    3. Hàng hóa bị bể vỡ / hư hỏng trong luân chuyển
+                  </option>
+                  <option value="Địa chỉ nhận hàng không tồn tại">
+                    4. Địa chỉ nhận hàng không tồn tại
+                  </option>
+                  <option value="Khách hẹn lại quá số lần quy định">
+                    5. Khách hẹn lại quá số lần quy định
+                  </option>
                   <option value="Khác (Sự cố vận hành)">6. Khác (Sự cố vận hành)</option>
                 </select>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Mức độ ưu tiên:</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Mức độ ưu tiên:
+                </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    { id: 'medium', label: 'Trung bình', color: 'border-slate-200 text-slate-700' },
-                    { id: 'high', label: 'Cao (High)', color: 'border-amber-300 text-amber-700' },
-                    { id: 'critical', label: 'Khẩn cấp', color: 'border-rose-300 text-rose-700' },
+                    {
+                      id: 'medium',
+                      label: 'Trung bình',
+                      color:
+                        'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300',
+                    },
+                    {
+                      id: 'high',
+                      label: 'Cao (High)',
+                      color:
+                        'border-amber-300 dark:border-amber-500/40 text-amber-700 dark:text-amber-300',
+                    },
+                    {
+                      id: 'critical',
+                      label: 'Khẩn cấp',
+                      color:
+                        'border-rose-300 dark:border-rose-500/40 text-rose-700 dark:text-rose-300',
+                    },
                   ].map((p) => (
                     <button
                       key={p.id}
                       type="button"
                       onClick={() => setEscalatePriority(p.id)}
-                      className={`py-1.5 text-xs font-semibold rounded-xl border transition ${
-                        escalatePriority === p.id 
-                          ? 'bg-rose-50 border-rose-600 text-rose-700 ring-1 ring-rose-600 font-bold' 
+                      className={`py-1.5 text-xs font-semibold rounded-xl border transition cursor-pointer ${
+                        escalatePriority === p.id
+                          ? 'bg-rose-50 dark:bg-rose-500/20 border-rose-600 text-rose-700 dark:text-rose-300 ring-1 ring-rose-600 font-bold'
                           : p.color
                       }`}
                     >
@@ -747,29 +921,31 @@ export const InternalShippingPage = () => {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Chi tiết biên bản sự cố:</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Chi tiết biên bản sự cố:
+                </label>
                 <textarea
                   rows={3}
                   value={escalateNote}
                   onChange={(e) => setEscalateNote(e.target.value)}
                   placeholder="Mô tả cụ thể diễn biến giao hàng thất bại để Admin đối soát..."
                   required
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-rose-500"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setEscalateShipment(null)}
-                  className="px-3.5 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-semibold transition"
+                  className="px-3.5 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl font-semibold transition"
                 >
                   Đóng
                 </button>
                 <button
                   type="submit"
                   disabled={escalating}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-semibold shadow-xs transition"
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-semibold shadow-xs transition cursor-pointer"
                 >
                   {escalating ? 'Đang gửi...' : 'Gửi báo cáo lên Admin'}
                 </button>

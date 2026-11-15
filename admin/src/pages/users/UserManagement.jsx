@@ -1,11 +1,18 @@
 import { useState, useMemo } from 'react';
-import { Search, Eye, Edit, Lock, Unlock, Loader2, ChevronLeft, ChevronRight, Plus, RotateCcw } from 'lucide-react';
+import { Search, Eye, Edit, Lock, Unlock, Loader2, Plus, RotateCcw } from 'lucide-react';
 import { usersApi } from '../../api';
 import { formatDate } from '../../utils/formatHelpers';
-import { Button, Input, Select } from '../../components/ui';
+import { Button, Input, Select, PaginationFooter } from '../../components/ui';
 import { usePaginatedCacheList } from '../../hooks/usePaginatedCacheList';
 import UserFormModal from './UserFormModal';
 import UserDetailModal from './UserDetailModal';
+
+const ROLE_LABELS = {
+  admin: 'Quản trị viên',
+  vendor: 'Đối tác bán hàng',
+  employee: 'Nhân viên',
+  customer: 'Khách hàng',
+};
 
 export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState('');
@@ -37,24 +44,24 @@ export default function UserManagement() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState(null);
-  
+
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [userToView, setUserToView] = useState(null);
 
   const getRoleBadge = (role) => {
     const styles = {
-      admin: 'bg-red-100 text-red-700',
-      vendor: 'bg-purple-100 text-purple-700',
-      employee: 'bg-amber-100 text-amber-700',
-      customer: 'bg-blue-100 text-blue-700',
+      admin: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300',
+      vendor: 'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300',
+      employee: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
+      customer: 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
     };
-    return styles[role] || 'bg-slate-100 text-slate-700 dark:text-slate-300';
+    return styles[role] || 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
   };
 
   const getStatusBadge = (status) => {
     return status === 'active'
-      ? 'bg-green-100 text-green-700'
-      : 'bg-slate-100 text-slate-500 dark:text-slate-400';
+      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+      : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
   };
 
   const handleAddClick = () => {
@@ -106,14 +113,14 @@ export default function UserManagement() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">User Management</h1>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Quản lý Khách hàng &amp; Tài khoản</h1>
             {reusedFromCache && (
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800">
                 ⚡ Tái sử dụng DS gốc (Cache)
               </span>
             )}
           </div>
-          <p className="text-slate-500 dark:text-slate-400">{totalItems} users</p>
+          <p className="text-slate-500 dark:text-slate-400">{totalItems} tài khoản người dùng</p>
         </div>
         <div className="flex items-center gap-2">
           {isFiltered && (
@@ -134,33 +141,33 @@ export default function UserManagement() {
       </div>
 
       <div className="bg-white dark:bg-slate-900 transition-colors rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-4">
-          <div className="flex-1 max-w-md relative">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-4">
+          <div className="flex-1 min-w-[240px] max-w-md relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-            <Input 
-              placeholder="Tìm kiếm user..." 
+            <Input
+              placeholder="Tìm kiếm khách hàng, email, mã người dùng..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-8"
             />
           </div>
-          <Select 
+          <Select
             options={[
               { value: '', label: 'Tất cả vai trò' },
-              { value: 'customer', label: 'Customer (Khách hàng)' },
-              { value: 'vendor', label: 'Vendor (Người bán)' },
-              { value: 'employee', label: 'Employee (Nhân viên)' },
-              { value: 'admin', label: 'Admin (Quản trị)' }
+              { value: 'customer', label: 'Khách hàng' },
+              { value: 'vendor', label: 'Đối tác bán hàng' },
+              { value: 'employee', label: 'Nhân viên' },
+              { value: 'admin', label: 'Quản trị viên' },
             ]}
             value={roleFilter}
             onChange={e => setRoleFilter(e.target.value)}
             className="w-48"
           />
-          <Select 
+          <Select
             options={[
               { value: '', label: 'Tất cả trạng thái' },
-              { value: 'active', label: 'Active (Hoạt động)' },
-              { value: 'inactive', label: 'Inactive (Đã khóa)' }
+              { value: 'active', label: 'Đang hoạt động' },
+              { value: 'inactive', label: 'Đã khóa' },
             ]}
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
@@ -176,19 +183,19 @@ export default function UserManagement() {
             </div>
           ) : users.length === 0 ? (
             <div className="text-center py-20 text-slate-500 dark:text-slate-400">
-              Không tìm thấy user nào.
+              Không tìm thấy người dùng nào.
             </div>
           ) : (
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Mã người dùng</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">User</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Họ và tên</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Email</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Role</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Status</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Created</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Actions</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Vai trò</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Trạng thái</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Ngày tham gia</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,51 +203,51 @@ export default function UserManagement() {
                   const code = user.userCode || (user.role === 'vendor' ? `VND-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'admin' ? `ADM-${user.id.slice(0, 8).toUpperCase()}` : user.role === 'employee' ? (user.employeeCode || `EMP-${user.id.slice(0, 8).toUpperCase()}`) : `CUS-${user.id.slice(0, 8).toUpperCase()}`);
                   const isLocked = user.status === 'inactive';
                   return (
-                  <tr key={user.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs font-bold px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">
-                        {code}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-600 dark:text-slate-400 mr-3 overflow-hidden shrink-0">
-                          {user.avatarUrl ? (
-                            <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
-                          ) : (
-                            user.fullName?.charAt(0) || '?'
-                          )}
+                    <tr key={user.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="px-4 py-3">
+                        <span className="font-mono text-xs font-bold px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">
+                          {code}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-sm font-bold text-slate-600 dark:text-slate-400 mr-3 overflow-hidden shrink-0">
+                            {user.avatarUrl ? (
+                              <img src={user.avatarUrl} alt={user.fullName} className="w-full h-full object-cover" />
+                            ) : (
+                              user.fullName?.charAt(0) || '?'
+                            )}
+                          </div>
+                          <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{user.fullName}</span>
                         </div>
-                        <span className="text-sm font-medium text-slate-800 dark:text-slate-100">{user.fullName}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{user.email}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleBadge(user.role)}`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(user.status)}`}>
-                        {isLocked ? 'inactive (Đã khóa)' : 'active'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{formatDate(user.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-blue-600" onClick={() => handleViewClick(user)} title="Xem chi tiết" />
-                        <Button variant="ghost" size="sm" icon={Edit} className="text-slate-400 hover:text-amber-600" onClick={() => handleEditClick(user)} title="Chỉnh sửa" />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={isLocked ? Unlock : Lock}
-                          className={isLocked ? 'text-slate-400 hover:text-emerald-600' : 'text-slate-400 hover:text-amber-600'}
-                          onClick={() => handleToggleStatus(user)}
-                          title={isLocked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
-                        />
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{user.email}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getRoleBadge(user.role)}`}>
+                          {ROLE_LABELS[user.role] || user.role}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusBadge(user.status)}`}>
+                          {isLocked ? 'Đã khóa' : 'Hoạt động'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{formatDate(user.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" size="sm" icon={Eye} className="text-slate-400 hover:text-blue-600" onClick={() => handleViewClick(user)} title="Xem chi tiết" />
+                          <Button variant="ghost" size="sm" icon={Edit} className="text-slate-400 hover:text-amber-600" onClick={() => handleEditClick(user)} title="Chỉnh sửa" />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={isLocked ? Unlock : Lock}
+                            className={isLocked ? 'text-slate-400 hover:text-emerald-600' : 'text-slate-400 hover:text-amber-600'}
+                            onClick={() => handleToggleStatus(user)}
+                            title={isLocked ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}
+                          />
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -248,40 +255,23 @@ export default function UserManagement() {
           )}
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Trang {page} / {totalPages} ({totalItems} user)
-            </p>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                icon={ChevronLeft} 
-                disabled={page <= 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-              />
-              <Button 
-                variant="outline" 
-                size="sm" 
-                icon={ChevronRight}
-                disabled={page >= totalPages}
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              />
-            </div>
-          </div>
-        )}
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          itemLabel="người dùng"
+        />
       </div>
 
-      <UserFormModal 
+      <UserFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         userToEdit={userToEdit}
         onSave={handleSave}
       />
 
-      <UserDetailModal 
+      <UserDetailModal
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
         user={userToView}

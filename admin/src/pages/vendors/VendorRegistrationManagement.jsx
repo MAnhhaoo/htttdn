@@ -9,19 +9,13 @@ import {
   Store,
   ShieldCheck,
   Eye,
-  Calendar,
-  CreditCard,
   Percent,
   Check,
   X,
-  Building,
-  FileText,
-  ChevronLeft,
-  ChevronRight,
-  Filter,
 } from 'lucide-react';
 import { vendorsApi } from '../../api';
-import { Button, Input, Badge, Modal } from '../../components/ui';
+import { Button, Modal, PaginationFooter } from '../../components/ui';
+import { formatPrice, formatDateOnly } from '../../utils/formatHelpers';
 
 export default function VendorRegistrationManagement() {
   const [activeTab, setActiveTab] = useState('pending');
@@ -137,19 +131,7 @@ export default function VendorRegistrationManagement() {
     }
   };
 
-  const formatPrice = (val) => {
-    if (!val && val !== 0) return '0 ₫';
-    return Number(val).toLocaleString('vi-VN') + ' ₫';
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'Chưa có';
-    return new Date(dateStr).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  };
+  const formatDate = (dateStr) => formatDateOnly(dateStr, 'Chưa có');
 
   const tabs = [
     { id: 'pending', label: 'Chờ duyệt hồ sơ mới', count: data.counts?.pending || 0, color: 'bg-amber-500' },
@@ -171,61 +153,6 @@ export default function VendorRegistrationManagement() {
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Xét duyệt vendor mới, quản lý thời hạn gói kinh doanh (1 năm / 2 năm), gia hạn và áp dụng chiết khấu hoa hồng sàn khi giao đơn thành công
           </p>
-        </div>
-      </div>
-
-      {/* Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Chờ duyệt mới</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950 flex items-center justify-center text-amber-600">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-2">
-            {data.counts?.pending || 0}
-          </div>
-          <span className="text-xs text-amber-600 font-medium">Hồ sơ đối tác mới</span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Cần gia hạn</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-600">
-              <RefreshCw className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-2">
-            {data.counts?.renewals || 0}
-          </div>
-          <span className="text-xs text-blue-600 font-medium">Yêu cầu gia hạn thêm 1-2 năm</span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Đang hoạt động</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-emerald-600">
-              <CheckCircle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-2">
-            {data.counts?.active || 0}
-          </div>
-          <span className="text-xs text-emerald-600 font-medium">Còn hạn kinh doanh</span>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Hết hạn / Tạm khóa</span>
-            <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950 flex items-center justify-center text-rose-600">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-2">
-            {data.counts?.expired || 0}
-          </div>
-          <span className="text-xs text-rose-600 font-medium">Cần nạp phí để mở lại</span>
         </div>
       </div>
 
@@ -438,29 +365,13 @@ export default function VendorRegistrationManagement() {
         </div>
 
         {/* Pagination */}
-        {data.totalPages > 1 && (
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 text-sm">
-            <span className="text-slate-500">
-              Trang {data.page} / {data.totalPages} (Tổng {data.totalItems} đối tác)
-            </span>
-            <div className="flex gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 disabled:opacity-40"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                disabled={page >= data.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 disabled:opacity-40"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
+        <PaginationFooter
+          page={data.page || page}
+          totalPages={data.totalPages}
+          totalItems={data.totalItems}
+          itemLabel="đối tác"
+          onPageChange={setPage}
+        />
       </div>
 
       {/* Modal Approve */}

@@ -1,8 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Clock, AlertTriangle, CheckCircle2, X, Calendar, DollarSign, 
-  HelpCircle, AlertCircle, Info, Sparkles 
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Clock, AlertTriangle, CheckCircle2, X, AlertCircle } from 'lucide-react';
 import { payrollApi } from '../../api/axiosClient';
 
 export const AttendanceCheckInModal = ({ isOpen, onClose, profile, onSuccess }) => {
@@ -31,7 +28,14 @@ export const AttendanceCheckInModal = ({ isOpen, onClose, profile, onSuccess }) 
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
     setCurrentTimeStr(`${hh}:${mm}`);
-    setCurrentDateStr(now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }));
+    setCurrentDateStr(
+      now.toLocaleDateString('vi-VN', {
+        weekday: 'long',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }),
+    );
 
     // Compare with shiftStart
     const [startH, startM] = shiftStart.split(':').map(Number);
@@ -105,24 +109,31 @@ export const AttendanceCheckInModal = ({ isOpen, onClose, profile, onSuccess }) 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-[#131B17] rounded-2xl max-w-lg w-full border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-sm ${
-              isLate ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white'
-            }`}>
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-sm ${
+                isLate
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-[#1A3A2C] dark:bg-[#2A5C4A] text-[#DEC47E]'
+              }`}
+            >
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-base">Chấm Công / Điểm Danh Vào Ca</h3>
-              <p className="text-xs text-slate-500">{currentDateStr}</p>
+              <h3 className="font-bold text-slate-900 dark:text-white text-base">
+                Chấm Công / Điểm Danh Vào Ca
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{currentDateStr}</p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition"
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/70 dark:hover:bg-slate-700 rounded-lg transition"
           >
             <X className="w-5 h-5" />
           </button>
@@ -130,71 +141,92 @@ export const AttendanceCheckInModal = ({ isOpen, onClose, profile, onSuccess }) 
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {errorMsg && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-red-700">
+            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl flex items-center gap-2 text-xs text-rose-700 dark:text-rose-300">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {/* Shift Details Card */}
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-              <span className="text-xs font-semibold text-slate-500">Ca làm việc phân công:</span>
-              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200">
+          <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                Ca làm việc phân công:
+              </span>
+              <span className="text-xs font-bold text-[#1A3A2C] dark:text-[#DEC47E] bg-[#EEF5F1] dark:bg-[#1A3A2C]/50 px-2.5 py-1 rounded-md border border-[#B9D6C6] dark:border-[#2A5C4A]">
                 {shiftName}
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+              <div className="bg-white dark:bg-[#0E1612] p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
                 <span className="text-[11px] text-slate-400 block">Giờ vào ca</span>
-                <span className="text-sm font-bold font-mono text-slate-800">{shiftStart}</span>
+                <span className="text-sm font-bold font-mono text-slate-800 dark:text-white">
+                  {shiftStart}
+                </span>
               </div>
-              <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+              <div className="bg-white dark:bg-[#0E1612] p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
                 <span className="text-[11px] text-slate-400 block">Giờ tan ca</span>
-                <span className="text-sm font-bold font-mono text-slate-800">{shiftEnd}</span>
+                <span className="text-sm font-bold font-mono text-slate-800 dark:text-white">
+                  {shiftEnd}
+                </span>
               </div>
-              <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+              <div className="bg-white dark:bg-[#0E1612] p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
                 <span className="text-[11px] text-slate-400 block">Định mức ca</span>
-                <span className="text-sm font-bold font-mono text-indigo-600">{standardHours} tiếng</span>
+                <span className="text-sm font-bold font-mono text-[#1A3A2C] dark:text-[#DEC47E]">
+                  {standardHours} tiếng
+                </span>
               </div>
             </div>
           </div>
 
           {/* Real-time Status Card */}
-          <div className={`p-4 rounded-xl border ${
-            isLate 
-              ? 'bg-amber-50 border-amber-200 text-amber-900' 
-              : 'bg-emerald-50 border-emerald-200 text-emerald-900'
-          }`}>
+          <div
+            className={`p-4 rounded-xl border ${
+              isLate
+                ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-900 dark:text-amber-200'
+                : 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
+            }`}
+          >
             <div className="flex items-start gap-3">
               {isLate ? (
-                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               ) : (
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
               )}
               <div className="space-y-1 text-xs">
                 <p className="font-bold text-sm">
-                  {isLate ? `Chấm công TRỄ ${lateMinutes} phút (~${lateHours} tiếng)` : 'Chấm công ĐÚNG GIỜ'}
+                  {isLate
+                    ? `Chấm công TRỄ ${lateMinutes} phút (~${lateHours} tiếng)`
+                    : 'Chấm công ĐÚNG GIỜ'}
                 </p>
-                <p className="text-slate-600">
-                  Thời điểm điểm danh: <span className="font-mono font-bold text-slate-800">{currentTimeStr}</span>
+                <p className="text-slate-600 dark:text-slate-300">
+                  Thời điểm điểm danh:{' '}
+                  <span className="font-mono font-bold text-slate-800 dark:text-white">
+                    {currentTimeStr}
+                  </span>
                 </p>
                 {isLate ? (
-                  <div className="mt-2 p-2.5 bg-white/80 rounded-lg border border-amber-300 space-y-1 text-[11px]">
-                    <p className="font-semibold text-amber-900">
-                      ⚖️ Quy định tính lương theo giờ làm thực tế:
+                  <div className="mt-2 p-2.5 bg-white/80 dark:bg-[#0E1612]/80 rounded-lg border border-amber-300 dark:border-amber-500/35 space-y-1 text-[11px]">
+                    <p className="font-semibold text-amber-900 dark:text-amber-300">
+                      Quy định tính lương theo giờ làm thực tế:
                     </p>
-                    <p className="text-slate-700">
-                      Do vào trễ, hôm nay bạn chỉ được ghi nhận <span className="font-bold text-amber-700">{actualHours} giờ làm</span> (thay vì {standardHours} giờ).
+                    <p className="text-slate-700 dark:text-slate-300">
+                      Do vào trễ, hôm nay bạn chỉ được ghi nhận{' '}
+                      <span className="font-bold text-amber-700 dark:text-amber-300">
+                        {actualHours} giờ làm
+                      </span>{' '}
+                      (thay vì {standardHours} giờ).
                     </p>
-                    <p className="text-slate-500 italic">
-                      Tiền lương tháng sẽ tính dựa trên {actualHours} giờ làm thực tế của ca hôm nay.
+                    <p className="text-slate-500 dark:text-slate-400 italic">
+                      Tiền lương tháng sẽ tính dựa trên {actualHours} giờ làm thực tế của ca hôm
+                      nay.
                     </p>
                   </div>
                 ) : (
-                  <p className="text-emerald-700">
-                    Bạn được ghi nhận trọn vẹn <span className="font-bold">{actualHours} giờ làm</span> cho ca trực hôm nay.
+                  <p className="text-emerald-700 dark:text-emerald-300">
+                    Bạn được ghi nhận trọn vẹn{' '}
+                    <span className="font-bold">{actualHours} giờ làm</span> cho ca trực hôm nay.
                   </p>
                 )}
               </div>
@@ -204,8 +236,8 @@ export const AttendanceCheckInModal = ({ isOpen, onClose, profile, onSuccess }) 
           {/* Late Reason Input (Mandatory if Late) */}
           {isLate && (
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-amber-900 flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+              <label className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                 Lý do đi trễ (Bắt buộc theo quy định) *
               </label>
               <textarea
@@ -213,7 +245,7 @@ export const AttendanceCheckInModal = ({ isOpen, onClose, profile, onSuccess }) 
                 value={lateReason}
                 onChange={(e) => setLateReason(e.target.value)}
                 placeholder="VD: Kẹt xe giờ cao điểm, hỏng xe giữa đường, giải quyết việc gia đình đột xuất..."
-                className="w-full px-3 py-2 text-xs border border-amber-300 rounded-xl outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-amber-50/30"
+                className="w-full px-3 py-2 text-xs border border-amber-300 dark:border-amber-500/40 rounded-xl outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-amber-50/30 dark:bg-slate-800 dark:text-white placeholder-slate-400"
                 required
               />
               <span className="text-[11px] text-slate-400">
@@ -224,7 +256,7 @@ export const AttendanceCheckInModal = ({ isOpen, onClose, profile, onSuccess }) 
 
           {/* Optional Note */}
           <div className="space-y-1">
-            <label className="block text-xs font-semibold text-slate-700">
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
               Ghi chú công việc hôm nay (Tùy chọn)
             </label>
             <input
@@ -232,31 +264,35 @@ export const AttendanceCheckInModal = ({ isOpen, onClose, profile, onSuccess }) 
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="VD: Nhận ca kiểm kê kho hàng B, xử lý đơn ưu tiên..."
-              className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 rounded-xl outline-none focus:border-[#2A5C4A] dark:focus:border-[#C9A84C]"
             />
           </div>
 
           {/* Actions */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+              className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className={`px-5 py-2 text-xs font-bold text-white rounded-xl shadow-xs transition flex items-center gap-1.5 ${
-                isLate 
-                  ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-200' 
-                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
+              className={`px-5 py-2 text-xs font-bold text-white rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer ${
+                isLate
+                  ? 'bg-amber-600 hover:bg-amber-700'
+                  : 'bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B]'
               }`}
             >
               <CheckCircle2 className="w-4 h-4" />
-              {submitting ? 'Đang ghi nhận...' : isLate ? `Xác Nhận Điểm Danh Trễ (${actualHours}h)` : `Xác Nhận Đúng Giờ (${actualHours}h)`}
+              {submitting
+                ? 'Đang ghi nhận...'
+                : isLate
+                  ? `Xác Nhận Điểm Danh Trễ (${actualHours}h)`
+                  : `Xác Nhận Đúng Giờ (${actualHours}h)`}
             </button>
           </div>
         </form>

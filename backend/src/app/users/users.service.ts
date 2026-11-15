@@ -8,6 +8,7 @@ import {
 import { Prisma, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AccountDirectoryService } from '../../common/account/account-directory.service';
 import { assertEmailAvailable } from '../../common/utils/account-email/account-email.util';
 import {
   formatPaginatedList,
@@ -47,6 +48,8 @@ const CLIENT_ACCOUNT_SELECT = {
   updatedAt: true,
   addresses: {
     where: { deletedAt: null },
+    orderBy: [{ isDefault: 'desc' as const }, { createdAt: 'desc' as const }],
+    take: 1,
     select: {
       addressLine: true,
       ward: true,
@@ -99,11 +102,19 @@ const EMPLOYEE_ACCOUNT_SELECT = {
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
+  private readonly fallbackDirectory: AccountDirectoryService;
 
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly realtime?: RealtimeService,
-  ) {}
+    @Optional() private readonly accountDirectory?: AccountDirectoryService,
+  ) {
+    this.fallbackDirectory = new AccountDirectoryService(this.prisma);
+  }
+
+  private get directory(): AccountDirectoryService {
+    return this.accountDirectory ?? this.fallbackDirectory;
+  }
 
   private formatClientAddress(
     addresses?: Array<{
@@ -239,8 +250,12 @@ export class UsersService {
     if (role === 'vendor') {
       let matchedVendorIds: string[] = [];
       if (search) {
+        const hasVendorPrefix = /^VND-/i.test(search);
         const hex = search.replace(/^VND-?/i, '');
-        if (/^[0-9a-fA-F-]{1,36}$/.test(hex)) {
+        if (
+          /^[0-9a-fA-F-]{1,36}$/.test(hex) &&
+          (hasVendorPrefix || hex.replace(/-/g, '').length >= 6)
+        ) {
           try {
             const rawMatches: { id: string }[] =
               await this.prisma.extended.$queryRaw`
@@ -439,34 +454,34 @@ export class UsersService {
   }
 
   async getUser(id: string) {
-    const client = await this.prisma.extended.client.findUnique({
-      where: { id },
-      select: CLIENT_ACCOUNT_SELECT,
-    });
+    const [client, vendor, admin, employee] = await Promise.all([
+      this.prisma.extended.client.findUnique({
+        where: { id },
+        select: CLIENT_ACCOUNT_SELECT,
+      }),
+      this.prisma.extended.vendor.findUnique({
+        where: { id },
+        select: VENDOR_ACCOUNT_SELECT,
+      }),
+      this.prisma.extended.admin.findUnique({
+        where: { id },
+        select: ADMIN_ACCOUNT_SELECT,
+      }),
+      this.prisma.extended.employee.findUnique({
+        where: { id },
+        select: EMPLOYEE_ACCOUNT_SELECT,
+      }),
+    ]);
+
     if (client) {
       return this.mapClientRecord(client);
     }
-
-    const vendor = await this.prisma.extended.vendor.findUnique({
-      where: { id },
-      select: VENDOR_ACCOUNT_SELECT,
-    });
     if (vendor) {
       return this.mapVendorRecord(vendor);
     }
-
-    const admin = await this.prisma.extended.admin.findUnique({
-      where: { id },
-      select: ADMIN_ACCOUNT_SELECT,
-    });
     if (admin) {
       return this.mapAdminRecord(admin);
     }
-
-    const employee = await this.prisma.extended.employee.findUnique({
-      where: { id },
-      select: EMPLOYEE_ACCOUNT_SELECT,
-    });
     if (employee) {
       return this.mapEmployeeRecord(employee);
     }
@@ -489,18 +504,7 @@ export class UsersService {
     }
 
     if (targetRole === 'admin') {
-      const allActiveAdmins = await this.prisma.extended.admin.findMany({
-        where: { status: 'active' },
-        select: { id: true },
-      });
-      const remainingActiveAdmins = allActiveAdmins.filter(
-        (a) => a.id !== id,
-      ).length;
-      if (remainingActiveAdmins === 0) {
-        throw new BadRequestException(
-          'Không thể khóa tài khoản quản trị viên đang hoạt động cuối cùng',
-        );
-      }
+      await this.directory.assertCanLockAdmin(id, currentUser?.userID);
     }
   }
 
@@ -577,49 +581,62 @@ export class UsersService {
     };
 
     const roles: AccountRole[] = ['client', 'vendor', 'employee', 'admin'];
-    for (const role of roles) {
-      const delegate = (this.prisma.extended as any)[role];
-      const existing = await delegate.findUnique({ where: { id } });
-      if (!existing) continue;
+    const foundByRole = await Promise.all(
+      roles.map(async (role) => {
+        const delegate = (this.prisma.extended as any)[role];
+        const existing = await delegate.findUnique({
+          where: { id },
+          select: { id: true, deletedAt: true },
+        });
+        return existing ? { role, delegate, existing } : null;
+      }),
+    );
 
-      const sourceWithAddress =
-        (role === 'employee' || role === 'vendor') && address !== undefined
-          ? { ...updateData, address }
-          : updateData;
-
-      const roleData = pickAllowed(role, sourceWithAddress);
-      await this.assertCanChangeStatus(id, role, roleData.status, currentUser);
-
-      if (roleData.email) {
-        await assertEmailAvailable(this.prisma.extended, roleData.email, { role, id });
-      }
-      if (roleData.status && existing.deletedAt) {
-        roleData.deletedAt = null;
-      }
-
-      const updated = await delegate.update({
-        where: { id },
-        data: roleData,
-      });
-
-      if (role === 'client' && address !== undefined) {
-        await this.syncClientDefaultAddress(
-          id,
-          updated.fullName,
-          updated.phone,
-          address,
-        );
-      }
-
-      if (roleData.status === 'inactive') {
-        this.realtime?.disconnectUser(id);
-      }
-
-      const { password: _, ...rest } = updated;
-      return rest;
+    const matched = foundByRole.find(Boolean);
+    if (!matched) {
+      throw new NotFoundException('Người dùng không tồn tại');
     }
 
-    throw new NotFoundException('Người dùng không tồn tại');
+    const { role, delegate, existing } = matched;
+    const sourceWithAddress =
+      (role === 'employee' || role === 'vendor') && address !== undefined
+        ? { ...updateData, address }
+        : updateData;
+
+    const roleData = pickAllowed(role, sourceWithAddress);
+    await this.assertCanChangeStatus(id, role, roleData.status, currentUser);
+
+    if (roleData.email) {
+      await assertEmailAvailable(this.prisma.extended, roleData.email, {
+        role,
+        id,
+      });
+    }
+    if (roleData.status && existing.deletedAt) {
+      roleData.deletedAt = null;
+    }
+
+    const updated = await delegate.update({
+      where: { id },
+      data: roleData,
+      omit: { password: true },
+    });
+
+    if (role === 'client' && address !== undefined) {
+      await this.syncClientDefaultAddress(
+        id,
+        updated.fullName,
+        updated.phone,
+        address,
+      );
+    }
+
+    if (roleData.status === 'inactive') {
+      this.realtime?.disconnectUser(id);
+    }
+
+    const { password: _, ...rest } = updated as any;
+    return rest;
   }
 
   async updateUserStatus(
@@ -637,23 +654,34 @@ export class UsersService {
 
   async deleteUser(id: string, currentUser?: UserInfo) {
     const roles: AccountRole[] = ['client', 'vendor', 'employee', 'admin'];
-    for (const role of roles) {
-      const delegate = (this.prisma.extended as any)[role];
-      const existing = await delegate.findUnique({ where: { id } });
-      if (!existing) continue;
+    const foundByRole = await Promise.all(
+      roles.map(async (role) => {
+        const delegate = (this.prisma.extended as any)[role];
+        const existing = await delegate.findUnique({
+          where: { id },
+          select: { id: true },
+        });
+        return existing ? { role, delegate } : null;
+      }),
+    );
 
-      await this.assertCanChangeStatus(id, role, UserStatus.inactive, currentUser);
-      const updated = await delegate.update({
-        where: { id },
-        data: {
-          status: UserStatus.inactive,
-          deletedAt: new Date(),
-        },
-      });
-      this.realtime?.disconnectUser(id);
-      const { password: _, ...rest } = updated;
-      return rest;
+    const matched = foundByRole.find(Boolean);
+    if (!matched) {
+      throw new NotFoundException('Người dùng không tồn tại');
     }
-    throw new NotFoundException('Người dùng không tồn tại');
+
+    const { role, delegate } = matched;
+    await this.assertCanChangeStatus(id, role, UserStatus.inactive, currentUser);
+    const updated = await delegate.update({
+      where: { id },
+      omit: { password: true },
+      data: {
+        status: UserStatus.inactive,
+        deletedAt: new Date(),
+      },
+    });
+    this.realtime?.disconnectUser(id);
+    const { password: _, ...rest } = updated as any;
+    return rest;
   }
 }

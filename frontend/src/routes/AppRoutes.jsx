@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import UserLayout from '../layouts/UserLayout';
 import AuthLayout from '../layouts/AuthLayout';
+import AccountLayout from '../layouts/AccountLayout';
 import ProtectedRoute from './ProtectedRoute';
 import Home from '../pages/Home/Home';
 import ProductSearch from '../pages/Product/ProductSearch';
@@ -25,7 +26,7 @@ export default function AppRoutes() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
       </Route>
-      
+
       <Route element={<UserLayout />}>
         <Route path="/" element={<Home />} />
         <Route path="/products" element={<ProductSearch />} />
@@ -34,15 +35,19 @@ export default function AppRoutes() {
         <Route path="/cart" element={<Cart />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
-        
+
         {/* Protected Routes */}
         <Route element={<ProtectedRoute />}>
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/payment-demo/:orderId" element={<PaymentDemo />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/favorites" element={<Favorites />} />
-          <Route path="/surveys" element={<SurveyPage />} />
+
+          <Route element={<AccountLayout />}>
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/favorites" element={<Favorites />} />
+            <Route path="/surveys" element={<SurveyPage />} />
+          </Route>
+
           <Route path="/surveys/:responseId" element={<SurveyPage />} />
         </Route>
       </Route>

@@ -1,28 +1,104 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { 
-  Boxes, Truck, CheckCircle2, Clock, Ban, Search, RefreshCw, 
-  Eye, Printer, AlertTriangle, Package, MapPin, UserCheck, 
-  ChevronRight, ArrowRight, ShieldCheck, FileText, Check
+import {
+  Boxes,
+  Truck,
+  CheckCircle2,
+  Ban,
+  Search,
+  RefreshCw,
+  Printer,
+  Package,
+  ShieldCheck,
+  Check,
 } from 'lucide-react';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
 import { orderService } from '../../services/orderService';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency, formatDate, formatShortOrderCode } from '../../utils/formatHelpers';
-import { Badge, Button, Input, Modal } from '../../components/ui';
+import { Badge, Button, useToast } from '../../components/ui';
+import CancelVendorOrderModal from './components/CancelVendorOrderModal';
+import PackingSlipPrintModal from './components/PackingSlipPrintModal';
+
+const NEXT_STEP_ACTION = {
+  pending: {
+    nextStatus: 'confirmed',
+    label: 'Xác nhận đơn hàng',
+    icon: CheckCircle2,
+    buttonClass: 'bg-emerald-600 hover:bg-emerald-700 text-white font-semibold',
+    confirmMessage: (code) => `Xác nhận tiếp nhận kiện hàng ${code} từ hệ thống MIVA?`,
+    cancelLabel: 'Hủy',
+    cancelVariant: 'danger',
+  },
+  confirmed: {
+    nextStatus: 'processing',
+    label: 'Tiếp nhận & Bắt đầu đóng gói',
+    icon: Boxes,
+    buttonClass:
+      'bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white font-semibold',
+    confirmMessage: (code) => `Bắt đầu đóng gói kiện hàng ${code}?`,
+    cancelLabel: 'Hủy',
+    cancelVariant: 'danger',
+  },
+  processing: {
+    nextStatus: 'ready_for_pickup',
+    label: 'Đã đóng gói xong - Sẵn sàng bàn giao',
+    icon: Check,
+    buttonClass: 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold',
+    confirmMessage: (code) =>
+      `Xác nhận đã đóng gói xong kiện hàng ${code} và sẵn sàng bàn giao cho bưu tá MIVA?`,
+    cancelLabel: 'Hủy',
+    cancelVariant: 'danger',
+  },
+  ready_for_pickup: {
+    nextStatus: 'shipping',
+    label: 'Xác nhận bưu tá đã lấy hàng',
+    icon: Truck,
+    buttonClass: 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold',
+    confirmMessage: (code) => `Xác nhận bưu tá MIVA đã tiếp nhận kiện hàng ${code} để đi giao?`,
+    cancelLabel: 'Hủy kiện',
+    cancelVariant: 'outline',
+  },
+};
+
+function renderVendorOrderStatusBadge(status) {
+  switch (status) {
+    case 'pending':
+      return <Badge variant="warning">Chờ Shop xác nhận</Badge>;
+    case 'confirmed':
+      return <Badge className="bg-sky-500/10 text-sky-600 border-sky-500/20">Đã xác nhận</Badge>;
+    case 'processing':
+      return <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">Đang đóng gói</Badge>;
+    case 'ready_for_pickup':
+      return (
+        <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+          Sẵn sàng gửi ship
+        </Badge>
+      );
+    case 'shipping':
+      return <Badge variant="info">Đang vận chuyển</Badge>;
+    case 'delivered':
+      return <Badge variant="success">Giao thành công</Badge>;
+    case 'cancelled':
+      return <Badge variant="error">Đã hủy</Badge>;
+    default:
+      return <Badge variant="default">{status}</Badge>;
+  }
+}
 
 export default function OrderFulfillmentPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [searchParams] = useSearchParams();
+
   const [vendorOrders, setVendorOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState(searchParams.get('search') || '');
-  
-  // Modals
+  const debouncedSearch = useDebouncedValue(search, 300);
+
   const [packingSlipModal, setPackingSlipModal] = useState(null);
   const [cancelModalItem, setCancelModalItem] = useState(null);
-  const [cancelReason, setCancelReason] = useState('Hết hàng tồn kho tại cửa hàng');
-  const [cancelNote, setCancelNote] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const latestRequest = useRef(0);
@@ -37,7 +113,9 @@ export default function OrderFulfillmentPage() {
       setLoadError('');
     } catch (err) {
       console.error('Error fetching fulfillment orders:', err);
-      if (request === latestRequest.current) setLoadError('Không tải được danh sách kiện hàng. Vui lòng thử làm mới.');
+      if (request === latestRequest.current) {
+        setLoadError('Không tải được danh sách kiện hàng. Vui lòng thử làm mới.');
+      }
     } finally {
       if (request === latestRequest.current) setLoading(false);
     }
@@ -52,259 +130,166 @@ export default function OrderFulfillmentPage() {
     return () => window.removeEventListener('miva:orders', fetchFulfillmentOrders);
   }, [fetchFulfillmentOrders]);
 
-  // Update Status Action
-  const handleUpdateStatus = async (item, newStatus, customNote = '') => {
-    let confirmMsg = '';
-    if (newStatus === 'confirmed') {
-      confirmMsg = `Xác nhận nhận đơn hàng ${item.vendorOrderCode} từ hệ thống MIVA?`;
-    } else if (newStatus === 'processing') {
-      confirmMsg = `Bắt đầu đóng gói kiện hàng ${item.vendorOrderCode}?`;
-    } else if (newStatus === 'ready_for_pickup') {
-      confirmMsg = `Xác nhận đã đóng gói xong kiện hàng ${item.vendorOrderCode} và sẵn sàng bàn giao cho bưu tá MIVA?`;
-    } else if (newStatus === 'shipping') {
-      confirmMsg = `Xác nhận bưu tá MIVA đã tiếp nhận kiện hàng ${item.vendorOrderCode} để đi giao?`;
-    }
-
+  const handleUpdateStatus = async (item, newStatus, confirmMsg) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
-
     try {
       setActionLoading(true);
-      await orderService.updateVendorOrderStatus(item.id, newStatus, customNote);
+      await orderService.updateVendorOrderStatus(item.id, newStatus, '');
+      toast.success(`Đã cập nhật trạng thái kiện hàng #${item.vendorOrderCode}.`);
       await fetchFulfillmentOrders();
     } catch (err) {
-      console.error('Failed to update vendor order status:', err);
-      alert('Không thể cập nhật trạng thái: ' + (err.response?.data?.errors?.[0]?.message || err.response?.data?.message || err.message));
+      const msg =
+        err.response?.data?.errors?.[0]?.message ||
+        err.response?.data?.message ||
+        err.message;
+      toast.error('Không thể cập nhật trạng thái: ' + msg);
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Submit Cancel Action
-  const handleConfirmCancel = async () => {
+  const handleConfirmCancel = async (fullNote) => {
     if (!cancelModalItem) return;
-    const fullNote = `${cancelReason}${cancelNote ? `: ${cancelNote}` : ''}`;
     try {
       setActionLoading(true);
       await orderService.updateVendorOrderStatus(cancelModalItem.id, 'cancelled', fullNote);
+      toast.success(`Đã hủy kiện hàng #${cancelModalItem.vendorOrderCode}.`);
       setCancelModalItem(null);
-      setCancelNote('');
       await fetchFulfillmentOrders();
     } catch (err) {
-      console.error('Failed to cancel vendor order:', err);
-      alert('Hủy kiện hàng thất bại: ' + (err.response?.data?.errors?.[0]?.message || err.response?.data?.message || err.message));
+      const msg =
+        err.response?.data?.errors?.[0]?.message ||
+        err.response?.data?.message ||
+        err.message;
+      toast.error('Hủy kiện hàng thất bại: ' + msg);
     } finally {
       setActionLoading(false);
     }
   };
 
-  // Metrics
   const stats = useMemo(() => {
-    const pending = vendorOrders.filter(vo => vo.status === 'pending').length;
-    const confirmed = vendorOrders.filter(vo => vo.status === 'confirmed').length;
-    const processing = vendorOrders.filter(vo => vo.status === 'processing').length;
-    const ready = vendorOrders.filter(vo => vo.status === 'ready_for_pickup').length;
-    const shipping = vendorOrders.filter(vo => vo.status === 'shipping' || vo.status === 'delivered').length;
-    const cancelled = vendorOrders.filter(vo => vo.status === 'cancelled').length;
-    return { pending, confirmed, processing, ready, shipping, cancelled, total: vendorOrders.length };
+    const counts = {
+      pending: 0,
+      confirmed: 0,
+      processing: 0,
+      ready: 0,
+      shipping: 0,
+      delivered: 0,
+      cancelled: 0,
+    };
+    vendorOrders.forEach((vo) => {
+      if (vo.status === 'pending') counts.pending += 1;
+      else if (vo.status === 'confirmed') counts.confirmed += 1;
+      else if (vo.status === 'processing') counts.processing += 1;
+      else if (vo.status === 'ready_for_pickup') counts.ready += 1;
+      else if (vo.status === 'shipping') counts.shipping += 1;
+      else if (vo.status === 'delivered') counts.delivered += 1;
+      else if (vo.status === 'cancelled') counts.cancelled += 1;
+    });
+    return {
+      ...counts,
+      urgent: counts.pending + counts.confirmed + counts.processing,
+      total: vendorOrders.length,
+    };
   }, [vendorOrders]);
 
-  // Filtered List
+  const filterTabs = [
+    { id: 'all', label: 'Tất cả kiện hàng', count: stats.total },
+    { id: 'urgent', label: '⚡ Cần xử lý gấp', count: stats.urgent, highlight: true },
+    { id: 'pending', label: 'Chờ xác nhận', count: stats.pending },
+    { id: 'confirmed', label: 'Đã xác nhận', count: stats.confirmed },
+    { id: 'processing', label: 'Đang đóng gói', count: stats.processing },
+    { id: 'ready_for_pickup', label: 'Sẵn sàng gửi ship', count: stats.ready },
+    { id: 'shipping', label: 'Đang giao', count: stats.shipping },
+    { id: 'delivered', label: 'Đã giao xong', count: stats.delivered },
+    { id: 'cancelled', label: 'Đã hủy', count: stats.cancelled },
+  ];
+
   const filteredOrders = useMemo(() => {
-    return vendorOrders.filter(vo => {
-      // Tab filter
+    const q = debouncedSearch.trim().toLowerCase();
+    return vendorOrders.filter((vo) => {
       let matchTab = true;
       if (activeTab === 'urgent') {
-        matchTab = vo.status === 'pending' || vo.status === 'confirmed' || vo.status === 'processing';
-      } else if (activeTab === 'pending') {
-        matchTab = vo.status === 'pending';
-      } else if (activeTab === 'confirmed') {
-        matchTab = vo.status === 'confirmed';
-      } else if (activeTab === 'processing') {
-        matchTab = vo.status === 'processing';
-      } else if (activeTab === 'ready_for_pickup') {
-        matchTab = vo.status === 'ready_for_pickup';
-      } else if (activeTab === 'shipping') {
-        matchTab = vo.status === 'shipping';
-      } else if (activeTab === 'delivered') {
-        matchTab = vo.status === 'delivered';
-      } else if (activeTab === 'cancelled') {
-        matchTab = vo.status === 'cancelled';
+        matchTab =
+          vo.status === 'pending' || vo.status === 'confirmed' || vo.status === 'processing';
+      } else if (activeTab !== 'all') {
+        matchTab = vo.status === activeTab;
       }
-
       if (!matchTab) return false;
+      if (!q) return true;
 
-      // Search filter
-      if (!search.trim()) return true;
-      const q = search.toLowerCase();
-      const matchCode = (vo.vendorOrderCode || '').toLowerCase().includes(q);
-      const matchOrderCode = (vo.order?.orderCode || '').toLowerCase().includes(q);
-      const matchTracking = (vo.shipment?.trackingNumber || '').toLowerCase().includes(q);
-      const matchItems = (vo.details || []).some(d => (d.productName || '').toLowerCase().includes(q));
-
-      return matchCode || matchOrderCode || matchTracking || matchItems;
+      return (
+        (vo.vendorOrderCode || '').toLowerCase().includes(q) ||
+        (vo.order?.orderCode || '').toLowerCase().includes(q) ||
+        (vo.shipment?.trackingNumber || '').toLowerCase().includes(q) ||
+        (vo.details || []).some((d) => (d.productName || '').toLowerCase().includes(q))
+      );
     });
-  }, [vendorOrders, activeTab, search]);
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="warning">Chờ Shop xác nhận</Badge>;
-      case 'confirmed':
-        return <Badge className="bg-sky-500/10 text-sky-600 border-sky-500/20">Đã xác nhận</Badge>;
-      case 'processing':
-        return <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20">Đang đóng gói</Badge>;
-      case 'ready_for_pickup':
-        return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">Sẵn sàng gửi ship</Badge>;
-      case 'shipping':
-        return <Badge variant="info">Đang vận chuyển</Badge>;
-      case 'delivered':
-        return <Badge variant="success">Giao thành công</Badge>;
-      case 'cancelled':
-        return <Badge variant="error">Đã hủy</Badge>;
-      default:
-        return <Badge variant="default">{status}</Badge>;
-    }
-  };
+  }, [vendorOrders, activeTab, debouncedSearch]);
 
   return (
     <div className="space-y-6">
-      {loadError && <p role="alert" className="text-sm text-red-600">{loadError}</p>}
-      {/* Top Header */}
+      {loadError && (
+        <p role="alert" className="text-sm text-rose-600 font-medium">
+          {loadError}
+        </p>
+      )}
+
+      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2.5">
             <Boxes className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
-            Đóng Gói &amp; Xuất Kho Điều Phối (Fulfillment)
+            Quản lý Đơn hàng &amp; Đóng gói Xuất kho
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Đơn hàng được Admin và Nhân viên MIVA kiểm duyệt chuyển sang cho Shop. Đóng gói xong hãy bấm gửi hàng cho bưu tá MIVA tiếp nhận.
+            Theo dõi toàn bộ kiện hàng của Shop, xác nhận chuẩn bị hàng, in phiếu đóng gói và bàn giao cho bưu tá MIVA Express.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start md:self-auto">
-          <Button
-            variant="outline"
-            onClick={fetchFulfillmentOrders}
-            disabled={loading}
-            className="flex items-center gap-2 shadow-xs"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Làm mới danh sách
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          onClick={fetchFulfillmentOrders}
+          disabled={loading}
+          className="flex items-center gap-2 shadow-xs self-start md:self-auto"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Làm mới danh sách
+        </Button>
       </div>
 
-      {/* KPI Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
-        <div 
-          onClick={() => setActiveTab('pending')}
-          className={`p-4 rounded-xl border transition cursor-pointer ${activeTab === 'pending' ? 'bg-amber-500/10 border-amber-500/40 ring-2 ring-amber-500/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-amber-400/50'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Chờ xác nhận</span>
-            <Clock className="w-4 h-4 text-amber-500" />
-          </div>
-          <p className="text-2xl font-bold text-amber-600 mt-2">{stats.pending}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Admin/NV vừa chuyển qua</p>
-        </div>
-
-        <div 
-          onClick={() => setActiveTab('confirmed')}
-          className={`p-4 rounded-xl border transition cursor-pointer ${activeTab === 'confirmed' ? 'bg-sky-500/10 border-sky-500/40 ring-2 ring-sky-500/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-sky-400/50'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Đã xác nhận</span>
-            <CheckCircle2 className="w-4 h-4 text-sky-500" />
-          </div>
-          <p className="text-2xl font-bold text-sky-600 mt-2">{stats.confirmed}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Chờ bắt đầu đóng gói</p>
-        </div>
-
-        <div 
-          onClick={() => setActiveTab('processing')}
-          className={`p-4 rounded-xl border transition cursor-pointer ${activeTab === 'processing' ? 'bg-blue-500/10 border-blue-500/40 ring-2 ring-blue-500/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-400/50'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Đang đóng gói</span>
-            <Package className="w-4 h-4 text-blue-500" />
-          </div>
-          <p className="text-2xl font-bold text-blue-600 mt-2">{stats.processing}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Shop đang chuẩn bị hàng</p>
-        </div>
-
-        <div 
-          onClick={() => setActiveTab('ready_for_pickup')}
-          className={`p-4 rounded-xl border transition cursor-pointer ${activeTab === 'ready_for_pickup' ? 'bg-emerald-500/10 border-emerald-500/40 ring-2 ring-emerald-500/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-400/50'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Sẵn sàng gửi ship</span>
-            <Truck className="w-4 h-4 text-emerald-500" />
-          </div>
-          <p className="text-2xl font-bold text-emerald-600 mt-2">{stats.ready}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Đã đóng gói xong</p>
-        </div>
-
-        <div 
-          onClick={() => setActiveTab('shipping')}
-          className={`p-4 rounded-xl border transition cursor-pointer ${activeTab === 'shipping' ? 'bg-indigo-500/10 border-indigo-500/40 ring-2 ring-indigo-500/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-indigo-400/50'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Đang vận chuyển</span>
-            <CheckCircle2 className="w-4 h-4 text-indigo-500" />
-          </div>
-          <p className="text-2xl font-bold text-indigo-600 mt-2">{stats.shipping}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Bưu tá MIVA đang giao</p>
-        </div>
-
-        <div 
-          onClick={() => setActiveTab('cancelled')}
-          className={`p-4 rounded-xl border transition cursor-pointer ${activeTab === 'cancelled' ? 'bg-rose-500/10 border-rose-500/40 ring-2 ring-rose-500/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-400/50'}`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Đã hủy kiện</span>
-            <Ban className="w-4 h-4 text-rose-500" />
-          </div>
-          <p className="text-2xl font-bold text-rose-600 mt-2">{stats.cancelled}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">Hết hàng / Sự cố</p>
-        </div>
-      </div>
-
-      {/* Filter and Search Bar */}
+      {/* Filter Tabs & Search */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3.5 shadow-xs">
-        {/* Tab Buttons */}
         <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-3">
-          {[
-            { id: 'all', label: 'Tất cả kiện hàng', count: stats.total },
-            { id: 'urgent', label: '⚡ Cần xử lý gấp', count: stats.pending + stats.confirmed + stats.processing, highlight: true },
-            { id: 'pending', label: 'Chờ xác nhận', count: stats.pending },
-            { id: 'confirmed', label: 'Đã xác nhận', count: stats.confirmed },
-            { id: 'processing', label: 'Đang đóng gói', count: stats.processing },
-            { id: 'ready_for_pickup', label: 'Sẵn sàng gửi ship', count: stats.ready },
-            { id: 'shipping', label: 'Đang giao', count: stats.shipping },
-            { id: 'cancelled', label: 'Đã hủy', count: stats.cancelled },
-          ].map(tab => (
+          {filterTabs.map((tab) => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => setActiveTab(tab.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === tab.id
                   ? 'bg-indigo-600 text-white shadow-xs'
                   : tab.highlight && tab.count > 0
-                  ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-200'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
               <span>{tab.label}</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                  activeTab === tab.id
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                }`}
+              >
                 {tab.count}
               </span>
             </button>
           ))}
         </div>
 
-        {/* Search */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="relative flex-1 min-w-[240px] max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
@@ -330,37 +315,40 @@ export default function OrderFulfillmentPage() {
       ) : filteredOrders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-center">
           <Package className="w-12 h-12 text-slate-300 dark:text-slate-700 mb-3" />
-          <h3 className="text-base font-semibold text-slate-700 dark:text-slate-300">Không có kiện hàng nào</h3>
+          <h3 className="text-base font-semibold text-slate-700 dark:text-slate-300">
+            Không có kiện hàng nào
+          </h3>
           <p className="text-xs text-slate-400 max-w-sm mt-1">
-            Không tìm thấy kiện hàng nào phù hợp với bộ lọc hiện tại. Khi Admin hoặc Nhân viên điều phối đơn hàng, danh sách sẽ tự động hiển thị tại đây.
+            Không tìm thấy kiện hàng nào phù hợp với bộ lọc hiện tại. Khi Admin hoặc Nhân viên điều phối đơn hàng, danh sách sẽ tự động cập nhật tại đây.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredOrders.map(vo => {
-            const isPending = vo.status === 'pending';
-            const isConfirmed = vo.status === 'confirmed';
-            const isProcessing = vo.status === 'processing';
-            const isReadyForPickup = vo.status === 'ready_for_pickup';
-            const isCancelled = vo.status === 'cancelled';
+          {filteredOrders.map((vo) => {
+            const nextAction = NEXT_STEP_ACTION[vo.status];
+            const ActionIcon = nextAction?.icon;
             const waitingForConfirmation = vo.order?.status === 'pending';
             const parentClosed = ['cancelled', 'completed'].includes(vo.order?.status);
+            const isCancelled = vo.status === 'cancelled';
             const isCompleted = vo.status === 'delivered';
             const isShipping = vo.status === 'shipping';
-
             const subtotal = Number(vo.subtotalAmount || 0);
 
             return (
-              <div 
-                key={vo.id} 
+              <div
+                key={vo.id}
                 className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden transition-all hover:shadow-md"
               >
-                {/* Card Header */}
                 <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2.5">
                     <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-md border border-indigo-200 dark:border-indigo-800">
-                      <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 uppercase">Mã đơn hàng:</span>
-                      <span className="font-mono font-bold text-sm text-indigo-700 dark:text-indigo-300" title={vo.order?.orderCode}>
+                      <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200 uppercase">
+                        Mã đơn hàng:
+                      </span>
+                      <span
+                        className="font-mono font-bold text-sm text-indigo-700 dark:text-indigo-300"
+                        title={vo.order?.orderCode}
+                      >
                         #{formatShortOrderCode(vo.order?.orderCode || vo.orderId)}
                       </span>
                     </div>
@@ -379,29 +367,30 @@ export default function OrderFulfillmentPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
                       <ShieldCheck className="w-3 h-3" />
-                      Điều phối bởi MIVA Ops
+                      Điều phối MIVA
                     </span>
-                    {getStatusBadge(vo.status)}
+                    {renderVendorOrderStatusBadge(vo.status)}
                   </div>
                 </div>
 
-                {/* Card Body */}
                 <div className="p-4 grid grid-cols-1 lg:grid-cols-12 gap-5">
-                  {/* Left: Products items (7 cols) */}
                   <div className="lg:col-span-7 space-y-3">
                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                       <Package className="w-3.5 h-3.5 text-indigo-500" />
-                      Sản phẩm cần đóng gói của Shop ({(vo.details || []).length} mục)
+                      Sản phẩm cần đóng gói ({(vo.details || []).length} mục)
                     </h4>
 
                     <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/30 p-2">
                       {(vo.details || []).map((item, idx) => (
-                        <div key={item.id || idx} className="py-2.5 first:pt-1 last:pb-1 flex items-center gap-3">
+                        <div
+                          key={item.id || idx}
+                          className="py-2.5 first:pt-1 last:pb-1 flex items-center gap-3"
+                        >
                           {item.imageUrl ? (
-                            <img 
-                              src={item.imageUrl} 
-                              alt={item.productName} 
-                              className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 bg-white shrink-0" 
+                            <img
+                              src={item.imageUrl}
+                              alt={item.productName}
+                              className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 bg-white shrink-0"
                             />
                           ) : (
                             <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
@@ -414,13 +403,17 @@ export default function OrderFulfillmentPage() {
                               {item.productName}
                             </p>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                              {item.colorName ? `Màu: ${item.colorName}` : ''} {item.sizeName ? `• Size: ${item.sizeName}` : ''}
+                              {item.colorName ? `Màu: ${item.colorName}` : ''}{' '}
+                              {item.sizeName ? `• Size: ${item.sizeName}` : ''}
                             </p>
                           </div>
 
                           <div className="text-right shrink-0">
                             <p className="text-xs text-slate-500">
-                              {formatCurrency(item.price)} <span className="font-bold text-indigo-600 dark:text-indigo-400">x{item.quantity}</span>
+                              {formatCurrency(item.price)}{' '}
+                              <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                                x{item.quantity}
+                              </span>
                             </p>
                             <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5">
                               {formatCurrency(Number(item.price) * Number(item.quantity))}
@@ -432,14 +425,15 @@ export default function OrderFulfillmentPage() {
 
                     {vo.notes && (
                       <div className="text-xs p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">Ghi chú kiện:</span> {vo.notes}
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">
+                          Ghi chú kiện:
+                        </span>{' '}
+                        {vo.notes}
                       </div>
                     )}
                   </div>
 
-                  {/* Right: Logistics & Action box (5 cols) */}
                   <div className="lg:col-span-5 flex flex-col justify-between border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-800 pt-4 lg:pt-0 lg:pl-5 space-y-4">
-                    {/* Shipping & Courier info */}
                     <div className="space-y-2.5">
                       <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                         <Truck className="w-3.5 h-3.5 text-indigo-500" />
@@ -468,7 +462,7 @@ export default function OrderFulfillmentPage() {
                           </div>
                         )}
                         <div className="pt-1.5 border-t border-slate-200 dark:border-slate-700 flex justify-between items-baseline">
-                          <span className="text-slate-500">Tổng thu tiền hàng:</span>
+                          <span className="text-slate-500">Tổng giá trị kiện hàng:</span>
                           <span className="text-base font-bold text-indigo-600 dark:text-indigo-400">
                             {formatCurrency(subtotal)}
                           </span>
@@ -476,104 +470,48 @@ export default function OrderFulfillmentPage() {
                       </div>
                     </div>
 
-                    {/* Operational Action Buttons */}
                     <div className="space-y-2 pt-2">
                       {waitingForConfirmation && (
-                        <p className="text-xs text-amber-700">Chờ Admin hoặc nhân viên MIVA xác nhận đơn hàng trước khi đóng gói.</p>
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                          Chờ Admin hoặc nhân viên MIVA xác nhận đơn hàng trước khi đóng gói.
+                        </p>
                       )}
                       {parentClosed && !isCancelled && !isCompleted && (
-                        <p className="text-xs text-slate-500">Đơn hàng đã kết thúc, không thể cập nhật kiện hàng.</p>
+                        <p className="text-xs text-slate-500">
+                          Đơn hàng đã kết thúc, không thể cập nhật kiện hàng.
+                        </p>
                       )}
-                      {isPending && (
+
+                      {nextAction && (
                         <div className="flex items-center gap-2">
                           <Button
-                            onClick={() => handleUpdateStatus(vo, 'confirmed')}
+                            onClick={() =>
+                              handleUpdateStatus(
+                                vo,
+                                nextAction.nextStatus,
+                                nextAction.confirmMessage(vo.vendorOrderCode),
+                              )
+                            }
                             disabled={actionLoading || waitingForConfirmation || parentClosed}
-                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-2.5 flex items-center justify-center gap-2 shadow-xs"
+                            className={`flex-1 text-xs py-2.5 flex items-center justify-center gap-2 shadow-xs ${nextAction.buttonClass}`}
                           >
-                            <CheckCircle2 className="w-4 h-4" />
-                            Xác nhận đơn hàng
+                            {ActionIcon && <ActionIcon className="w-4 h-4" />}
+                            {nextAction.label}
                           </Button>
 
                           <Button
-                            variant="danger"
+                            variant={nextAction.cancelVariant}
                             onClick={() => setCancelModalItem(vo)}
                             disabled={actionLoading || parentClosed}
-                            className="text-xs py-2.5 px-3 flex items-center justify-center gap-1.5"
-                            title="Từ chối / Hủy kiện nếu hết hàng"
+                            className={`text-xs py-2.5 px-3 flex items-center justify-center gap-1.5 ${
+                              nextAction.cancelVariant === 'outline'
+                                ? 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30'
+                                : ''
+                            }`}
+                            title="Từ chối / Hủy kiện nếu hết hàng hoặc sự cố"
                           >
-                            <Ban className="w-3.5 h-3.5" />
-                            Hủy
-                          </Button>
-                        </div>
-                      )}
-
-                      {isConfirmed && (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            onClick={() => handleUpdateStatus(vo, 'processing')}
-                            disabled={actionLoading || waitingForConfirmation || parentClosed}
-                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-2.5 flex items-center justify-center gap-2 shadow-xs"
-                          >
-                            <Boxes className="w-4 h-4" />
-                            Tiếp nhận &amp; Bắt đầu đóng gói
-                          </Button>
-
-                          <Button
-                            variant="danger"
-                            onClick={() => setCancelModalItem(vo)}
-                            disabled={actionLoading || parentClosed}
-                            className="text-xs py-2.5 px-3 flex items-center justify-center gap-1.5"
-                            title="Hủy kiện nếu hết hàng"
-                          >
-                            <Ban className="w-3.5 h-3.5" />
-                            Hủy
-                          </Button>
-                        </div>
-                      )}
-
-                      {isProcessing && (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            onClick={() => handleUpdateStatus(vo, 'ready_for_pickup')}
-                            disabled={actionLoading || waitingForConfirmation || parentClosed}
-                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 flex items-center justify-center gap-2 shadow-xs"
-                          >
-                            <Check className="w-4 h-4" />
-                            Đã đóng gói xong - Sẵn sàng bàn giao
-                          </Button>
-
-                          <Button
-                            variant="danger"
-                            onClick={() => setCancelModalItem(vo)}
-                            disabled={actionLoading || parentClosed}
-                            className="text-xs py-2.5 px-3 flex items-center justify-center gap-1.5"
-                            title="Hủy kiện nếu phát hiện lỗi"
-                          >
-                            <Ban className="w-3.5 h-3.5" />
-                            Hủy
-                          </Button>
-                        </div>
-                      )}
-
-                      {isReadyForPickup && (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            onClick={() => handleUpdateStatus(vo, 'shipping')}
-                            disabled={actionLoading || waitingForConfirmation || parentClosed}
-                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold py-2.5 flex items-center justify-center gap-2"
-                          >
-                            <Truck className="w-4 h-4" />
-                            Xác nhận bưu tá đã lấy hàng
-                          </Button>
-
-                          <Button
-                            variant="outline"
-                            onClick={() => setCancelModalItem(vo)}
-                            disabled={actionLoading}
-                            className="text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 py-2.5 px-3"
-                          >
-                            Hủy kiện
+                            {nextAction.cancelVariant === 'danger' && <Ban className="w-3.5 h-3.5" />}
+                            {nextAction.cancelLabel}
                           </Button>
                         </div>
                       )}
@@ -599,14 +537,13 @@ export default function OrderFulfillmentPage() {
                         </div>
                       )}
 
-                      {/* Packing Slip Button */}
                       <Button
                         variant="ghost"
                         onClick={() => setPackingSlipModal(vo)}
                         className="w-full text-xs text-slate-500 hover:text-indigo-600 py-1.5 flex items-center justify-center gap-1.5"
                       >
                         <Printer className="w-3.5 h-3.5" />
-                        In Phiếu Đóng Gói (Packing Slip)
+                        In Phiếu Đóng Gói
                       </Button>
                     </div>
                   </div>
@@ -617,170 +554,20 @@ export default function OrderFulfillmentPage() {
         </div>
       )}
 
-      {/* Cancel Order Modal */}
-      {cancelModalItem && (
-        <Modal
-          isOpen={!!cancelModalItem}
-          onClose={() => setCancelModalItem(null)}
-          title={`Hủy Kiện Hàng #${cancelModalItem.vendorOrderCode}`}
-          maxWidth="max-w-md"
-          footer={
-            <div className="flex items-center justify-end gap-2 w-full">
-              <Button variant="ghost" onClick={() => setCancelModalItem(null)} disabled={actionLoading}>
-                Quay lại
-              </Button>
-              <Button 
-                variant="danger" 
-                onClick={handleConfirmCancel} 
-                disabled={actionLoading}
-                className="flex items-center gap-1.5"
-              >
-                <Ban className="w-4 h-4" />
-                {actionLoading ? 'Đang hủy...' : 'Xác nhận hủy kiện'}
-              </Button>
-            </div>
-          }
-        >
-          <div className="space-y-4 text-xs">
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg text-amber-800 dark:text-amber-300 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <span>
-                Khi hủy kiện hàng này, số lượng tồn kho của các sản phẩm bên trong sẽ được tự động cộng trả lại kho của shop.
-              </span>
-            </div>
+      <CancelVendorOrderModal
+        vendorOrder={cancelModalItem}
+        isOpen={Boolean(cancelModalItem)}
+        onClose={() => setCancelModalItem(null)}
+        onConfirm={handleConfirmCancel}
+        loading={actionLoading}
+      />
 
-            <div>
-              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                Lý do hủy kiện hàng:
-              </label>
-              <select
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              >
-                <option value="Hết hàng tồn kho tại cửa hàng">Hết hàng tồn kho tại cửa hàng</option>
-                <option value="Sản phẩm bị lỗi hỏng khi kiểm tra">Sản phẩm bị lỗi hỏng khi kiểm tra</option>
-                <option value="Không kịp đóng gói trước thời hạn bàn giao">Không kịp đóng gói trước thời hạn bàn giao</option>
-                <option value="Không liên hệ được bưu tá / Sự cố kho bãi">Không liên hệ được bưu tá / Sự cố kho bãi</option>
-                <option value="Khác">Khác (nhập chi tiết bên dưới)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">
-                Ghi chú bổ sung (tùy chọn):
-              </label>
-              <textarea
-                rows={3}
-                value={cancelNote}
-                onChange={(e) => setCancelNote(e.target.value)}
-                placeholder="Nhập thông tin chi tiết giải trình cho Admin/Khách hàng..."
-                className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              />
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Printable Packing Slip Modal */}
-      {packingSlipModal && (
-        <Modal
-          isOpen={!!packingSlipModal}
-          onClose={() => setPackingSlipModal(null)}
-          title="Phiếu Đóng Gói & Bàn Giao Kiện Hàng MIVA"
-          maxWidth="max-w-2xl"
-          footer={
-            <div className="flex items-center justify-between w-full">
-              <span className="text-xs text-slate-400">
-                MIVA Logistics Handover Standard Form
-              </span>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" onClick={() => setPackingSlipModal(null)}>
-                  Đóng
-                </Button>
-                <Button 
-                  onClick={() => window.print()}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
-                >
-                  <Printer className="w-4 h-4" />
-                  In Phiếu Đóng Gói
-                </Button>
-              </div>
-            </div>
-          }
-        >
-          <div className="space-y-5 text-slate-800 dark:text-slate-100 p-2 print:p-0">
-            {/* Slip Header */}
-            <div className="border-b-2 border-slate-900 pb-3 flex justify-between items-start">
-              <div>
-                <h2 className="text-xl font-extrabold tracking-tight">PHIẾU ĐÓNG GÓI KIỆN HÀNG</h2>
-                <p className="text-xs text-slate-500 uppercase tracking-widest mt-0.5">SÀN THƯƠNG MẠI ĐIỆN TỬ MIVA</p>
-              </div>
-              <div className="text-right">
-                <p className="font-mono font-bold text-sm text-indigo-700">{packingSlipModal.vendorOrderCode}</p>
-                <p className="text-[11px] text-slate-400" title={packingSlipModal.order?.orderCode}>Đơn gốc: #{formatShortOrderCode(packingSlipModal.order?.orderCode || packingSlipModal.orderId)}</p>
-              </div>
-            </div>
-
-            {/* Info Grid */}
-            <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-lg border border-slate-200 dark:border-slate-700">
-              <div className="space-y-1">
-                <p><span className="text-slate-500">Đơn vị gửi:</span> <span className="font-bold">{user?.storeName || 'Shop đối tác MIVA'}</span></p>
-                <p><span className="text-slate-500">Mã vận đơn:</span> <span className="font-mono font-bold text-slate-900 dark:text-white">{packingSlipModal.shipment?.trackingNumber || 'VNPOST-MIVA'}</span></p>
-                <p><span className="text-slate-500">Ngày in phiếu:</span> {new Date().toLocaleDateString('vi-VN')}</p>
-              </div>
-              <div className="space-y-1">
-                <p><span className="text-slate-500">Đơn vị vận chuyển:</span> <span className="font-bold">MIVA Express (Nội bộ)</span></p>
-                <p><span className="text-slate-500">Bưu tá tiếp nhận:</span> {packingSlipModal.shipment?.carrier?.fullName || 'Bưu tá MIVA'}</p>
-                <p><span className="text-slate-500">Địa chỉ giao:</span> Khách hàng MIVA (Bảo mật)</p>
-              </div>
-            </div>
-
-            {/* Items checklist */}
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider mb-2">Danh mục hàng hóa đóng gói:</h4>
-              <table className="w-full text-xs text-left border border-slate-200 dark:border-slate-700">
-                <thead className="bg-slate-100 dark:bg-slate-800">
-                  <tr className="border-b border-slate-200 dark:border-slate-700">
-                    <th className="p-2 w-8 text-center">✓</th>
-                    <th className="p-2">Tên sản phẩm</th>
-                    <th className="p-2">Phân loại</th>
-                    <th className="p-2 text-center">SL</th>
-                    <th className="p-2 text-right">Đơn giá</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                  {(packingSlipModal.details || []).map((d, i) => (
-                    <tr key={d.id || i}>
-                      <td className="p-2 text-center">
-                        <div className="w-4 h-4 border border-slate-400 rounded-sm mx-auto"></div>
-                      </td>
-                      <td className="p-2 font-medium">{d.productName}</td>
-                      <td className="p-2 text-slate-500">{d.colorName} • Size {d.sizeName}</td>
-                      <td className="p-2 text-center font-bold">{d.quantity}</td>
-                      <td className="p-2 text-right">{formatCurrency(d.price)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Signature Blocks */}
-            <div className="grid grid-cols-2 gap-8 pt-6 text-center text-xs">
-              <div>
-                <p className="font-bold text-slate-700 dark:text-slate-300">ĐẠI DIỆN SHOP ĐÓNG GÓI</p>
-                <p className="text-[10px] text-slate-400 italic mt-0.5">(Ký và ghi rõ họ tên)</p>
-                <div className="h-16"></div>
-              </div>
-              <div>
-                <p className="font-bold text-slate-700 dark:text-slate-300">BƯU TÁ MIVA NHẬN KIỆN</p>
-                <p className="text-[10px] text-slate-400 italic mt-0.5">(Ký và ghi rõ họ tên)</p>
-                <div className="h-16"></div>
-              </div>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <PackingSlipPrintModal
+        vendorOrder={packingSlipModal}
+        storeName={user?.storeName}
+        isOpen={Boolean(packingSlipModal)}
+        onClose={() => setPackingSlipModal(null)}
+      />
     </div>
   );
 }

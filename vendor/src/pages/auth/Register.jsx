@@ -113,53 +113,53 @@ export default function VendorRegister() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-[#0b0820] flex items-center justify-center p-4 transition-colors font-sans py-12">
-      {/* Cohesive Partner Ecosystem Aurora Mesh Background */}
+    <div className="min-h-screen relative overflow-hidden bg-[#07120D] flex items-center justify-center p-4 transition-colors font-sans py-12">
+      {/* MIVA Deep Forest & Champagne Gold Aurora Mesh Background */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden z-0">
-        <div className="absolute -top-36 -left-36 w-[560px] h-[560px] rounded-full bg-indigo-600/35 blur-[140px]" />
-        <div className="absolute top-1/4 -right-36 w-[540px] h-[540px] rounded-full bg-purple-600/30 blur-[140px]" />
-        <div className="absolute -bottom-40 left-1/3 w-[540px] h-[540px] rounded-full bg-fuchsia-500/20 blur-[150px]" />
-        <div className="absolute top-20 right-1/3 w-[320px] h-[320px] rounded-full bg-amber-500/15 blur-[120px]" />
+        <div className="absolute -top-36 -left-36 w-[560px] h-[560px] rounded-full bg-[#1A3A2C]/65 blur-[140px]" />
+        <div className="absolute top-1/4 -right-36 w-[540px] h-[540px] rounded-full bg-[#C9A84C]/20 blur-[145px]" />
+        <div className="absolute -bottom-40 left-1/3 w-[540px] h-[540px] rounded-full bg-[#2A5C4A]/40 blur-[150px]" />
+        <div className="absolute top-20 right-1/3 w-[320px] h-[320px] rounded-full bg-[#B08A2E]/15 blur-[120px]" />
 
         <div
-          className="absolute inset-0 opacity-[0.07]"
+          className="absolute inset-0 opacity-[0.06]"
           style={{
             backgroundImage:
-              'linear-gradient(to right, #a78bfa 1px, transparent 1px), linear-gradient(to bottom, #a78bfa 1px, transparent 1px)',
+              'linear-gradient(to right, #C9A84C 1px, transparent 1px), linear-gradient(to bottom, #C9A84C 1px, transparent 1px)',
             backgroundSize: '48px 48px',
           }}
         />
       </div>
 
-      <div className="hidden lg:flex items-center gap-2.5 fixed top-8 left-8 px-4 py-2 rounded-full bg-white/[0.06] backdrop-blur-xl border border-white/15 text-xs text-indigo-100 shadow-lg z-10">
-        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-        <span className="font-semibold">MIVA Partner Ecosystem</span>
-        <span className="text-indigo-300/60">•</span>
-        <span className="text-indigo-200">Đăng ký Mở Gian Hàng</span>
+      <div className="hidden lg:flex items-center gap-2.5 fixed top-8 left-8 px-4 py-2 rounded-full bg-white/[0.06] backdrop-blur-xl border border-[#C9A84C]/25 text-xs text-[#E8F0EC] shadow-lg z-10">
+        <Sparkles className="w-3.5 h-3.5 text-[#C9A84C]" />
+        <span className="font-semibold text-white">MIVA Kênh Người Bán</span>
+        <span className="text-[#C9A84C]/70">•</span>
+        <span className="text-[#DEC47E]">Đăng ký Đối tác Bán hàng MIVA</span>
       </div>
 
-      <div className="max-w-2xl w-full bg-white/95 dark:bg-slate-900/90 backdrop-blur-2xl rounded-3xl shadow-[0_25px_70px_-15px_rgba(99,102,241,0.45)] border border-white/30 dark:border-slate-700/80 ring-1 ring-indigo-500/20 p-8 sm:p-10 relative z-10 overflow-hidden">
-        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-indigo-600 via-purple-500 to-amber-400" />
+      <div className="max-w-2xl w-full bg-white/95 dark:bg-[#131B17]/95 backdrop-blur-2xl rounded-3xl shadow-[0_25px_70px_-15px_rgba(7,18,13,0.75)] border border-white/30 dark:border-[#223029] ring-1 ring-[#C9A84C]/25 p-8 sm:p-10 relative z-10 overflow-hidden">
+        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#1A3A2C] via-[#C9A84C] to-[#2A5C4A]" />
 
         <Link
           to="/login"
-          className="inline-flex items-center text-sm text-slate-500 dark:text-slate-400 hover:text-indigo-600 mb-6 transition-colors"
+          className="inline-flex items-center text-sm text-slate-500 dark:text-slate-400 hover:text-[#1A3A2C] dark:hover:text-[#DEC47E] mb-6 transition-colors"
         >
           <ArrowLeft className="w-4 h-4 mr-1.5" /> Quay lại Đăng nhập
         </Link>
 
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-violet-600 to-purple-500 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30">
-              <Store className="w-6 h-6" />
+          <div className="flex items-center gap-3.5 mb-2">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#C9A84C] to-[#9E7B23] text-[#08130E] flex items-center justify-center shadow-lg shadow-[#C9A84C]/25 shrink-0">
+              <Store className="w-6 h-6 stroke-[2.1]" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
-                Đăng ký Mở Gian Hàng Đối Tác
+                Đăng ký Đối tác Bán hàng MIVA
               </h1>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Trở thành đối tác kinh doanh chính thức trên nền tảng thương mại điện tử
+                Trở thành đối tác kinh doanh chính thức trên nền tảng thương mại điện tử MIVA
               </p>
             </div>
           </div>
@@ -171,8 +171,8 @@ export default function VendorRegister() {
             <div
               className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm transition-colors ${
                 step === 1
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'bg-emerald-500 text-white'
+                  ? 'bg-[#1A3A2C] text-[#DEC47E] border border-[#C9A84C]/40 shadow-md shadow-[#1A3A2C]/25'
+                  : 'bg-[#2A5C4A] text-white'
               }`}
             >
               {step > 1 ? <Check className="w-5 h-5" /> : '1'}
@@ -187,7 +187,7 @@ export default function VendorRegister() {
 
           <div className="h-0.5 flex-1 mx-4 bg-slate-200 dark:bg-slate-700 hidden sm:block">
             <div
-              className={`h-full bg-indigo-600 transition-all duration-300 ${
+              className={`h-full bg-gradient-to-r from-[#1A3A2C] to-[#C9A84C] transition-all duration-300 ${
                 step === 2 ? 'w-full' : 'w-0'
               }`}
             />
@@ -197,7 +197,7 @@ export default function VendorRegister() {
             <div
               className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm transition-colors ${
                 step === 2
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  ? 'bg-[#1A3A2C] text-[#DEC47E] border border-[#C9A84C]/40 shadow-md shadow-[#1A3A2C]/25'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
               }`}
             >
@@ -221,13 +221,13 @@ export default function VendorRegister() {
         {/* STEP 1: Personal & Account Information */}
         {step === 1 && (
           <form onSubmit={handleNextStep} className="space-y-5">
-            <div className="bg-slate-50 dark:bg-slate-900/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 mb-2">
-              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 text-sm font-semibold mb-1">
+            <div className="bg-[#EEF5F1]/70 dark:bg-[#1A3A2C]/25 p-4 rounded-2xl border border-[#2A5C4A]/15 dark:border-[#2A5C4A]/40 mb-2">
+              <div className="flex items-center gap-2 text-[#1A3A2C] dark:text-[#DEC47E] text-sm font-semibold mb-1">
                 <User className="w-4 h-4" />
-                <span>Thông tin cá nhân & Đăng nhập</span>
+                <span>Thông tin cá nhân &amp; Đăng nhập</span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Thông tin người chịu trách nhiệm pháp lý hoặc đại diện cửa hàng.
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                Thông tin người chịu trách nhiệm pháp lý hoặc đại diện cửa hàng trên MIVA.
               </p>
             </div>
 
@@ -280,7 +280,7 @@ export default function VendorRegister() {
             <div className="pt-4 flex justify-end">
               <Button
                 type="submit"
-                className="h-11 px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-2 font-medium shadow-md shadow-indigo-600/20"
+                className="h-11 px-6 bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white rounded-xl flex items-center gap-2 font-medium shadow-md shadow-[#1A3A2C]/25"
               >
                 <span>Tiếp tục: Đăng ký kinh doanh</span>
                 <ArrowRight className="w-4 h-4" />
@@ -292,10 +292,10 @@ export default function VendorRegister() {
         {/* STEP 2: Business Registration Details */}
         {step === 2 && (
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="bg-indigo-50/70 dark:bg-indigo-950/40 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 mb-2">
-              <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400 text-sm font-semibold mb-1">
+            <div className="bg-[#EEF5F1]/80 dark:bg-[#1A3A2C]/30 p-4 rounded-2xl border border-[#2A5C4A]/20 dark:border-[#2A5C4A]/45 mb-2">
+              <div className="flex items-center gap-2 text-[#1A3A2C] dark:text-[#DEC47E] text-sm font-semibold mb-1">
                 <Building2 className="w-4 h-4" />
-                <span>Bước 2: Hồ sơ Đăng ký kinh doanh & Doanh nghiệp</span>
+                <span>Bước 2: Hồ sơ Đăng ký kinh doanh &amp; Doanh nghiệp</span>
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-400">
                 Khai báo thông tin giấy phép kinh doanh để được duyệt và cấp gian hàng chính thức.
@@ -352,17 +352,21 @@ export default function VendorRegister() {
                   onClick={() => setFormData({ ...formData, subscriptionPlan: '1_year' })}
                   className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
                     formData.subscriptionPlan === '1_year'
-                      ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30'
-                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                      ? 'border-[#C9A84C] bg-[#FBF7EC]/80 dark:bg-[#C9A84C]/10'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-[#2A5C4A]/50'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">Gói 1 Năm</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                      Gói 1 Năm
+                    </span>
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                       Cơ bản
                     </span>
                   </div>
-                  <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">1.200.000 ₫</div>
+                  <div className="text-lg font-bold text-[#1A3A2C] dark:text-[#DEC47E]">
+                    1.200.000 ₫
+                  </div>
                   <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                     Thời hạn: 12 tháng • Hoa hồng sàn: 8%
                   </div>
@@ -372,17 +376,21 @@ export default function VendorRegister() {
                   onClick={() => setFormData({ ...formData, subscriptionPlan: '2_years' })}
                   className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
                     formData.subscriptionPlan === '2_years'
-                      ? 'border-indigo-600 bg-indigo-50/40 dark:bg-indigo-950/30'
-                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                      ? 'border-[#C9A84C] bg-[#FBF7EC]/80 dark:bg-[#C9A84C]/10'
+                      : 'border-slate-200 dark:border-slate-700 hover:border-[#2A5C4A]/50'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">Gói 2 Năm</span>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400">
+                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                      Gói 2 Năm
+                    </span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#C9A84C]/20 text-[#9E7B23] dark:text-[#DEC47E]">
                       Tiết kiệm 400.000 ₫
                     </span>
                   </div>
-                  <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">2.000.000 ₫</div>
+                  <div className="text-lg font-bold text-[#1A3A2C] dark:text-[#DEC47E]">
+                    2.000.000 ₫
+                  </div>
                   <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                     Thời hạn: 24 tháng • Hoa hồng sàn: 8%
                   </div>
@@ -397,11 +405,25 @@ export default function VendorRegister() {
                   type="checkbox"
                   checked={formData.agreedToTerms}
                   onChange={(e) => setFormData({ ...formData, agreedToTerms: e.target.checked })}
-                  className="mt-1 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  className="mt-1 rounded border-slate-300 text-[#1A3A2C] focus:ring-[#1A3A2C]"
                   required
                 />
                 <span className="text-slate-600 dark:text-slate-400 leading-relaxed text-xs">
-                  Tôi cam kết các thông tin đăng ký kinh doanh và mã số thuế nêu trên là hoàn toàn chính xác và chịu trách nhiệm trước pháp luật. Tôi đồng ý với <a href="#" className="text-indigo-600 font-medium hover:underline">Điều khoản hợp tác</a> và <a href="#" className="text-indigo-600 font-medium hover:underline">Quy chế hoạt động sàn TMĐT</a>.
+                  Tôi cam kết các thông tin đăng ký kinh doanh và mã số thuế nêu trên là hoàn toàn chính xác và chịu trách nhiệm trước pháp luật. Tôi đồng ý với{' '}
+                  <a
+                    href="#"
+                    className="text-[#1A3A2C] dark:text-[#DEC47E] font-semibold hover:underline"
+                  >
+                    Điều khoản hợp tác
+                  </a>{' '}
+                  và{' '}
+                  <a
+                    href="#"
+                    className="text-[#1A3A2C] dark:text-[#DEC47E] font-semibold hover:underline"
+                  >
+                    Quy chế hoạt động sàn TMĐT MIVA
+                  </a>
+                  .
                 </span>
               </label>
             </div>
@@ -420,7 +442,7 @@ export default function VendorRegister() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="h-11 px-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center justify-center gap-2 font-medium shadow-md shadow-indigo-600/20"
+                className="h-11 px-6 bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white rounded-xl flex items-center justify-center gap-2 font-medium shadow-md shadow-[#1A3A2C]/25"
               >
                 {isLoading ? (
                   <>
@@ -429,7 +451,7 @@ export default function VendorRegister() {
                   </>
                 ) : (
                   <>
-                    <ShieldCheck className="w-5 h-5" />
+                    <ShieldCheck className="w-5 h-5 text-[#DEC47E]" />
                     <span>Hoàn tất Đăng ký kinh doanh</span>
                   </>
                 )}

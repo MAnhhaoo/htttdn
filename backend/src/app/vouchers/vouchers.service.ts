@@ -55,12 +55,20 @@ export class VouchersService {
           {
             scope: 'platform',
             details: {
-              none: { productId: { not: null }, orderId: null },
+              none: {
+                productId: { not: null },
+                orderId: null,
+                reversedAt: null,
+              },
             },
           },
           {
             details: {
-              some: { productId: { in: productIds }, orderId: null },
+              some: {
+                productId: { in: productIds },
+                orderId: null,
+                reversedAt: null,
+              },
             },
           },
         ],
@@ -81,7 +89,11 @@ export class VouchersService {
         quantity: true,
         usedQuantity: true,
         details: {
-          where: { productId: { in: productIds }, orderId: null },
+          where: {
+            productId: { in: productIds },
+            orderId: null,
+            reversedAt: null,
+          },
           select: { productId: true },
         },
       },
@@ -269,16 +281,61 @@ export class VouchersService {
     const { productIds: _productIds, categoryIds: _categoryIds, ...data } = dto;
     const updated = await this.prisma.extendedTransaction(async (tx) => {
       if (productIds !== undefined) {
-        await tx.voucherDetail.deleteMany({
+        const existingDetails = await tx.voucherDetail.findMany({
           where: {
             voucherId: id,
             productId: { not: null },
             orderId: null,
           },
         });
-        if (productIds.length > 0) {
+        const targetProductIds = new Set(productIds);
+        const existingByProductId = new Map<
+          string,
+          (typeof existingDetails)[number]
+        >();
+        for (const detail of existingDetails) {
+          if (detail.productId) {
+            existingByProductId.set(detail.productId, detail);
+          }
+        }
+
+        const toReverseIds = existingDetails
+          .filter(
+            (d) =>
+              d.productId !== null &&
+              !targetProductIds.has(d.productId) &&
+              d.reversedAt === null,
+          )
+          .map((d) => d.id);
+
+        const toRestoreIds = existingDetails
+          .filter(
+            (d) =>
+              d.productId !== null &&
+              targetProductIds.has(d.productId) &&
+              d.reversedAt !== null,
+          )
+          .map((d) => d.id);
+
+        const newProductIds = productIds.filter(
+          (pid) => !existingByProductId.has(pid),
+        );
+
+        if (toReverseIds.length > 0) {
+          await tx.voucherDetail.updateMany({
+            where: { id: { in: toReverseIds } },
+            data: { reversedAt: new Date() },
+          });
+        }
+        if (toRestoreIds.length > 0) {
+          await tx.voucherDetail.updateMany({
+            where: { id: { in: toRestoreIds } },
+            data: { reversedAt: null },
+          });
+        }
+        if (newProductIds.length > 0) {
           await tx.voucherDetail.createMany({
-            data: productIds.map((productId) => ({
+            data: newProductIds.map((productId) => ({
               voucherId: id,
               productId,
             })),
@@ -354,9 +411,16 @@ export class VouchersService {
     if (voucher.vendorId !== user.userID && voucher.adminId !== user.userID) {
       throw new ForbiddenException('Bạn không có quyền xóa voucher này');
     }
-    const updated = await this.prisma.extended.voucher.update({
-      where: { id },
-      data: { status: VoucherStatus.inactive, deletedAt: new Date() },
+    const now = new Date();
+    const updated = await this.prisma.extendedTransaction(async (tx) => {
+      await tx.voucherDetail.updateMany({
+        where: { voucherId: id, orderId: null, reversedAt: null },
+        data: { reversedAt: now },
+      });
+      return tx.voucher.update({
+        where: { id },
+        data: { status: VoucherStatus.inactive, deletedAt: now },
+      });
     });
     this.emitUpdated(updated);
     return updated;
@@ -388,25 +452,65 @@ export class VouchersService {
       throw new BadRequestException('Voucher bị trùng lặp');
     }
 
-    const variants = await db.productVariant.findMany({
-      where: {
-        id: {
-          in: requestedItems.map((item) => item.productVariantId),
+    const [variants, vouchers] = await Promise.all([
+      db.productVariant.findMany({
+        where: {
+          id: {
+            in: requestedItems.map((item) => item.productVariantId),
+          },
+          deletedAt: null,
         },
-        deletedAt: null,
-      },
-      include: {
-        productColor: { include: { product: true } },
-      },
-    });
+        select: {
+          id: true,
+          productColorId: true,
+          size: true,
+          stock: true,
+          price: true,
+          deletedAt: true,
+          productColor: {
+            select: {
+              id: true,
+              productId: true,
+              color: true,
+              imageUrls: true,
+              deletedAt: true,
+              product: {
+                select: {
+                  id: true,
+                  vendorId: true,
+                  categoryId: true,
+                  name: true,
+                  slug: true,
+                  status: true,
+                  deletedAt: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      normalizedCodes.length > 0
+        ? db.voucher.findMany({
+            where: { code: { in: normalizedCodes }, deletedAt: null },
+            include: {
+              details: {
+                where: {
+                  productId: { not: null },
+                  orderId: null,
+                  reversedAt: null,
+                },
+              },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
     if (variants.length !== requestedItems.length) {
       throw new BadRequestException('Có biến thể sản phẩm không tồn tại');
     }
 
+    const variantMap = new Map(variants.map((v) => [v.id, v]));
     const items = requestedItems.map((requested) => {
-      const variant = variants.find(
-        (item) => item.id === requested.productVariantId,
-      )!;
+      const variant = variantMap.get(requested.productVariantId)!;
       if (
         variant.stock < requested.quantity ||
         variant.productColor.deletedAt ||
@@ -424,14 +528,6 @@ export class VouchersService {
       };
     });
 
-    const vouchers = await db.voucher.findMany({
-      where: { code: { in: normalizedCodes }, deletedAt: null },
-      include: {
-        details: {
-          where: { productId: { not: null }, orderId: null },
-        },
-      },
-    });
     if (vouchers.length !== normalizedCodes.length) {
       throw new BadRequestException('Voucher không tồn tại');
     }
@@ -445,6 +541,23 @@ export class VouchersService {
           ? -1
           : 1,
     );
+
+    const usageGroups =
+      ordered.length > 0
+        ? await db.voucherDetail.groupBy({
+            by: ['voucherId'],
+            where: {
+              voucherId: { in: ordered.map((v) => v.id) },
+              order: { clientId: userId },
+              reversedAt: null,
+            },
+            _count: { _all: true },
+          })
+        : [];
+    const usedByCustomerMap = new Map<string, number>(
+      usageGroups.map((group) => [group.voucherId, group._count._all ?? 0]),
+    );
+
     const subtotal = items.reduce(
       (sum, item) => sum.plus(item.amount),
       new Prisma.Decimal(0),
@@ -470,13 +583,7 @@ export class VouchersService {
         );
       }
 
-      const usedByCustomer = await db.voucherDetail.count({
-        where: {
-          voucherId: voucher.id,
-          order: { clientId: userId },
-          reversedAt: null,
-        },
-      });
+      const usedByCustomer = usedByCustomerMap.get(voucher.id) ?? 0;
       if (
         usedByCustomer + (plannedUses.get(voucher.id) || 0) >=
         voucher.perUserLimit
@@ -488,7 +595,7 @@ export class VouchersService {
 
       const productIds = new Set(
         voucher.details.flatMap((detail) =>
-          detail.productId ? [detail.productId] : [],
+          detail.productId && !detail.reversedAt ? [detail.productId] : [],
         ),
       );
       const isAllPlatform =
@@ -572,16 +679,18 @@ export class VouchersService {
   }
 
   private async resolveCategoryProductIds(categoryIds: string[]): Promise<string[]> {
-    const validCategories = await this.prisma.extended.category.count({
-      where: { id: { in: categoryIds }, deletedAt: null },
-    });
+    const [validCategories, products] = await Promise.all([
+      this.prisma.extended.category.count({
+        where: { id: { in: categoryIds }, deletedAt: null },
+      }),
+      this.prisma.extended.product.findMany({
+        where: { categoryId: { in: categoryIds }, deletedAt: null },
+        select: { id: true },
+      }),
+    ]);
     if (validCategories !== categoryIds.length) {
       throw new BadRequestException('Có danh mục áp dụng không tồn tại');
     }
-    const products = await this.prisma.extended.product.findMany({
-      where: { categoryId: { in: categoryIds }, deletedAt: null },
-      select: { id: true },
-    });
     if (products.length === 0) {
       throw new BadRequestException('Các danh mục đã chọn hiện chưa có sản phẩm nào');
     }
@@ -616,7 +725,7 @@ export class VouchersService {
   private detailsInclude() {
     return {
       details: {
-        where: { productId: { not: null }, orderId: null },
+        where: { productId: { not: null }, orderId: null, reversedAt: null },
         include: {
           product: {
             select: {

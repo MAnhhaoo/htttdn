@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react';
 import {
   Plus,
   Trash2,
@@ -6,12 +6,10 @@ import {
   ChevronUp,
   Loader2,
   Upload,
-  Image as ImageIcon,
   X,
-} from "lucide-react";
-import { Modal, Button, Input, Select, Badge } from "../../components/ui";
-import { productService } from "../../services/productService";
-import { useAuth } from "../../contexts/AuthContext";
+} from 'lucide-react';
+import { Modal, Button, Input, Select, Badge, useToast } from '../../components/ui';
+import { productService } from '../../services/productService';
 
 export default function ProductFormModal({
   isOpen,
@@ -20,16 +18,15 @@ export default function ProductFormModal({
   onSave,
   categories = [],
 }) {
-  const { user } = useAuth();
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingColorId, setUploadingColorId] = useState(null);
 
-  // --- Form State ---
   const [formData, setFormData] = useState({
-    name: "",
-    categoryId: "",
-    description: "",
-    status: "active",
+    name: '',
+    categoryId: '',
+    description: '',
+    status: 'active',
     colors: [],
   });
 
@@ -37,38 +34,40 @@ export default function ProductFormModal({
 
   useEffect(() => {
     if (productToEdit) {
+      const mappedColors = productToEdit.colors
+        ? productToEdit.colors.map((c) => ({
+            id: c.id,
+            color: c.color || '',
+            imageUrls: Array.isArray(c.imageUrls) ? [...c.imageUrls] : [],
+            inputUrl: '',
+            variants: (c.variants || []).map((v) => ({
+              id: v.id,
+              size: v.size || '',
+              price: Number(v.price) || 0,
+              stock: Number(v.stock) || 0,
+            })),
+          }))
+        : [];
       setFormData({
-        name: productToEdit.name || "",
-        categoryId: productToEdit.categoryId || "",
-        description: productToEdit.description || "",
-        status: productToEdit.status || "active",
-        colors: productToEdit.colors
-          ? productToEdit.colors.map((c) => ({
-              id: c.id,
-              color: c.color || "",
-              imageUrls: Array.isArray(c.imageUrls) ? [...c.imageUrls] : [],
-              inputUrl: "",
-              variants: (c.variants || []).map((v) => ({
-                id: v.id,
-                size: v.size || "",
-                price: Number(v.price) || 0,
-                stock: Number(v.stock) || 0,
-              })),
-            }))
-          : [],
+        name: productToEdit.name || '',
+        categoryId: productToEdit.categoryId || '',
+        description: productToEdit.description || '',
+        status: productToEdit.status || 'active',
+        colors: mappedColors,
       });
+      setExpandedColorId(mappedColors[0]?.id || null);
     } else {
       setFormData({
-        name: "",
-        categoryId: "",
-        description: "",
-        status: "active",
+        name: '',
+        categoryId: '',
+        description: '',
+        status: 'active',
         colors: [],
       });
+      setExpandedColorId(null);
     }
   }, [productToEdit, isOpen]);
 
-  // --- Handlers ---
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -76,9 +75,9 @@ export default function ProductFormModal({
   const handleAddColor = () => {
     const newColor = {
       id: `temp-color-${Date.now()}`,
-      color: "",
+      color: '',
       imageUrls: [],
-      inputUrl: "",
+      inputUrl: '',
       variants: [],
     };
     setFormData((prev) => ({ ...prev, colors: [...prev.colors, newColor] }));
@@ -88,9 +87,7 @@ export default function ProductFormModal({
   const handleUpdateColor = (colorId, field, value) => {
     setFormData((prev) => ({
       ...prev,
-      colors: prev.colors.map((c) =>
-        c.id === colorId ? { ...c, [field]: value } : c,
-      ),
+      colors: prev.colors.map((c) => (c.id === colorId ? { ...c, [field]: value } : c)),
     }));
   };
 
@@ -125,14 +122,11 @@ export default function ProductFormModal({
         }));
       }
     } catch (err) {
-      console.error("Lỗi tải ảnh:", err);
-      alert(
-        "Không thể tải ảnh lên: " +
-          (err.response?.data?.message || err.message),
-      );
+      console.error('Lỗi tải ảnh:', err);
+      toast.error('Không thể tải ảnh lên: ' + (err.response?.data?.message || err.message));
     } finally {
       setUploadingColorId(null);
-      e.target.value = "";
+      e.target.value = '';
     }
   };
 
@@ -141,13 +135,13 @@ export default function ProductFormModal({
       ...prev,
       colors: prev.colors.map((c) => {
         if (c.id === colorId) {
-          const trimmed = (c.inputUrl || "").trim();
+          const trimmed = (c.inputUrl || '').trim();
           if (!trimmed) return c;
           const currentUrls = (c.imageUrls || []).filter(Boolean);
           return {
             ...c,
             imageUrls: [...currentUrls, trimmed],
-            inputUrl: "",
+            inputUrl: '',
           };
         }
         return c;
@@ -179,7 +173,7 @@ export default function ProductFormModal({
             ...c,
             variants: [
               ...c.variants,
-              { id: `temp-var-${Date.now()}`, size: "", price: 0, stock: 0 },
+              { id: `temp-var-${Date.now()}`, size: '', price: 0, stock: 0 },
             ],
           };
         }
@@ -222,16 +216,13 @@ export default function ProductFormModal({
 
   const handleSubmit = async () => {
     if (!formData.name?.trim() || !formData.categoryId) {
-      alert(
-        "Vui lòng điền đầy đủ các thông tin bắt buộc (Tên sản phẩm, Danh mục)",
-      );
+      toast.error('Vui lòng điền đầy đủ thông tin bắt buộc (Tên sản phẩm, Danh mục).');
       return;
     }
 
-    // Kiểm tra tên màu nếu có thêm màu
     for (let i = 0; i < formData.colors.length; i++) {
       if (!formData.colors[i].color?.trim()) {
-        alert(`Vui lòng nhập tên cho phân loại màu #${i + 1}`);
+        toast.error(`Vui lòng nhập tên cho phân loại màu #${i + 1}.`);
         return;
       }
     }
@@ -241,16 +232,16 @@ export default function ProductFormModal({
       const payload = {
         name: formData.name.trim(),
         description: formData.description?.trim() || null,
-        status: formData.status || "active",
+        status: formData.status || 'active',
         categoryId: formData.categoryId,
         category: { connect: { id: formData.categoryId } },
         colors: formData.colors.map((c) => ({
-          ...(c.id && !c.id.startsWith("temp-") ? { id: c.id } : {}),
+          ...(c.id && !c.id.startsWith('temp-') ? { id: c.id } : {}),
           color: c.color.trim(),
           imageUrls: (c.imageUrls || []).filter(Boolean),
           variants: (c.variants || []).map((v) => ({
-            ...(v.id && !v.id.startsWith("temp-") ? { id: v.id } : {}),
-            size: String(v.size || "").trim() || "Tiêu chuẩn",
+            ...(v.id && !v.id.startsWith('temp-') ? { id: v.id } : {}),
+            size: String(v.size || '').trim() || 'Tiêu chuẩn',
             price: Number(v.price) || 0,
             stock: Number(v.stock) || 0,
           })),
@@ -259,15 +250,17 @@ export default function ProductFormModal({
 
       if (productToEdit) {
         await productService.updateProduct(productToEdit.id, payload);
+        toast.success('Đã cập nhật sản phẩm thành công!');
       } else {
         await productService.createProduct(payload);
+        toast.success('Đã thêm sản phẩm mới thành công!');
       }
       onSave(payload);
     } catch (error) {
-      console.error("Error saving product:", error);
-      alert(
-        "Không thể lưu sản phẩm. " +
-          (error.response?.data?.message || error.message || ""),
+      console.error('Error saving product:', error);
+      toast.error(
+        'Không thể lưu sản phẩm: ' +
+          (error.response?.data?.message || error.message || 'Vui lòng thử lại.'),
       );
     } finally {
       setIsSubmitting(false);
@@ -277,13 +270,13 @@ export default function ProductFormModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
-      title={productToEdit ? "Edit Product" : "Add New Product"}
+      onClose={() => !isSubmitting && onClose()}
+      title={productToEdit ? 'Chỉnh sửa Sản phẩm' : 'Thêm Sản phẩm mới'}
       maxWidth="max-w-4xl"
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
-            Cancel
+            Hủy bỏ
           </Button>
           <Button
             variant="primary"
@@ -292,62 +285,62 @@ export default function ProductFormModal({
             disabled={isSubmitting}
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            Save Product
+            {isSubmitting ? 'Đang lưu...' : 'Lưu sản phẩm'}
           </Button>
         </>
       }
     >
       <div className="space-y-8">
-        {/* LEVEL 1: PRODUCT INFO */}
+        {/* 1. THÔNG TIN CƠ BẢN */}
         <section>
-          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4 border-b pb-2">
-            1. Basic Information
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-4 border-b border-slate-200 dark:border-slate-800 pb-2">
+            1. Thông tin cơ bản
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="Product Name *"
-              placeholder="e.g. Vintage T-Shirt"
+              label="Tên sản phẩm *"
+              placeholder="Ví dụ: Áo thun Cotton cao cấp"
               value={formData.name}
-              onChange={(e) => handleChange("name", e.target.value)}
+              onChange={(e) => handleChange('name', e.target.value)}
             />
             <Select
-              label="Category *"
+              label="Danh mục ngành hàng *"
               options={[
-                { value: "", label: "Select Category" },
+                { value: '', label: 'Chọn danh mục' },
                 ...categories.map((c) => ({ value: c.id, label: c.name })),
               ]}
               value={formData.categoryId}
-              onChange={(e) => handleChange("categoryId", e.target.value)}
+              onChange={(e) => handleChange('categoryId', e.target.value)}
             />
             <Select
-              label="Status"
+              label="Trạng thái hiển thị"
               options={[
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
+                { value: 'active', label: 'Đang mở bán' },
+                { value: 'inactive', label: 'Tạm khóa (Ngừng bán)' },
               ]}
               value={formData.status}
-              onChange={(e) => handleChange("status", e.target.value)}
+              onChange={(e) => handleChange('status', e.target.value)}
             />
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                Description
+                Mô tả sản phẩm
               </label>
               <textarea
-                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 dark:text-white rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 dark:text-white rounded-lg text-sm outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 rows={3}
-                placeholder="Product description..."
+                placeholder="Nhập thông tin chất liệu, kiểu dáng, hướng dẫn bảo quản..."
                 value={formData.description}
-                onChange={(e) => handleChange("description", e.target.value)}
+                onChange={(e) => handleChange('description', e.target.value)}
               />
             </div>
           </div>
         </section>
 
-        {/* LEVEL 2 & 3: COLORS AND VARIANTS */}
+        {/* 2. MÀU SẮC & BIẾN THỂ */}
         <section>
-          <div className="flex items-center justify-between mb-4 border-b pb-2">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-              2. Colors & Variants
+          <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-slate-800 pb-2">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+              2. Phân loại Màu sắc &amp; Kích cỡ
             </h3>
             <Button
               variant="outline"
@@ -356,14 +349,14 @@ export default function ProductFormModal({
               onClick={handleAddColor}
               className="hover:border-indigo-500 hover:text-indigo-600"
             >
-              Add Color
+              Thêm màu sắc
             </Button>
           </div>
 
           {formData.colors.length === 0 ? (
-            <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-300 rounded-xl">
+            <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-700 rounded-xl">
               <p className="text-slate-500 dark:text-slate-400 text-sm">
-                No colors added yet. Add a color to define variants.
+                Chưa có phân loại màu nào. Hãy bấm &ldquo;Thêm màu sắc&rdquo; để thiết lập hình ảnh, kích cỡ và tồn kho.
               </p>
             </div>
           ) : (
@@ -373,13 +366,10 @@ export default function ProductFormModal({
                   key={color.id}
                   className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 transition-colors overflow-hidden shadow-sm"
                 >
-                  {/* Color Header */}
                   <div
                     className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 cursor-pointer select-none"
                     onClick={() =>
-                      setExpandedColorId(
-                        expandedColorId === color.id ? null : color.id,
-                      )
+                      setExpandedColorId(expandedColorId === color.id ? null : color.id)
                     }
                   >
                     <div className="flex items-center gap-3">
@@ -389,51 +379,48 @@ export default function ProductFormModal({
                         <ChevronDown className="w-5 h-5 text-slate-400" />
                       )}
                       <span className="font-semibold text-slate-800 dark:text-slate-100">
-                        {color.color || `Color #${index + 1}`}
+                        {color.color || `Phân loại màu #${index + 1}`}
                       </span>
-                      <Badge
-                        variant="info"
-                        className="bg-indigo-100 text-indigo-700"
-                      >
-                        {color.variants.length} variants
+                      <Badge variant="info" className="bg-indigo-100 text-indigo-700">
+                        {color.variants.length} biến thể
                       </Badge>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      className="text-rose-500 hover:text-rose-700 hover:bg-rose-50"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleRemoveColor(color.id);
                       }}
+                      title="Xóa phân loại màu"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
 
-                  {/* Color Content */}
                   {expandedColorId === color.id && (
                     <div className="p-4 border-t border-slate-200 dark:border-slate-800">
                       <div className="space-y-4 mb-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <Input
-                            label="Color Name *"
-                            placeholder="e.g. Red, Black, White..."
+                            label="Tên màu sắc *"
+                            placeholder="Ví dụ: Đen, Trắng, Xanh Navy..."
                             value={color.color}
                             onChange={(e) =>
-                              handleUpdateColor(
-                                color.id,
-                                "color",
-                                e.target.value,
-                              )
+                              handleUpdateColor(color.id, 'color', e.target.value)
                             }
                           />
                           <div>
                             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                              Product Images
+                              Hình ảnh sản phẩm
                             </label>
                             <label
-                              className={`flex items-center justify-center gap-2 px-3 py-2 border border-dashed border-indigo-400 dark:border-indigo-600 rounded-lg text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer transition-colors ${uploadingColorId === color.id ? "opacity-50 pointer-events-none" : ""}`}
+                              className={`flex items-center justify-center gap-2 px-3 py-2 border border-dashed border-indigo-400 dark:border-indigo-600 rounded-lg text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer transition-colors ${
+                                uploadingColorId === color.id
+                                  ? 'opacity-50 pointer-events-none'
+                                  : ''
+                              }`}
                             >
                               {uploadingColorId === color.id ? (
                                 <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
@@ -442,8 +429,8 @@ export default function ProductFormModal({
                               )}
                               <span>
                                 {uploadingColorId === color.id
-                                  ? "Đang tải ảnh..."
-                                  : "Thêm ảnh từ máy"}
+                                  ? 'Đang tải ảnh...'
+                                  : 'Tải ảnh từ máy tính'}
                               </span>
                               <input
                                 type="file"
@@ -456,18 +443,13 @@ export default function ProductFormModal({
                           </div>
                         </div>
 
-                        {/* Image URL Input Alternative */}
                         <div className="flex gap-2 items-center">
                           <div className="flex-1">
                             <Input
-                              placeholder="Hoặc dán URL ảnh trực tiếp (https://...)"
-                              value={color.inputUrl || ""}
+                              placeholder="Hoặc dán đường dẫn ảnh trực tiếp (https://...)"
+                              value={color.inputUrl || ''}
                               onChange={(e) =>
-                                handleUpdateColor(
-                                  color.id,
-                                  "inputUrl",
-                                  e.target.value,
-                                )
+                                handleUpdateColor(color.id, 'inputUrl', e.target.value)
                               }
                             />
                           </div>
@@ -481,54 +463,49 @@ export default function ProductFormModal({
                           </Button>
                         </div>
 
-                        {/* Image Preview Gallery */}
-                        {color.imageUrls &&
-                          color.imageUrls.filter(Boolean).length > 0 && (
-                            <div>
-                              <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
-                                Ảnh đã chọn (
-                                {color.imageUrls.filter(Boolean).length}):
-                              </span>
-                              <div className="flex flex-wrap gap-2.5">
-                                {color.imageUrls
-                                  .filter(Boolean)
-                                  .map((imgUrl, imgIdx) => (
-                                    <div
-                                      key={imgIdx}
-                                      className="relative group w-16 h-16 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shadow-sm"
+                        {color.imageUrls && color.imageUrls.filter(Boolean).length > 0 && (
+                          <div>
+                            <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
+                              Ảnh đã chọn ({color.imageUrls.filter(Boolean).length}):
+                            </span>
+                            <div className="flex flex-wrap gap-2.5">
+                              {color.imageUrls
+                                .filter(Boolean)
+                                .map((imgUrl, imgIdx) => (
+                                  <div
+                                    key={imgIdx}
+                                    className="relative group w-16 h-16 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shadow-sm"
+                                  >
+                                    <img
+                                      src={imgUrl}
+                                      alt="Xem trước"
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.currentTarget.onerror = null;
+                                        e.currentTarget.src =
+                                          'https://placehold.co/80x80?text=Loi+Anh';
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveImage(color.id, imgIdx)}
+                                      className="absolute top-1 right-1 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full shadow transition-opacity opacity-80 group-hover:opacity-100"
+                                      title="Xóa ảnh"
                                     >
-                                      <img
-                                        src={imgUrl}
-                                        alt="Color preview"
-                                        className="w-full h-full object-cover"
-                                        onError={(e) => {
-                                          e.currentTarget.onerror = null;
-                                          e.currentTarget.src =
-                                            "https://placehold.co/80x80?text=Error";
-                                        }}
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleRemoveImage(color.id, imgIdx)
-                                        }
-                                        className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full shadow transition-opacity opacity-80 group-hover:opacity-100"
-                                        title="Xóa ảnh"
-                                      >
-                                        <X className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  ))}
-                              </div>
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
                             </div>
-                          )}
+                          </div>
+                        )}
                       </div>
 
-                      {/* LEVEL 3: VARIANTS */}
+                      {/* Biến thể Size & Tồn kho */}
                       <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 border border-slate-200 dark:border-slate-800">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-medium text-slate-700 dark:text-slate-300 text-sm">
-                            Sizes & Inventory (Variants)
+                          <h4 className="font-semibold text-slate-700 dark:text-slate-300 text-sm">
+                            Kích cỡ, Giá bán &amp; Tồn kho
                           </h4>
                           <Button
                             variant="secondary"
@@ -536,35 +513,35 @@ export default function ProductFormModal({
                             icon={Plus}
                             onClick={() => handleAddVariant(color.id)}
                           >
-                            Add Size
+                            Thêm kích cỡ
                           </Button>
                         </div>
 
                         {color.variants.length === 0 ? (
                           <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-4">
-                            No variants added for this color.
+                            Chưa có biến thể kích cỡ nào cho màu này.
                           </p>
                         ) : (
                           <div className="space-y-2">
                             {color.variants.map((variant) => (
                               <div
                                 key={variant.id}
-                                className="flex flex-wrap md:flex-nowrap items-end gap-2 bg-white dark:bg-slate-900 transition-colors p-2 rounded border border-slate-200 dark:border-slate-800"
+                                className="flex flex-wrap md:flex-nowrap items-end gap-2 bg-white dark:bg-slate-900 transition-colors p-2.5 rounded-lg border border-slate-200 dark:border-slate-800"
                               >
                                 <div className="flex-1 min-w-[100px]">
                                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
-                                    Size
+                                    Kích cỡ (Size)
                                   </label>
                                   <input
                                     type="text"
-                                    className="w-full px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-800 dark:text-white rounded outline-none focus:border-indigo-500"
-                                    placeholder="e.g. L"
+                                    className="w-full px-2.5 py-1.5 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white rounded outline-none focus:border-indigo-500"
+                                    placeholder="VD: M, L, XL..."
                                     value={variant.size}
                                     onChange={(e) =>
                                       handleUpdateVariant(
                                         color.id,
                                         variant.id,
-                                        "size",
+                                        'size',
                                         e.target.value,
                                       )
                                     }
@@ -572,18 +549,19 @@ export default function ProductFormModal({
                                 </div>
                                 <div className="flex-1 min-w-[120px]">
                                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
-                                    Price (VND)
+                                    Giá bán (VNĐ)
                                   </label>
                                   <input
                                     type="number"
-                                    className="w-full px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-800 dark:text-white  rounded outline-none focus:border-indigo-500"
+                                    min="0"
+                                    className="w-full px-2.5 py-1.5 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white rounded outline-none focus:border-indigo-500"
                                     placeholder="0"
                                     value={variant.price}
                                     onChange={(e) =>
                                       handleUpdateVariant(
                                         color.id,
                                         variant.id,
-                                        "price",
+                                        'price',
                                         Number(e.target.value),
                                       )
                                     }
@@ -591,28 +569,29 @@ export default function ProductFormModal({
                                 </div>
                                 <div className="flex-1 min-w-[100px]">
                                   <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">
-                                    Stock
+                                    Số lượng tồn kho
                                   </label>
                                   <input
                                     type="number"
-                                    className="w-full px-2 py-1.5 text-sm border border-slate-200 dark:border-slate-800 dark:text-white  rounded outline-none focus:border-indigo-500"
+                                    min="0"
+                                    className="w-full px-2.5 py-1.5 text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white rounded outline-none focus:border-indigo-500"
                                     placeholder="0"
                                     value={variant.stock}
                                     onChange={(e) =>
                                       handleUpdateVariant(
                                         color.id,
                                         variant.id,
-                                        "stock",
+                                        'stock',
                                         Number(e.target.value),
                                       )
                                     }
                                   />
                                 </div>
                                 <button
-                                  onClick={() =>
-                                    handleRemoveVariant(color.id, variant.id)
-                                  }
-                                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                  type="button"
+                                  onClick={() => handleRemoveVariant(color.id, variant.id)}
+                                  className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded"
+                                  title="Xóa biến thể"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>

@@ -1,23 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  Truck, Search, Filter, RefreshCw, UserCheck, CheckCircle2, 
-  Clock, AlertTriangle, ChevronLeft, ChevronRight, MapPin, 
-  Calendar, FileText, ArrowRight, User, Phone, Package, Send, Shuffle
+import {
+  Truck,
+  Search,
+  RefreshCw,
+  UserCheck,
+  CheckCircle2,
+  Clock,
+  MapPin,
+  User,
+  Phone,
+  Package,
+  Shuffle,
 } from 'lucide-react';
 import { shippingApi, employeesApi } from '../../api';
-import { formatShortOrderCode } from '../../utils/orderHelpers';
-import { Button, Input, Modal, Badge } from '../../components/ui';
-
-const STATUS_CONFIG = {
-  pending: { label: 'Chờ tiếp nhận', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
-  assigned: { label: 'Đã phân công', color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
-  picking_up: { label: 'Đang lấy hàng', color: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20' },
-  in_transit: { label: 'Đang luân chuyển', color: 'bg-purple-500/10 text-purple-500 border-purple-500/20' },
-  out_for_delivery: { label: 'Đang giao hàng', color: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20' },
-  delivered: { label: 'Giao thành công', color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
-  failed: { label: 'Giao thất bại', color: 'bg-rose-500/10 text-rose-500 border-rose-500/20' },
-  returned: { label: 'Đã hoàn hàng', color: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
-};
+import {
+  formatShortOrderCode,
+  getShipmentBadgeVariant,
+  getShipmentStatusText,
+} from '../../utils/orderHelpers';
+import { Button, Input, Modal, Badge, PaginationFooter } from '../../components/ui';
 
 export default function ShippingManagement() {
   const [shipments, setShipments] = useState([]);
@@ -25,6 +26,12 @@ export default function ShippingManagement() {
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
+  const [shipmentCounts, setShipmentCounts] = useState({
+    total: 0,
+    pending: 0,
+    inTransit: 0,
+    delivered: 0,
+  });
 
   // Filters
   const [search, setSearch] = useState('');
@@ -71,10 +78,24 @@ export default function ShippingManagement() {
       };
 
       const res = await shippingApi.getShipments(params);
-      const data = res.data || res;
-      setShipments(data.list || []);
+      const data = res.data?.data ?? res.data ?? res;
+      const list = data.list || [];
+      setShipments(list);
       setTotalItems(data.totalItems || 0);
       setTotalPages(data.totalPages || 1);
+
+      const fallbackPending = list.filter((s) => s.status === 'pending').length;
+      const fallbackInTransit = list.filter(
+        (s) => s.status === 'in_transit' || s.status === 'out_for_delivery' || s.status === 'picking_up' || s.status === 'assigned',
+      ).length;
+      const fallbackDelivered = list.filter((s) => s.status === 'delivered').length;
+
+      setShipmentCounts({
+        total: data.countTotal ?? data.counts?.total ?? data.totalItems ?? list.length,
+        pending: data.countPending ?? data.counts?.pending ?? fallbackPending,
+        inTransit: data.countInTransit ?? data.counts?.inTransit ?? fallbackInTransit,
+        delivered: data.countDelivered ?? data.counts?.delivered ?? fallbackDelivered,
+      });
     } catch (err) {
       console.error('Error fetching shipments:', err);
     } finally {
@@ -194,10 +215,11 @@ export default function ShippingManagement() {
     }
   };
 
-  // Quick Stats
-  const pendingCount = shipments.filter(s => s.status === 'pending').length;
-  const inTransitCount = shipments.filter(s => s.status === 'in_transit' || s.status === 'out_for_delivery').length;
-  const deliveredCount = shipments.filter(s => s.status === 'delivered').length;
+  // Server KPI counts (falling back safely if not provided by API)
+  const totalCount = shipmentCounts.total;
+  const pendingCount = shipmentCounts.pending;
+  const inTransitCount = shipmentCounts.inTransit;
+  const deliveredCount = shipmentCounts.delivered;
 
   return (
     <div className="space-y-6">
@@ -238,7 +260,7 @@ export default function ShippingManagement() {
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Tổng vận đơn</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{totalItems}</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{totalCount}</p>
           </div>
           <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl text-blue-600">
             <Package className="w-6 h-6" />
@@ -342,9 +364,7 @@ export default function ShippingManagement() {
                   </td>
                 </tr>
               ) : (
-                shipments.map((s) => {
-                  const statusConf = STATUS_CONFIG[s.status] || { label: s.status, color: 'bg-slate-100 text-slate-600' };
-                  return (
+                shipments.map((s) => (
                     <tr key={s.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="px-5 py-4">
                         <div className="font-semibold text-blue-600 dark:text-blue-400 font-mono text-xs">
@@ -402,9 +422,9 @@ export default function ShippingManagement() {
                       </td>
 
                       <td className="px-5 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${statusConf.color}`}>
-                          {statusConf.label}
-                        </span>
+                        <Badge variant={getShipmentBadgeVariant(s.status)}>
+                          {getShipmentStatusText(s.status)}
+                        </Badge>
                         {s.events?.[0] && (
                           <div className="text-[11px] text-slate-400 mt-1 truncate max-w-[180px]" title={s.events[0].description}>
                             {s.events[0].description}
@@ -446,39 +466,20 @@ export default function ShippingManagement() {
                         </div>
                       </td>
                     </tr>
-                  );
-                })
+                ))
               )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
-          <div>
-            Hiển thị trang <span className="font-semibold text-slate-700 dark:text-slate-300">{page}</span> / {totalPages} (Tổng {totalItems} vận đơn)
-          </div>
-          <div className="flex gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="p-1.5"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="p-1.5"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          itemLabel="vận đơn"
+          onPageChange={setPage}
+        />
       </div>
 
       {/* Modal 1: Assign Carrier Modal */}
@@ -554,7 +555,7 @@ export default function ShippingManagement() {
               <Button variant="outline" type="button" onClick={() => setIsAssignOpen(false)}>
                 Hủy
               </Button>
-              <Button type="submit" disabled={assigning} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button type="submit" disabled={assigning} className="bg-[#1A3A2C] hover:bg-[#2A5C4A] dark:bg-[#2A5C4A] dark:hover:bg-[#35755B] text-white">
                 {assigning ? 'Đang phân công...' : 'Xác nhận Điều phối'}
               </Button>
             </div>
@@ -675,9 +676,9 @@ export default function ShippingManagement() {
                   </p>
                 </div>
               </div>
-              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${STATUS_CONFIG[selectedShipment.status]?.color}`}>
-                {STATUS_CONFIG[selectedShipment.status]?.label || selectedShipment.status}
-              </span>
+              <Badge variant={getShipmentBadgeVariant(selectedShipment.status)}>
+                {getShipmentStatusText(selectedShipment.status)}
+              </Badge>
             </div>
 
             {/* Events Timeline */}

@@ -1,10 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Modal, Button, Badge } from '../../components/ui';
 import { employeesApi } from '../../api';
-import { 
-  TrendingUp, Calendar, ArrowRight, UserCheck, Clock, FileText, 
-  Loader2, AlertCircle, DollarSign
-} from 'lucide-react';
+import { TrendingUp, Calendar, UserCheck, Loader2 } from 'lucide-react';
 
 export default function SalaryHistoryModal({ isOpen, onClose, employee }) {
   const [history, setHistory] = useState([]);

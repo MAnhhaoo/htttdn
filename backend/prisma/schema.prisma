@@ -182,6 +182,8 @@ model Admin {
   orderStatusHistories OrderStatusHistory[] @relation("AdminOrderStatusActor")
   createdEmployees     Employee[]           @relation("AdminCreatedEmployees")
   createdSalaryHistories EmployeeSalaryHistory[] @relation("AdminSalaryModifier")
+
+  @@index([status, deletedAt, createdAt])
 }
 
 model Employee {
@@ -220,6 +222,8 @@ model Employee {
   @@index([adminId])
   @@index([status])
   @@index([department])
+  @@index([status, deletedAt, department])
+  @@index([status, createdAt])
 }
 
 model Client {
@@ -245,6 +249,9 @@ model Client {
   cart                 Cart?
   orders               Order[]
   orderStatusHistories OrderStatusHistory[] @relation("ClientOrderStatusActor")
+
+  @@index([deletedAt, status, createdAt])
+  @@index([deletedAt, createdAt])
 }
 
 model Vendor {
@@ -280,6 +287,11 @@ model Vendor {
   vouchers             Voucher[]            @relation("VendorVoucher")
   orderStatusHistories OrderStatusHistory[] @relation("VendorOrderStatusActor")
   vendorOrders         VendorOrder[]        @relation("VendorOrders")
+
+  @@index([approvalStatus, status, deletedAt, createdAt])
+  @@index([status, deletedAt, createdAt])
+  @@index([renewalRequested])
+  @@index([subscriptionExpiresAt])
 }
 
 model Survey {
@@ -308,6 +320,9 @@ model Survey {
   @@index([adminId])
   @@index([vendorId])
   @@index([status, triggerType, startDate, endDate])
+  @@index([vendorId, deletedAt, status, createdAt])
+  @@index([adminId, deletedAt, status, createdAt])
+  @@index([deletedAt, status, createdAt])
 }
 
 model SurveyQuestion {
@@ -319,6 +334,7 @@ model SurveyQuestion {
   position  Int
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
+  deletedAt DateTime?
 
   survey  Survey         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   options SurveyOption[]
@@ -326,20 +342,23 @@ model SurveyQuestion {
 
   @@unique([surveyId, position])
   @@index([surveyId])
+  @@index([surveyId, deletedAt, position])
 }
 
 model SurveyOption {
-  id         String   @id @default(uuid()) @db.Uuid
-  questionId String   @db.Uuid
-  content    String   @db.VarChar(500)
+  id         String    @id @default(uuid()) @db.Uuid
+  questionId String    @db.Uuid
+  content    String    @db.VarChar(500)
   position   Int
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
 
   question SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
   answers  SurveyAnswer[]
 
   @@unique([questionId, position])
   @@index([questionId])
+  @@index([questionId, deletedAt, position])
 }
 
 model SurveyResponse {
@@ -394,6 +413,11 @@ model Notification {
   @@index([clientId, isRead, createdAt])
   @@index([vendorId, isRead, createdAt])
   @@index([surveyId])
+  @@index([clientId, createdAt])
+  @@index([vendorId, createdAt])
+  @@index([adminId, createdAt])
+  @@index([vendorId, type, createdAt])
+  @@index([surveyId, vendorId, createdAt])
 }
 
 model SurveyAnswer {
@@ -412,6 +436,9 @@ model SurveyAnswer {
   @@index([responseId])
   @@index([questionId])
   @@index([optionId])
+  @@index([questionId, createdAt])
+  @@index([questionId, optionId])
+  @@index([questionId, ratingValue])
 }
 
 model Voucher {
@@ -443,6 +470,8 @@ model Voucher {
   @@index([vendorId])
   @@index([scope])
   @@index([status, startDate, endDate])
+  @@index([deletedAt, createdAt])
+  @@index([vendorId, deletedAt, createdAt])
 }
 
 model VoucherDetail {
@@ -466,6 +495,7 @@ model VoucherDetail {
   @@index([voucherId])
   @@index([productId])
   @@index([orderId])
+  @@index([voucherId, reversedAt, orderId])
 }
 
 model Category {
@@ -477,6 +507,8 @@ model Category {
   deletedAt DateTime?
 
   products Product[]
+
+  @@index([deletedAt, createdAt])
 }
 
 model Product {
@@ -501,19 +533,24 @@ model Product {
   @@index([categoryId])
   @@index([vendorId])
   @@index([status])
+  @@index([deletedAt, status, createdAt])
+  @@index([categoryId, deletedAt, status, createdAt])
+  @@index([vendorId, deletedAt, status, createdAt])
 }
 
 model ProductFavorite {
-  id        String   @id @default(uuid()) @db.Uuid
-  clientId  String   @db.Uuid
-  productId String   @db.Uuid
-  createdAt DateTime @default(now())
+  id        String    @id @default(uuid()) @db.Uuid
+  clientId  String    @db.Uuid
+  productId String    @db.Uuid
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
 
   client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, productId])
   @@index([clientId, createdAt])
+  @@index([clientId, deletedAt, createdAt])
   @@index([productId])
 }
 
@@ -535,6 +572,7 @@ model ClientAddress {
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId, deletedAt])
+  @@index([clientId, deletedAt, isDefault, createdAt])
 }
 
 model ProductColor {
@@ -551,6 +589,7 @@ model ProductColor {
 
   @@unique([productId, color])
   @@index([productId])
+  @@index([productId, deletedAt, createdAt])
 }
 
 model ProductVariant {
@@ -569,6 +608,7 @@ model ProductVariant {
 
   @@unique([productColorId, size])
   @@index([productColorId])
+  @@index([productColorId, deletedAt, price])
 }
 
 model Review {
@@ -588,6 +628,8 @@ model Review {
 
   @@index([clientId])
   @@index([productId])
+  @@index([productId, deletedAt, createdAt])
+  @@index([deletedAt, createdAt])
 }
 
 model Cart {
@@ -602,18 +644,21 @@ model Cart {
 }
 
 model CartItem {
-  id               String   @id @default(uuid()) @db.Uuid
-  productVariantId String   @db.Uuid
-  cartId           String   @db.Uuid
-  quantity         Int      @default(1)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id               String    @id @default(uuid()) @db.Uuid
+  productVariantId String    @db.Uuid
+  cartId           String    @db.Uuid
+  quantity         Int       @default(1)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
 
   productVariant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
   cart           Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
   @@unique([cartId, productVariantId])
   @@index([productVariantId])
+  @@index([cartId, createdAt])
+  @@index([cartId, deletedAt, createdAt])
 }
 
 model Order {
@@ -645,6 +690,9 @@ model Order {
   @@index([clientId])
   @@index([status])
   @@index([createdAt])
+  @@index([clientId, createdAt])
+  @@index([status, createdAt])
+  @@index([status, createdAt, clientId])
 }
 
 model OrderDetail {
@@ -684,6 +732,9 @@ model Payment {
   updatedAt       DateTime      @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([createdAt])
 }
 
 model OrderStatusHistory {
@@ -709,6 +760,7 @@ model OrderStatusHistory {
   @@index([clientId])
   @@index([vendorId])
   @@index([employeeId])
+  @@index([employeeId, orderId])
 }
 
 model EmployeeSalaryHistory {
@@ -729,6 +781,7 @@ model EmployeeSalaryHistory {
 
   @@index([employeeId])
   @@index([adminId])
+  @@index([employeeId, effectiveDate])
 }
 
 model EmployeeAttendance {
@@ -774,6 +827,7 @@ model EmployeePayroll {
   @@unique([employeeId, month, year])
   @@index([employeeId])
   @@index([month, year])
+  @@index([month, year, status])
 }
 
 model VendorOrder {
@@ -797,6 +851,8 @@ model VendorOrder {
   @@index([orderId])
   @@index([vendorId])
   @@index([status])
+  @@index([vendorId, createdAt])
+  @@index([vendorId, status])
 }
 
 model Shipment {
@@ -824,9 +880,10 @@ model Shipment {
   events      ShipmentEvent[]
 
   @@index([orderId])
-  @@index([vendorOrderId])
   @@index([carrierId])
   @@index([status])
+  @@index([carrierId, status, createdAt])
+  @@index([status, createdAt])
 }
 
 model ShipmentEvent {
@@ -843,5 +900,6 @@ model ShipmentEvent {
 
   @@index([shipmentId])
   @@index([createdAt])
+  @@index([shipmentId, createdAt])
 }
 

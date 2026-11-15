@@ -7,6 +7,7 @@ import { OrderStatus, PaymentMethod, PaymentStatus } from '@prisma/client';
 
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
+import { PRODUCT_VARIANT_SUMMARY_SELECT } from 'src/common/prisma/prisma-selects.const';
 import { RealtimeService } from 'src/app/realtime/realtime.service';
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
 
@@ -16,7 +17,13 @@ const paymentInclude = {
       details: {
         include: {
           productVariant: {
-            include: { productColor: { include: { product: true } } }}}}}}};
+            select: PRODUCT_VARIANT_SUMMARY_SELECT,
+          },
+        },
+      },
+    },
+  },
+};
 
 @Injectable()
 export class PaymentsService {

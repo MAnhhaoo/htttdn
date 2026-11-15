@@ -1,20 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { 
-  Calculator, DollarSign, Calendar, Filter, RefreshCw, CheckCircle2, 
-  Clock, AlertCircle, Edit, Check, CreditCard, ChevronLeft, ChevronRight,
-  TrendingUp, Users, FileSpreadsheet, Building2, User
+  Calculator, DollarSign, Calendar, RefreshCw, CheckCircle2, 
+  Clock, Edit, Check, CreditCard, Users
 } from 'lucide-react';
-import { payrollApi } from '../../api';
-import { Button, Input, Modal, Badge } from '../../components/ui';
+import { payrollApi, employeesApi } from '../../api';
+import { formatVND } from '../../utils/formatHelpers';
+import { Button, Input, Modal } from '../../components/ui';
 
 const STATUS_CONFIG = {
   draft: { label: 'Bản nháp', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
   approved: { label: 'Đã duyệt', color: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
   paid: { label: 'Đã thanh toán', color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
-};
-
-const formatVND = (val) => {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(val) || 0);
 };
 
 export default function PayrollManagement() {
@@ -23,9 +19,10 @@ export default function PayrollManagement() {
   const [calculating, setCalculating] = useState(false);
 
   // Filters
-  const [month, setMonth] = useState(new Date().getMonth() + 1); // Current month
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [department, setDepartment] = useState('');
+  const [departments, setDepartments] = useState([]);
   const [status, setStatus] = useState('');
 
   // Edit Modal State
@@ -60,6 +57,20 @@ export default function PayrollManagement() {
   useEffect(() => {
     fetchPayrolls();
   }, [fetchPayrolls]);
+
+  useEffect(() => {
+    let mounted = true;
+    employeesApi
+      .getDepartments()
+      .then((res) => {
+        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        if (mounted) setDepartments(list);
+      })
+      .catch((err) => console.error('Error fetching departments:', err));
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Handle calculate payroll engine
   const handleCalculatePayroll = async () => {
@@ -235,17 +246,18 @@ export default function PayrollManagement() {
           </div>
 
           {/* Department Filter */}
-          <div className="w-48">
+          <div className="w-56">
             <select
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
               className="w-full h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-200 focus:outline-none"
             >
               <option value="">Tất cả phòng ban</option>
-              <option value="Phòng Quản lý & Vận hành Đơn hàng">Phòng Quản lý & Vận hành Đơn hàng</option>
-              <option value="Tổ Kiểm duyệt & Xác nhận Đơn hàng">Tổ Kiểm duyệt & Xác nhận Đơn hàng</option>
-              <option value="Bộ phận Điều phối & Liên kết Vendor">Bộ phận Điều phối & Liên kết Vendor</option>
-              <option value="Bộ phận Xử lý Sự cố & Ngoại lệ Đơn">Bộ phận Xử lý Sự cố & Ngoại lệ Đơn</option>
+              {departments.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
             </select>
           </div>
 

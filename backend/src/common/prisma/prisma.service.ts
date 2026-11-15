@@ -68,13 +68,21 @@ export class PrismaService
       query: {
         $allModels: {
           findFirst: ({ args, query, model }) => {
-            if (this.isSoftDeletable(model)) {
+            if (
+              this.isSoftDeletable(model) &&
+              (args.where as Record<string, unknown> | undefined)?.deletedAt ===
+                undefined
+            ) {
               args.where = { ...args.where, deletedAt: null };
             }
             return query(args);
           },
           findMany: ({ args, query, model }) => {
-            if (this.isSoftDeletable(model)) {
+            if (
+              this.isSoftDeletable(model) &&
+              (args.where as Record<string, unknown> | undefined)?.deletedAt ===
+                undefined
+            ) {
               args.where = { ...args.where, deletedAt: null };
             }
             if (!args.orderBy) {
@@ -104,7 +112,11 @@ export class PrismaService
             return query(args);
           },
           count: ({ args, query, model }) => {
-            if (this.isSoftDeletable(model)) {
+            if (
+              this.isSoftDeletable(model) &&
+              (args.where as Record<string, unknown> | undefined)?.deletedAt ===
+                undefined
+            ) {
               args.where = { ...args.where, deletedAt: null };
             }
             return query(args);
@@ -115,11 +127,48 @@ export class PrismaService
             return query(args);
           },
           delete: async ({ args, query, model }) => {
-            const record = await extended[model].findUnique({
+            const delegateName =
+              model.charAt(0).toLowerCase() + model.slice(1);
+            const record = await (extended as any)[delegateName].findUnique({
               where: args.where,
             });
-            if (!record) {
+            if (
+              !record ||
+              (this.isSoftDeletable(model) && record.deletedAt)
+            ) {
               throw new NotFoundException(`${model} not found for delete`);
+            }
+            if (this.hasField(model, 'deletedAt')) {
+              const isAccount = this.ACCOUNT_MODELS.includes(model);
+              const { where, ...restArgs } = args as any;
+              return ((this as any)[delegateName] as any).update({
+                ...restArgs,
+                where,
+                data: isAccount
+                  ? { status: 'inactive', deletedAt: null }
+                  : { deletedAt: new Date() },
+              });
+            }
+            return query(args);
+          },
+          deleteMany: async ({ args, query, model }) => {
+            if (this.hasField(model, 'deletedAt')) {
+              const delegateName =
+                model.charAt(0).toLowerCase() + model.slice(1);
+              const isAccount = this.ACCOUNT_MODELS.includes(model);
+              const rawWhere = args.where as
+                | Record<string, unknown>
+                | undefined;
+              const where =
+                !isAccount && rawWhere?.deletedAt === undefined
+                  ? { ...args.where, deletedAt: null }
+                  : args.where;
+              return ((this as any)[delegateName] as any).updateMany({
+                where,
+                data: isAccount
+                  ? { status: 'inactive', deletedAt: null }
+                  : { deletedAt: new Date() },
+              });
             }
             return query(args);
           },

@@ -9,5 +9,5 @@ export const favoriteService = {
   },
   removeFavorite: async (productId) => {
     return apiClient.delete(`/products/${productId}/favorite`);
-  }
+  },
 };

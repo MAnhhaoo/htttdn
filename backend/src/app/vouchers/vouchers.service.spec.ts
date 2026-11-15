@@ -103,7 +103,7 @@ describe('VouchersService', () => {
               30,
             ),
           ])},
-      voucherDetail: { count: jest.fn().mockResolvedValue(0) }};
+      voucherDetail: { groupBy: jest.fn().mockResolvedValue([]) }};
     const service = new VouchersService({} as PrismaService);
     const result = await service.calculate(
       ['PLATFORM10', 'VENDOR30'],
@@ -136,7 +136,7 @@ describe('VouchersService', () => {
     const db = {
       productVariant: { findMany: jest.fn().mockResolvedValue([variant(variantId, 100, productId)]) },
       voucher: { findMany: jest.fn().mockResolvedValue([selectedVoucher]) },
-      voucherDetail: { count: jest.fn().mockResolvedValue(0) },
+      voucherDetail: { groupBy: jest.fn().mockResolvedValue([]) },
     };
     const service = new VouchersService({} as PrismaService);
     const planned = new Map<string, number>();
@@ -172,7 +172,7 @@ describe('VouchersService', () => {
               20,
             ),
           ])},
-      voucherDetail: { count: jest.fn().mockResolvedValue(0) }};
+      voucherDetail: { groupBy: jest.fn().mockResolvedValue([]) }};
     const service = new VouchersService({} as PrismaService);
 
     await expect(
@@ -187,5 +187,66 @@ describe('VouchersService', () => {
         db as never,
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('reverses removed product-scope details and restores previously reversed ones on update without physical delete', async () => {
+    const voucherId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const removedProdId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const restoredProdId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const brandNewProdId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
+    const existingVoucher = {
+      ...voucher(voucherId, 'VND20', VoucherScope.vendor, DiscountType.percentage, 20),
+      vendorId,
+      adminId: null,
+      details: [{ id: 'vd-active', voucherId, productId: removedProdId, orderId: null, reversedAt: null }],
+    };
+
+    const tx = {
+      voucherDetail: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'vd-active', voucherId, productId: removedProdId, orderId: null, reversedAt: null },
+          { id: 'vd-reversed', voucherId, productId: restoredProdId, orderId: null, reversedAt: new Date() },
+        ]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      voucher: {
+        update: jest.fn().mockResolvedValue({
+          ...existingVoucher,
+          details: [
+            { id: 'vd-reversed', productId: restoredProdId, orderId: null, reversedAt: null },
+            { id: 'vd-new', productId: brandNewProdId, orderId: null, reversedAt: null },
+          ],
+        }),
+      },
+    };
+
+    const prisma = {
+      extended: {
+        voucher: { findFirst: jest.fn().mockResolvedValue(existingVoucher) },
+        product: { count: jest.fn().mockResolvedValue(2) },
+      },
+      extendedTransaction: jest.fn((cb: (client: typeof tx) => unknown) => cb(tx)),
+    };
+
+    const service = new VouchersService(prisma as unknown as PrismaService);
+    await service.update(
+      voucherId,
+      { productIds: [restoredProdId, brandNewProdId] } as any,
+      { userID: vendorId, role: 'vendor' } as any,
+    );
+
+    expect(tx.voucherDetail.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['vd-active'] } },
+      data: { reversedAt: expect.any(Date) },
+    });
+    expect(tx.voucherDetail.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['vd-reversed'] } },
+      data: { reversedAt: null },
+    });
+    expect(tx.voucherDetail.createMany).toHaveBeenCalledWith({
+      data: [{ voucherId, productId: brandNewProdId }],
+    });
   });
 });

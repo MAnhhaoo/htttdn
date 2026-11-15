@@ -20,6 +20,12 @@ import {
 import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { PrismaService } from 'src/common/prisma/prisma.service';
 import {
+  CARRIER_SUMMARY_SELECT,
+  EMPLOYEE_ACTOR_SELECT,
+  PRODUCT_VARIANT_SUMMARY_SELECT,
+  VENDOR_SUMMARY_SELECT,
+} from 'src/common/prisma/prisma-selects.const';
+import {
   formatPaginatedList,
   normalizePagination,
 } from 'src/common/utils/paginaton-util/pagintion-util.service';
@@ -33,14 +39,17 @@ import {
 } from './dto/update-order-status.dto';
 import { AssignOrderDto } from './dto/assign-order.dto';
 import { GetOrdersPaginationDto } from './dto/get-order.dto';
+import {
+  DEPARTMENT_KEYWORDS,
+  isExceptionDept,
+  isHandlingDept,
+  isShippingDept,
+  loadShipperPoolWithLoads,
+  pickNextShipperFromPool,
+} from './order-assignment.helper';
 import { randomBytes } from 'crypto';
 
-export const DEPARTMENT_KEYWORDS = {
-  VENDOR_COORDINATION: 'Điều phối',
-  SHIPPING: 'Vận chuyển',
-  DELIVERY: 'Giao nhận',
-  EXCEPTION: 'Sự cố',
-} as const;
+export { DEPARTMENT_KEYWORDS };
 
 /**
  * Hậu tố ngẫu nhiên 8 ký tự hex cho mã kiện/vận đơn (VO-/SHIP-yyyymm-XXXXXXXX).
@@ -75,25 +84,7 @@ const orderInclude = {
   details: {
     include: {
       productVariant: {
-        include: {
-          productColor: {
-            include: {
-              product: {
-                include: {
-                  vendor: {
-                    select: {
-                      id: true,
-                      fullName: true,
-                      storeName: true,
-                      phone: true,
-                      avatarUrl: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
+        select: PRODUCT_VARIANT_SUMMARY_SELECT,
       },
       review: true,
     },
@@ -107,13 +98,7 @@ const orderInclude = {
   vendorOrders: {
     include: {
       vendor: {
-        select: {
-          id: true,
-          fullName: true,
-          storeName: true,
-          phone: true,
-          avatarUrl: true,
-        },
+        select: VENDOR_SUMMARY_SELECT,
       },
     },
   },
@@ -121,13 +106,7 @@ const orderInclude = {
     include: {
       events: { orderBy: { createdAt: 'asc' as const } },
       carrier: {
-        select: {
-          id: true,
-          fullName: true,
-          employeeCode: true,
-          phone: true,
-          department: true,
-        },
+        select: CARRIER_SUMMARY_SELECT,
       },
     },
   },
@@ -135,12 +114,7 @@ const orderInclude = {
     include: {
       admin: { select: { id: true, fullName: true, email: true } },
       employee: {
-        select: {
-          id: true,
-          fullName: true,
-          employeeCode: true,
-          department: true,
-        },
+        select: EMPLOYEE_ACTOR_SELECT,
       },
       vendor: { select: { id: true, storeName: true, fullName: true } },
       client: { select: { id: true, fullName: true } },
@@ -165,6 +139,7 @@ const surveyPromptSelect = {
       admin: { select: { id: true } },
       vendor: { select: { id: true } },
       questions: {
+        where: { deletedAt: null },
         orderBy: { position: 'asc' as const },
         select: {
           id: true,
@@ -173,6 +148,7 @@ const surveyPromptSelect = {
           required: true,
           position: true,
           options: {
+            where: { deletedAt: null },
             orderBy: { position: 'asc' as const },
             select: { id: true, content: true, position: true },
           },
@@ -259,9 +235,10 @@ export class OrdersService {
       where: { clientId },
       include: {
         items: {
+          where: { deletedAt: null },
           include: {
             productVariant: {
-              include: { productColor: { include: { product: true } } },
+              select: PRODUCT_VARIANT_SUMMARY_SELECT,
             },
           },
         },
@@ -390,7 +367,7 @@ export class OrdersService {
           'Voucher không áp dụng cho các sản phẩm đã chọn',
         );
     }
-    return { targetItems, vendorGroups, codesByVendor };
+    return { cartId: cart.id, targetItems, vendorGroups, codesByVendor };
   }
 
   async previewCheckout(clientId: string, dto: PreviewCheckoutDto) {
@@ -455,7 +432,7 @@ export class OrdersService {
       try {
         result = await this.prisma.extendedTransaction(
           async (tx) => {
-            const { targetItems, vendorGroups, codesByVendor } =
+            const { cartId, targetItems, vendorGroups, codesByVendor } =
               await this.prepareCheckout(tx, clientId, dto);
 
             const createdOrders: any[] = [];
@@ -463,9 +440,10 @@ export class OrdersService {
             const yearMonth = getYearMonth();
             // 1 đơn hàng lớn (nhiều đơn hàng nhỏ cùng lượt đặt) chỉ giao cho 1 điều phối viên duy nhất;
             // nhân viên giao hàng (bưu tá) được phân công riêng cho từng đơn hàng nhỏ.
-            const sharedHandlingEmp = await this.findBestHandlingEmployee(tx);
-            const assignedShipperIdsInBatch: string[] = [];
-            const assignedShipperLoadInBatch = new Map<string, number>();
+            const [sharedHandlingEmp, shipperPool] = await Promise.all([
+              this.findBestHandlingEmployee(tx),
+              loadShipperPoolWithLoads(tx),
+            ]);
 
             for (const [vId, vendorItems] of vendorGroups.entries()) {
               const calculated = await this.vouchersService.calculate(
@@ -593,20 +571,10 @@ export class OrdersService {
 
               // 1. Dùng chung 1 Điều phối viên (Bộ phận Điều phối & Liên kết Vendor) cho tất cả đơn hàng nhỏ trong lượt đặt
               const handlingEmp = sharedHandlingEmp;
-              // 2. Phân công Bưu tá (Phòng Vận chuyển & Giao nhận) riêng cho từng đơn hàng nhỏ
-              const shipperEmp = await this.findBestShipperEmployee(
-                tx,
-                handlingEmp?.id,
-                assignedShipperIdsInBatch,
-                assignedShipperLoadInBatch,
-              );
-              if (shipperEmp) {
-                assignedShipperIdsInBatch.push(shipperEmp.id);
-                assignedShipperLoadInBatch.set(
-                  shipperEmp.id,
-                  (assignedShipperLoadInBatch.get(shipperEmp.id) || 0) + 1,
-                );
-              }
+              // 2. Phân công Bưu tá (Phòng Vận chuyển & Giao nhận) riêng cho từng đơn hàng nhỏ từ pool đã nạp sẵn
+              const shipperEmp = pickNextShipperFromPool(shipperPool, {
+                excludeEmployeeId: handlingEmp?.id,
+              });
 
               // Kiện hàng khởi tạo và tự động phân công bưu tá Phòng Vận chuyển & Giao nhận
               await this.createShipmentWithInitialEvent(tx, {
@@ -685,7 +653,7 @@ export class OrdersService {
               createdOrders.push({ ...createdOrder, surveyPrompts });
             }
 
-            // Delete only the checked out cart items
+            // Soft-delete only the checked out cart items
             if (dto.expectedTotalAmount !== undefined) {
               const actualTotal = createdOrders.reduce(
                 (sum, order) => sum.plus(order.totalAmount),
@@ -696,11 +664,16 @@ export class OrdersService {
                   'Giá hoặc voucher vừa thay đổi. Vui lòng kiểm tra tổng tiền và xác nhận lại.',
                 );
             }
-            const checkedOutItemIds = targetItems.map((i) => i.id);
-            await tx.cartItem.deleteMany({
+            const checkedOutVariantIds = targetItems.map(
+              (i) => i.productVariantId,
+            );
+            await tx.cartItem.updateMany({
               where: {
-                id: { in: checkedOutItemIds },
+                cartId,
+                productVariantId: { in: checkedOutVariantIds },
+                deletedAt: null,
               },
+              data: { deletedAt: new Date() },
             });
 
             return {
@@ -765,11 +738,30 @@ export class OrdersService {
   async listForVendor(vendorId: string) {
     const orders = await this.prisma.extended.order.findMany({
       where: {
+        OR: [
+          { vendorOrders: { some: { vendorId } } },
+          {
+            details: {
+              some: {
+                productVariant: { productColor: { product: { vendorId } } },
+              },
+            },
+          },
+        ],
+      },
+      include: {
+        ...orderInclude,
         details: {
-          some: { productVariant: { productColor: { product: { vendorId } } } },
+          where: {
+            productVariant: { productColor: { product: { vendorId } } },
+          },
+          include: orderInclude.details.include,
+        },
+        vendorOrders: {
+          where: { vendorId },
+          include: orderInclude.vendorOrders.include,
         },
       },
-      include: orderInclude,
       orderBy: { createdAt: 'desc' },
     });
     return orders.map((o) => this.sanitizeOrderForVendor(o, vendorId));
@@ -1141,7 +1133,7 @@ export class OrdersService {
 
   async listAll(query: GetOrdersPaginationDto, user?: UserInfo) {
     const { search, status, sortOrder, groupByBatch, employeeId } = query;
-    const sortDir: 'asc' | 'desc' = sortOrder === 'desc' ? 'desc' : 'asc';
+    const sortDir: 'asc' | 'desc' = sortOrder === 'asc' ? 'asc' : 'desc';
     const shouldGroupByBatch =
       groupByBatch === true || groupByBatch === 'true';
     const { page, itemPerPage, skip } = normalizePagination({
@@ -1151,13 +1143,33 @@ export class OrdersService {
     const baseWhere: Prisma.OrderWhereInput = {};
     let isCourierUser = false;
 
-    // Nếu người dùng là nhân viên (employee), hiển thị đơn hàng theo đúng phân công và ban nghiệp vụ
-    if (user?.role === 'employee') {
-      const emp = await this.prisma.extended.employee.findUnique({
-        where: { id: user.userID },
-        select: { id: true, department: true, assignedOrderScope: true },
-      });
+    const needViewerEmp = user?.role === 'employee';
+    const needTargetEmp =
+      Boolean(employeeId && employeeId !== 'all') &&
+      typeof this.prisma.extended.employee?.findUnique === 'function';
 
+    const [emp, targetEmp] = await Promise.all([
+      needViewerEmp
+        ? this.prisma.extended.employee.findUnique({
+            where: { id: user!.userID },
+            select: { id: true, department: true, assignedOrderScope: true },
+          })
+        : Promise.resolve(null),
+      needTargetEmp
+        ? needViewerEmp && employeeId === user!.userID
+          ? Promise.resolve(undefined)
+          : this.prisma.extended.employee.findUnique({
+              where: { id: employeeId! },
+              select: { id: true, department: true, assignedOrderScope: true },
+            })
+        : Promise.resolve(null),
+    ]);
+
+    const resolvedTargetEmp =
+      targetEmp === undefined ? emp : targetEmp;
+
+    // Nếu người dùng là nhân viên (employee), hiển thị đơn hàng theo đúng phân công và ban nghiệp vụ
+    if (needViewerEmp) {
       if (emp) {
         const isManager = emp.assignedOrderScope === 'all_orders';
         const isVendorLink = emp.department.includes(
@@ -1230,73 +1242,10 @@ export class OrdersService {
         isCourierUser = true;
         baseWhere.shipments = {
           some: {
-            carrierId: user.userID,
+            carrierId: user!.userID,
           },
         };
       }
-    }
-
-    // [TỐI ƯU TRUY VẤN DATABASE - YÊU CẦU 3 & 5]:
-    // Thay vì chạy 7 câu lệnh COUNT() rời rạc, sử dụng 1 câu lệnh SQL GROUP BY status duy nhất
-    // để tổng hợp số lượng hóa đơn theo từng trạng thái trên toàn bộ CSDL.
-    const countsByStatus: Record<string, number> = {
-      all: 0,
-      pending: 0,
-      confirmed: 0,
-      processing: 0,
-      shipping: 0,
-      completed: 0,
-      cancelled: 0,
-    };
-
-    if (typeof this.prisma.extended.order.groupBy === 'function') {
-      const groupedCounts = await this.prisma.extended.order.groupBy({
-        by: ['status'],
-        where: baseWhere,
-        _count: { _all: true },
-      });
-      for (const row of groupedCounts) {
-        const c = Number(row._count?._all ?? 0);
-        countsByStatus[row.status] = c;
-        countsByStatus.all += c;
-      }
-    } else {
-      const [
-        countAll,
-        countPending,
-        countConfirmed,
-        countProcessing,
-        countShipping,
-        countCompleted,
-        countCancelled,
-      ] = await Promise.all([
-        this.prisma.extended.order.count({ where: baseWhere }),
-        this.prisma.extended.order.count({
-          where: { AND: [baseWhere, { status: OrderStatus.pending }] },
-        }),
-        this.prisma.extended.order.count({
-          where: { AND: [baseWhere, { status: OrderStatus.confirmed }] },
-        }),
-        this.prisma.extended.order.count({
-          where: { AND: [baseWhere, { status: OrderStatus.processing }] },
-        }),
-        this.prisma.extended.order.count({
-          where: { AND: [baseWhere, { status: OrderStatus.shipping }] },
-        }),
-        this.prisma.extended.order.count({
-          where: { AND: [baseWhere, { status: OrderStatus.completed }] },
-        }),
-        this.prisma.extended.order.count({
-          where: { AND: [baseWhere, { status: OrderStatus.cancelled }] },
-        }),
-      ]);
-      countsByStatus.all = countAll;
-      countsByStatus.pending = countPending;
-      countsByStatus.confirmed = countConfirmed;
-      countsByStatus.processing = countProcessing;
-      countsByStatus.shipping = countShipping;
-      countsByStatus.completed = countCompleted;
-      countsByStatus.cancelled = countCancelled;
     }
 
     const whereConditions: Prisma.OrderWhereInput[] = [baseWhere];
@@ -1335,18 +1284,10 @@ export class OrdersService {
     }
 
     if (employeeId && employeeId !== 'all') {
-      const targetEmp =
-        typeof this.prisma.extended.employee?.findUnique === 'function'
-          ? await this.prisma.extended.employee.findUnique({
-              where: { id: employeeId },
-              select: { id: true, department: true, assignedOrderScope: true },
-            })
-          : null;
-
       const isTargetCourier =
-        targetEmp &&
-        targetEmp.assignedOrderScope !== 'all_orders' &&
-        this.isShippingDepartment(targetEmp.department);
+        resolvedTargetEmp &&
+        resolvedTargetEmp.assignedOrderScope !== 'all_orders' &&
+        this.isShippingDepartment(resolvedTargetEmp.department);
 
       if (isTargetCourier) {
         whereConditions.push({
@@ -1367,23 +1308,86 @@ export class OrdersService {
         ? whereConditions[0]
         : { AND: whereConditions };
 
-    // [ĐỌC DATABASE - DANH SÁCH HÓA ĐƠN & CHI TIẾT HÓA ĐƠN (YÊU CẦU 2 & 3)]:
-    // Đếm tổng số hóa đơn thỏa điều kiện lọc và đọc danh sách hóa đơn phân trang kèm chi tiết (orderInclude).
-    const totalItems = await this.prisma.extended.order.count({ where });
+    const loadCountsByStatus = async (): Promise<Record<string, number>> => {
+      const counts: Record<string, number> = {
+        all: 0,
+        pending: 0,
+        confirmed: 0,
+        processing: 0,
+        shipping: 0,
+        completed: 0,
+        cancelled: 0,
+      };
+      if (typeof this.prisma.extended.order.groupBy === 'function') {
+        const groupedCounts = await this.prisma.extended.order.groupBy({
+          by: ['status'],
+          where: baseWhere,
+          _count: { _all: true },
+        });
+        for (const row of groupedCounts) {
+          const c = Number(row._count?._all ?? 0);
+          counts[row.status] = c;
+          counts.all += c;
+        }
+        return counts;
+      }
+
+      const [
+        countAll,
+        countPending,
+        countConfirmed,
+        countProcessing,
+        countShipping,
+        countCompleted,
+        countCancelled,
+      ] = await Promise.all([
+        this.prisma.extended.order.count({ where: baseWhere }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.pending }] },
+        }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.confirmed }] },
+        }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.processing }] },
+        }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.shipping }] },
+        }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.completed }] },
+        }),
+        this.prisma.extended.order.count({
+          where: { AND: [baseWhere, { status: OrderStatus.cancelled }] },
+        }),
+      ]);
+      counts.all = countAll;
+      counts.pending = countPending;
+      counts.confirmed = countConfirmed;
+      counts.processing = countProcessing;
+      counts.shipping = countShipping;
+      counts.completed = countCompleted;
+      counts.cancelled = countCancelled;
+      return counts;
+    };
 
     if (shouldGroupByBatch) {
-      const headers = await this.prisma.extended.order.findMany({
-        where,
-        select: {
-          id: true,
-          clientId: true,
-          receiverName: true,
-          receiverPhone: true,
-          shippingAddress: true,
-          createdAt: true,
-        },
-        orderBy: [{ createdAt: sortDir }, { id: sortDir }],
-      });
+      const [countsByStatus, totalItems, headers] = await Promise.all([
+        loadCountsByStatus(),
+        this.prisma.extended.order.count({ where }),
+        this.prisma.extended.order.findMany({
+          where,
+          select: {
+            id: true,
+            clientId: true,
+            receiverName: true,
+            receiverPhone: true,
+            shippingAddress: true,
+            createdAt: true,
+          },
+          orderBy: [{ createdAt: sortDir }, { id: sortDir }],
+        }),
+      ]);
 
       const batches = this.groupOrdersByBatchHeaders(headers);
       const pageBatches = batches.slice(skip, skip + itemPerPage);
@@ -1409,38 +1413,72 @@ export class OrdersService {
       };
     }
 
-    const rawList = await this.prisma.extended.order.findMany({
-      where,
-      include: orderInclude,
-      orderBy: [{ createdAt: sortDir }, { id: sortDir }],
-      skip,
-      take: itemPerPage,
-    });
+    const [countsByStatus, totalItems, rawList] = await Promise.all([
+      loadCountsByStatus(),
+      this.prisma.extended.order.count({ where }),
+      this.prisma.extended.order.findMany({
+        where,
+        include: orderInclude,
+        orderBy: [{ createdAt: sortDir }, { id: sortDir }],
+        skip,
+        take: itemPerPage,
+      }),
+    ]);
 
     const list =
       isCourierUser && user?.userID
         ? rawList.map((o) => this.sanitizeOrderForCourier(o, user.userID))
         : rawList;
 
-    // Danh sách chỉ đọc dữ liệu. Việc phân công nhân sự được thực hiện khi tạo đơn, đổi trạng thái
-    // hoặc qua POST /orders/admin/auto-assign-all, không thực hiện trong thao tác GET.
     return {
       ...formatPaginatedList(list, totalItems, { page, itemPerPage }),
       countsByStatus,
     };
   }
 
-  async getById(id: string, user: UserInfo) {
-    let order = await this.prisma.extended.order.findUnique({
-      where: { id },
-      include: orderInclude,
-    });
+  async getById(
+    id: string,
+    user: UserInfo,
+    prefetchedEmployee?: {
+      id?: string;
+      fullName?: string;
+      employeeCode?: string;
+      department: string | null;
+      permissions?: Prisma.JsonValue | null;
+      assignedOrderScope: string;
+    } | null,
+  ) {
+    const needEmpLookup =
+      user.role === 'employee' && prefetchedEmployee === undefined;
+    const [initialOrder, resolvedEmp] = await Promise.all([
+      this.prisma.extended.order.findUnique({
+        where: { id },
+        include: orderInclude,
+      }),
+      needEmpLookup
+        ? this.prisma.extended.employee.findUnique({
+            where: { id: user.userID },
+            select: {
+              id: true,
+              fullName: true,
+              employeeCode: true,
+              department: true,
+              assignedOrderScope: true,
+            },
+          })
+        : Promise.resolve(prefetchedEmployee ?? null),
+    ]);
+    let order = initialOrder;
     if (!order) throw new NotFoundException('Đơn hàng không tồn tại');
 
-    await this.assertCanView(order, user);
+    await this.assertCanView(order, user, resolvedEmp);
 
-    // Tự động phân công bưu tá nếu chưa có (chỉ sau khi xác thực quyền xem)
-    if (!order.shipments?.some((s) => Boolean(s.carrierId))) {
+    // Tự động phân công bưu tá nếu chưa có và đơn hàng chưa kết thúc
+    if (
+      order.status !== OrderStatus.cancelled &&
+      order.status !== OrderStatus.completed &&
+      !order.shipments?.some((s) => Boolean(s.carrierId))
+    ) {
       try {
         const shipper = await this.findBestShipperEmployee();
         if (shipper) {
@@ -1494,14 +1532,10 @@ export class OrdersService {
       return this.sanitizeOrderForVendor(order, user.userID);
     }
     if (user.role === 'employee') {
-      const emp = await this.prisma.extended.employee.findUnique({
-        where: { id: user.userID },
-        select: { department: true, assignedOrderScope: true },
-      });
       if (
-        emp &&
-        emp.assignedOrderScope !== 'all_orders' &&
-        this.isShippingDepartment(emp.department)
+        resolvedEmp &&
+        resolvedEmp.assignedOrderScope !== 'all_orders' &&
+        this.isShippingDepartment(resolvedEmp.department)
       ) {
         return this.sanitizeOrderForCourier(order, user.userID);
       }
@@ -1531,6 +1565,13 @@ export class OrdersService {
       (sum: number, d: any) => sum + Number(d.price) * d.quantity,
       0,
     );
+    const origSubtotal = Number(order.subtotalAmount || 0);
+    const origDiscount = Number(order.discountAmount || 0);
+    const vendorDiscount =
+      origSubtotal > 0
+        ? Math.round(origDiscount * (vendorSubtotal / origSubtotal))
+        : 0;
+    const vendorNetTotal = Math.max(0, vendorSubtotal - vendorDiscount);
     const myVendorOrder = (order.vendorOrders || []).find(
       (vo: any) => vo.vendorId === vendorId,
     );
@@ -1557,7 +1598,8 @@ export class OrdersService {
       },
       details: vendorDetails,
       subtotalAmount: vendorSubtotal,
-      totalAmount: vendorSubtotal,
+      discountAmount: vendorDiscount,
+      totalAmount: vendorNetTotal,
       ...(order.vendorOrders !== undefined && {
         vendorOrders: myVendorOrder ? [myVendorOrder] : [],
       }),
@@ -1567,18 +1609,36 @@ export class OrdersService {
   }
 
   async updateStatus(id: string, dto: UpdateOrderStatusDto, user: UserInfo) {
-    const current = await this.getById(id, user);
-
     let cachedEmp: {
+      id: string;
+      fullName: string;
+      employeeCode: string;
       department: string | null;
       permissions: Prisma.JsonValue | null;
       assignedOrderScope: string;
     } | null = null;
+
     if (user.role === 'employee') {
       cachedEmp = await this.prisma.extended.employee.findUnique({
         where: { id: user.userID },
-        select: { department: true, permissions: true, assignedOrderScope: true },
+        select: {
+          id: true,
+          fullName: true,
+          employeeCode: true,
+          department: true,
+          permissions: true,
+          assignedOrderScope: true,
+        },
       });
+    }
+
+    const current = await this.getById(
+      id,
+      user,
+      user.role === 'employee' ? cachedEmp : undefined,
+    );
+
+    if (user.role === 'employee') {
       const isManager = cachedEmp?.assignedOrderScope === 'all_orders';
       const isCourier =
         cachedEmp && !isManager && this.isShippingDepartment(cachedEmp.department);
@@ -1709,15 +1769,18 @@ export class OrdersService {
         const usages = current.voucherDetails.filter(
           (detail) => !detail.reversedAt,
         );
-        for (const usage of usages) {
-          await tx.voucherDetail.update({
-            where: { id: usage.id },
-            data: { reversedAt: new Date() },
+        if (usages.length > 0) {
+          const reversedAt = new Date();
+          await tx.voucherDetail.updateMany({
+            where: { id: { in: usages.map((u) => u.id) } },
+            data: { reversedAt },
           });
-          await tx.voucher.updateMany({
-            where: { id: usage.voucherId, usedQuantity: { gt: 0 } },
-            data: { usedQuantity: { decrement: 1 } },
-          });
+          for (const usage of usages) {
+            await tx.voucher.updateMany({
+              where: { id: usage.voucherId, usedQuantity: { gt: 0 } },
+              data: { usedQuantity: { decrement: 1 } },
+            });
+          }
         }
         await tx.payment.update({
           where: { orderId: id },
@@ -1874,9 +1937,9 @@ export class OrdersService {
             });
           }
 
-          for (const d of vendorDetails) {
-            await tx.orderDetail.update({
-              where: { id: d.id },
+          if (vendorDetails.length > 0) {
+            await tx.orderDetail.updateMany({
+              where: { id: { in: vendorDetails.map((d) => d.id) } },
               data: { vendorOrderId: vOrder.id },
             });
           }
@@ -1926,13 +1989,9 @@ export class OrdersService {
           ? `[Nhân viên] ${auditNote}`
           : '[Nhân viên xử lý]';
 
-        // Tạo thông báo thực tế cho Vendor và Admin khi nhân viên xử lý / báo cáo sự cố
-        const employee = await tx.employee.findUnique({
-          where: { id: user.userID },
-          select: { id: true, fullName: true, employeeCode: true },
-        });
-        const empName = employee
-          ? `${employee.fullName} (${employee.employeeCode || 'NV'})`
+        // Tạo thông báo thực tế cho Vendor và Admin khi nhân viên xử lý / báo cáo sự cố (tái sử dụng cachedEmp đã nạp)
+        const empName = cachedEmp
+          ? `${cachedEmp.fullName} (${cachedEmp.employeeCode || 'NV'})`
           : 'Nhân viên điều phối';
         const orderCodeStr =
           current.orderCode || current.id.slice(0, 8).toUpperCase();
@@ -1964,11 +2023,11 @@ export class OrdersService {
             where: { status: 'active', deletedAt: null },
             select: { id: true },
           });
-          const adminTitle =
-            dto.title || `[Báo cáo sự cố] Đơn hàng #${orderCodeStr}`;
-          for (const adm of admins) {
-            await tx.notification.create({
-              data: {
+          if (admins.length > 0) {
+            const adminTitle =
+              dto.title || `[Báo cáo sự cố] Đơn hàng #${orderCodeStr}`;
+            await tx.notification.createMany({
+              data: admins.map((adm) => ({
                 adminId: adm.id,
                 type: 'order_update',
                 title: adminTitle,
@@ -1980,7 +2039,7 @@ export class OrdersService {
                   employeeName: empName,
                   type: 'employee_incident_report',
                 },
-              },
+              })),
             });
           }
         }
@@ -1995,11 +2054,11 @@ export class OrdersService {
                 .filter((id: any): id is string => Boolean(id)),
             ),
           );
-          const vendorTitle =
-            dto.title || `[Thông báo sự cố đơn hàng] #${orderCodeStr}`;
-          for (const vId of vendorIds) {
-            await tx.notification.create({
-              data: {
+          if (vendorIds.length > 0) {
+            const vendorTitle =
+              dto.title || `[Thông báo sự cố đơn hàng] #${orderCodeStr}`;
+            await tx.notification.createMany({
+              data: vendorIds.map((vId) => ({
                 vendorId: vId,
                 type: 'order_update',
                 title: vendorTitle,
@@ -2011,7 +2070,7 @@ export class OrdersService {
                   employeeName: empName,
                   type: 'employee_incident_action',
                 },
-              },
+              })),
             });
           }
         }
@@ -2174,75 +2233,19 @@ export class OrdersService {
     preferExcludeIds?: string[],
     extraLoadMap?: Map<string, number>,
   ) {
-    const client = tx || (this.prisma.extended as unknown as Prisma.TransactionClient);
-    const candidates = await client.employee.findMany({
-      where: {
-        status: 'active',
-        deletedAt: null,
-        OR: [
-          {
-            department: {
-              contains: DEPARTMENT_KEYWORDS.SHIPPING,
-              mode: 'insensitive',
-            },
-          },
-          {
-            department: {
-              contains: DEPARTMENT_KEYWORDS.DELIVERY,
-              mode: 'insensitive',
-            },
-          },
-        ],
-        ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
-      },
-      select: {
-        id: true,
-        fullName: true,
-        employeeCode: true,
-        department: true,
-        phone: true,
-        assignedOrderScope: true,
-        assignedShipments: {
-          where: {
-            status: {
-              in: [
-                ShipmentStatus.assigned,
-                ShipmentStatus.picking_up,
-                ShipmentStatus.in_transit,
-                ShipmentStatus.out_for_delivery,
-              ],
-            },
-          },
-          select: { id: true },
-        },
-      },
+    const client =
+      tx || (this.prisma.extended as unknown as Prisma.TransactionClient);
+    const pool = await loadShipperPoolWithLoads(client, { excludeEmployeeId });
+    return pickNextShipperFromPool(pool, {
+      excludeEmployeeId,
+      preferExcludeIds,
+      extraLoadMap,
+      incrementLoad: false,
     });
-
-    if (!candidates.length) return null;
-    const scopedCouriers = candidates.filter(
-      (c) => c.assignedOrderScope !== 'all_orders',
-    );
-    const rolePool = scopedCouriers.length > 0 ? scopedCouriers : candidates;
-    const unpickedInBatch = preferExcludeIds?.length
-      ? rolePool.filter((c) => !preferExcludeIds.includes(c.id))
-      : rolePool;
-    const pool = unpickedInBatch.length > 0 ? unpickedInBatch : rolePool;
-
-    const getLoad = (c: (typeof pool)[number]) =>
-      (c.assignedShipments?.length || 0) + (extraLoadMap?.get(c.id) || 0);
-
-    const sorted = [...pool].sort((a, b) => getLoad(a) - getLoad(b));
-    const minLoad = getLoad(sorted[0]);
-    const leastBusy = sorted.filter((c) => getLoad(c) === minLoad);
-    return leastBusy[Math.floor(Math.random() * leastBusy.length)];
   }
 
   private isShippingDepartment(department?: string | null): boolean {
-    if (!department) return false;
-    return (
-      department.includes(DEPARTMENT_KEYWORDS.SHIPPING) ||
-      department.includes(DEPARTMENT_KEYWORDS.DELIVERY)
-    );
+    return isShippingDept(department);
   }
 
   private getBatchClientKey(order: {
@@ -2382,10 +2385,24 @@ export class OrdersService {
   }
 
   async assignOrder(id: string, dto: AssignOrderDto, user: UserInfo) {
-    const order = await this.prisma.extended.order.findUnique({
-      where: { id },
-      include: { shipments: true, vendorOrders: true },
-    });
+    const [order, employee] = await Promise.all([
+      this.prisma.extended.order.findUnique({
+        where: { id },
+        include: { shipments: true, vendorOrders: true },
+      }),
+      this.prisma.extended.employee.findUnique({
+        where: { id: dto.employeeId },
+        select: {
+          id: true,
+          fullName: true,
+          employeeCode: true,
+          phone: true,
+          department: true,
+          status: true,
+          deletedAt: true,
+        },
+      }),
+    ]);
     if (!order) {
       throw new NotFoundException('Không tìm thấy đơn hàng');
     }
@@ -2396,18 +2413,6 @@ export class OrdersService {
       throw new BadRequestException('Không thể phân công đơn hàng đã kết thúc');
     }
 
-    const employee = await this.prisma.extended.employee.findUnique({
-      where: { id: dto.employeeId },
-      select: {
-        id: true,
-        fullName: true,
-        employeeCode: true,
-        phone: true,
-        department: true,
-        status: true,
-        deletedAt: true,
-      },
-    });
     if (!employee) {
       throw new NotFoundException('Không tìm thấy nhân viên được chỉ định');
     }
@@ -2417,10 +2422,9 @@ export class OrdersService {
       );
     }
 
-    const dept = (employee.department || '').toLowerCase();
-    const isShipper = dept.includes('vận chuyển') || dept.includes('giao nhận');
-    const isHandling = dept.includes('điều phối') || dept.includes('vendor');
-    const isException = dept.includes('sự cố') || dept.includes('ngoại lệ');
+    const isShipper = isShippingDept(employee.department);
+    const isHandling = isHandlingDept(employee.department);
+    const isException = isExceptionDept(employee.department);
 
     const result = await this.prisma.extendedTransaction(async (tx) => {
       let historyNote = '';
@@ -2626,20 +2630,37 @@ export class OrdersService {
   }
 
   async autoAssignAll(user: UserInfo) {
-    // 1. Find all shipments without carrier assigned
-    const unassignedShipments = await this.prisma.extended.shipment.findMany({
-      where: {
-        carrierId: null,
-        order: {
-          status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
-        },
-      },
-      include: { order: true },
-    });
+    const [unassignedShipments, ordersWithoutShipment, shipperPool] =
+      await Promise.all([
+        this.prisma.extended.shipment.findMany({
+          where: {
+            carrierId: null,
+            order: {
+              status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
+            },
+          },
+          include: { order: true },
+        }),
+        this.prisma.extended.order.findMany({
+          where: {
+            shipments: { none: {} },
+            status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
+          },
+        }),
+        loadShipperPoolWithLoads(this.prisma.extended),
+      ]);
+
+    if (!shipperPool.candidates.length) {
+      return {
+        success: true,
+        message: 'Đã tự động phân công bưu tá thành công cho 0 đơn / kiện hàng',
+        assignedCount: 0,
+      };
+    }
 
     let count = 0;
     for (const shipment of unassignedShipments) {
-      const bestEmp = await this.findBestShipperEmployee();
+      const bestEmp = pickNextShipperFromPool(shipperPool);
       if (!bestEmp) break;
 
       await this.prisma.extendedTransaction(async (tx) => {
@@ -2685,16 +2706,8 @@ export class OrdersService {
       count++;
     }
 
-    // 2. Also check active orders without any shipments
-    const ordersWithoutShipment = await this.prisma.extended.order.findMany({
-      where: {
-        shipments: { none: {} },
-        status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
-      },
-    });
-
     for (const order of ordersWithoutShipment) {
-      const bestEmp = await this.findBestShipperEmployee();
+      const bestEmp = pickNextShipperFromPool(shipperPool);
       if (!bestEmp) break;
 
       await this.prisma.extendedTransaction(async (tx) => {
@@ -2732,14 +2745,24 @@ export class OrdersService {
     };
   }
 
-  private async assertCanView(order: any, user: UserInfo) {
+  private async assertCanView(
+    order: any,
+    user: UserInfo,
+    prefetchedEmp?: {
+      department: string | null;
+      assignedOrderScope: string;
+    } | null,
+  ) {
     if (user.role === 'admin' || order.clientId === user.userID) return;
 
     if (user.role === 'employee') {
-      const emp = await this.prisma.extended.employee.findUnique({
-        where: { id: user.userID },
-        select: { department: true, assignedOrderScope: true },
-      });
+      const emp =
+        prefetchedEmp !== undefined
+          ? prefetchedEmp
+          : await this.prisma.extended.employee.findUnique({
+              where: { id: user.userID },
+              select: { department: true, assignedOrderScope: true },
+            });
 
       if (emp?.assignedOrderScope === 'all_orders') return;
 

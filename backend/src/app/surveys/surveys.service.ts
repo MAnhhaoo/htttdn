@@ -180,16 +180,45 @@ export class SurveysService {
 
     return this.prisma.extendedTransaction(async (tx) => {
       if (dto.questions) {
-        await tx.surveyQuestion.deleteMany({ where: { surveyId: id } });
+        const now = new Date();
+        const oldQuestions = await tx.surveyQuestion.findMany({
+          where: { surveyId: id, deletedAt: null },
+          select: { id: true },
+        });
+        if (oldQuestions.length > 0) {
+          await tx.surveyOption.updateMany({
+            where: {
+              questionId: { in: oldQuestions.map((q) => q.id) },
+              deletedAt: null,
+            },
+            data: { deletedAt: now },
+          });
+          const minPosAgg = await tx.surveyQuestion.aggregate({
+            where: { surveyId: id },
+            _min: { position: true },
+          });
+          const baseNeg = Math.min(0, minPosAgg?._min?.position ?? 0) - 1;
+          for (let i = 0; i < oldQuestions.length; i += 1) {
+            await tx.surveyQuestion.update({
+              where: { id: oldQuestions[i].id },
+              data: {
+                deletedAt: now,
+                position: baseNeg - i,
+              },
+            });
+          }
+        }
         data.questions = {
           create: dto.questions.map((question) =>
             this.questionCreateData(question),
-          )};
+          ),
+        };
       }
       return tx.survey.update({
         where: { id },
         data,
-        include: this.managementInclude()});
+        include: this.managementInclude(),
+      });
     });
   }
 
@@ -261,9 +290,20 @@ export class SurveysService {
   async remove(id: string, user: UserInfo) {
     const survey = await this.getSurveyForManagement(id);
     this.assertOwnerOrAdmin(survey, user);
-    return this.prisma.extended.survey.update({
-      where: { id },
-      data: { status: SurveyStatus.closed, deletedAt: new Date() },
+    const now = new Date();
+    return this.prisma.extendedTransaction(async (tx) => {
+      await tx.surveyOption.updateMany({
+        where: { question: { surveyId: id }, deletedAt: null },
+        data: { deletedAt: now },
+      });
+      await tx.surveyQuestion.updateMany({
+        where: { surveyId: id, deletedAt: null },
+        data: { deletedAt: now },
+      });
+      return tx.survey.update({
+        where: { id },
+        data: { status: SurveyStatus.closed, deletedAt: now },
+      });
     });
   }
 
@@ -409,14 +449,16 @@ export class SurveysService {
     const response = await this.getResponse(responseId, userId);
     if (!response.openedAt) {
       const now = new Date();
-      await this.prisma.extended.surveyResponse.updateMany({
-        where: { id: responseId, clientId: userId, openedAt: null },
-        data: { openedAt: now },
-      });
-      await this.prisma.extended.notification.updateMany({
-        where: { surveyResponseId: responseId, clientId: userId },
-        data: { isRead: true, readAt: now },
-      });
+      await Promise.all([
+        this.prisma.extended.surveyResponse.updateMany({
+          where: { id: responseId, clientId: userId, openedAt: null },
+          data: { openedAt: now },
+        }),
+        this.prisma.extended.notification.updateMany({
+          where: { surveyResponseId: responseId, clientId: userId },
+          data: { isRead: true, readAt: now },
+        }),
+      ]);
       return this.getResponse(responseId, userId);
     }
     return response;
@@ -442,8 +484,14 @@ export class SurveysService {
               admin: { select: { id: true, fullName: true } },
               vendor: { select: { id: true, fullName: true, storeName: true } },
               questions: {
+                where: { deletedAt: null },
                 orderBy: { position: 'asc' },
-                include: { options: { orderBy: { position: 'asc' } } },
+                include: {
+                  options: {
+                    where: { deletedAt: null },
+                    orderBy: { position: 'asc' },
+                  },
+                },
               },
             },
           },
@@ -513,8 +561,17 @@ export class SurveysService {
             survey: {
               include: {
                 questions: {
+                  where: { deletedAt: null },
                   orderBy: { position: 'asc' },
-                  include: { options: { orderBy: { position: 'asc' } } }}}},
+                  include: {
+                    options: {
+                      where: { deletedAt: null },
+                      orderBy: { position: 'asc' },
+                    },
+                  },
+                },
+              },
+            },
             answers: { select: { id: true }, take: 1 }}});
         if (!response) throw new NotFoundException('Khảo sát không tồn tại');
         this.assertResponseAvailable(response);
@@ -859,10 +916,43 @@ export class SurveysService {
       };
     }
 
-    const interactionGroups = await this.prisma.extended.surveyResponse.groupBy({
-      by: ['status'],
-      where: { surveyId: id },
-      _count: { _all: true }});
+    const nonTextQuestionIds = survey.questions
+      .filter((q) => q.type !== SurveyQuestionType.text)
+      .map((q) => q.id);
+
+    const [interactionGroups, rawOpenedCount, aggregatedAnswerGroups] =
+      await Promise.all([
+        this.prisma.extended.surveyResponse.groupBy({
+          by: ['status'],
+          where: { surveyId: id },
+          _count: { _all: true },
+        }),
+        this.prisma.extended.surveyResponse.count
+          ? this.prisma.extended.surveyResponse.count({
+              where: {
+                surveyId: id,
+                OR: [
+                  { openedAt: { not: null } },
+                  { status: SurveyResponseStatus.submitted },
+                ],
+              },
+            })
+          : Promise.resolve(null),
+        nonTextQuestionIds.length
+          ? this.prisma.extended.surveyAnswer.groupBy({
+              by: ['questionId', 'optionId', 'ratingValue'],
+              where: {
+                questionId: { in: nonTextQuestionIds },
+                response: {
+                  surveyId: id,
+                  status: SurveyResponseStatus.submitted,
+                },
+              },
+              _count: { _all: true },
+            })
+          : Promise.resolve([]),
+      ]);
+
     const interactionCounts = Object.fromEntries(
       Object.values(SurveyResponseStatus).map((status) => [
         status,
@@ -873,19 +963,31 @@ export class SurveysService {
     const responseCount = interactionCounts[SurveyResponseStatus.submitted];
     const invitedCount = survey._count.responses;
     const pendingCount = interactionCounts[SurveyResponseStatus.pending] ?? 0;
-    const openedCount = this.prisma.extended.surveyResponse.count
-      ? await this.prisma.extended.surveyResponse.count({
-          where: {
-            surveyId: id,
-            OR: [
-              { openedAt: { not: null } },
-              { status: SurveyResponseStatus.submitted },
-            ],
-          },
-        })
-      : responseCount;
+    const openedCount = rawOpenedCount ?? responseCount;
     const completionRate =
       invitedCount > 0 ? responseCount / invitedCount : 0;
+
+    const ratingCountsByQuestion = new Map<string, Map<number, number>>();
+    const optionCountsByQuestion = new Map<string, Map<string, number>>();
+    for (const group of aggregatedAnswerGroups) {
+      const count = group._count._all ?? 0;
+      if (group.ratingValue !== null && group.ratingValue !== undefined) {
+        let qMap = ratingCountsByQuestion.get(group.questionId);
+        if (!qMap) {
+          qMap = new Map<number, number>();
+          ratingCountsByQuestion.set(group.questionId, qMap);
+        }
+        qMap.set(group.ratingValue, (qMap.get(group.ratingValue) ?? 0) + count);
+      }
+      if (group.optionId !== null && group.optionId !== undefined) {
+        let oMap = optionCountsByQuestion.get(group.questionId);
+        if (!oMap) {
+          oMap = new Map<string, number>();
+          optionCountsByQuestion.set(group.questionId, oMap);
+        }
+        oMap.set(group.optionId, (oMap.get(group.optionId) ?? 0) + count);
+      }
+    }
 
     const questions = await Promise.all(
       survey.questions.map(async (question) => {
@@ -894,14 +996,17 @@ export class SurveysService {
           question: question.question,
           type: question.type,
           required: question.required,
-          position: question.position};
+          position: question.position,
+        };
         const answerScope: Prisma.SurveyAnswerWhereInput = {
           questionId: question.id,
-          response: { surveyId: id }};
+          response: { surveyId: id },
+        };
         if (question.type === SurveyQuestionType.text) {
           const where: Prisma.SurveyAnswerWhereInput = {
             ...answerScope,
-            textAnswer: { not: null }};
+            textAnswer: { not: null },
+          };
           const [totalItems, answers] = await Promise.all([
             this.prisma.extended.surveyAnswer.count({ where }),
             this.prisma.extended.surveyAnswer.findMany({
@@ -913,23 +1018,28 @@ export class SurveysService {
                 textAnswer: true,
                 createdAt: true,
                 response: {
-                  select: { client: { select: { id: true, fullName: true } } }}},
-              orderBy: { createdAt: 'desc' }}),
+                  select: {
+                    client: { select: { id: true, fullName: true } },
+                  },
+                },
+              },
+              orderBy: { createdAt: 'desc' },
+            }),
           ]);
           return {
             ...base,
-            result: formatPaginatedList(answers, totalItems, { page, itemPerPage })};
+            result: formatPaginatedList(answers, totalItems, {
+              page,
+              itemPerPage,
+            }),
+          };
         }
         if (question.type === SurveyQuestionType.rating) {
-          const groups = await this.prisma.extended.surveyAnswer.groupBy({
-            by: ['ratingValue'],
-            where: { ...answerScope, ratingValue: { not: null } },
-            _count: { _all: true }});
+          const ratingCounts = ratingCountsByQuestion.get(question.id);
           const distribution = [1, 2, 3, 4, 5].map((value) => ({
             value,
-            count:
-              groups.find((group) => group.ratingValue === value)?._count
-                ._all ?? 0}));
+            count: ratingCounts?.get(value) ?? 0,
+          }));
           const answeredCount = distribution.reduce(
             (sum, item) => sum + item.count,
             0,
@@ -944,25 +1054,24 @@ export class SurveysService {
                     0,
                   ) / answeredCount
                 : 0,
-              distribution}};
+              distribution,
+            },
+          };
         }
-        const groups = await this.prisma.extended.surveyAnswer.groupBy({
-          by: ['optionId'],
-          where: { ...answerScope, optionId: { not: null } },
-          _count: { _all: true }});
-        const counts = new Map(
-          groups.map((group) => [group.optionId, group._count._all]),
-        );
+        const counts = optionCountsByQuestion.get(question.id);
         return {
           ...base,
           result: {
             options: question.options.map((option) => {
-              const count = counts.get(option.id) ?? 0;
+              const count = counts?.get(option.id) ?? 0;
               return {
                 ...option,
                 count,
-                percentage: responseCount ? (count / responseCount) * 100 : 0};
-            })}};
+                percentage: responseCount ? (count / responseCount) * 100 : 0,
+              };
+            }),
+          },
+        };
       }),
     );
     return {
@@ -1071,6 +1180,8 @@ export class SurveysService {
 
     const clientEntries = entries.filter((e) => e.clientId);
     const vendorEntries = entries.filter((e) => e.vendorId);
+    let newSurveyResponseIds: string[] = [];
+    let newVendorIds: string[] = [];
 
     if (clientEntries.length) {
       const rows = clientEntries.map((entry) => ({
@@ -1088,6 +1199,7 @@ export class SurveysService {
         select: { id: true, clientId: true, orderId: true, notification: { select: { id: true } } },
       });
       const withoutNotification = responses.filter((r) => !r.notification);
+      newSurveyResponseIds = withoutNotification.map((r) => r.id);
       if (withoutNotification.length) {
         await tx.notification.createMany({
           data: withoutNotification.map((response) => ({
@@ -1110,25 +1222,68 @@ export class SurveysService {
     }
 
     if (vendorEntries.length) {
-      await tx.notification.createMany({
-        data: vendorEntries.map((entry) => ({
-          vendorId: entry.vendorId,
+      const targetVendorIds = [
+        ...new Set(vendorEntries.map((e) => e.vendorId as string)),
+      ];
+      const existingVendorNotifs = await tx.notification.findMany({
+        where: {
           surveyId: survey.id,
-          type: NotificationType.survey_invitation,
-          title: `[MIVA gửi Đối tác] ${survey.title}`,
-          content: survey.description || 'Ban quản trị MIVA trân trọng gửi khảo sát tới Quý Đối tác bán hàng.',
-          data: {
-            surveyId: survey.id,
-            status: SurveyResponseStatus.pending,
-          },
-          expiresAt: survey.endDate,
-        })),
-        skipDuplicates: true,
+          vendorId: { in: targetVendorIds },
+        },
+        select: { vendorId: true },
       });
+      const existingVendorSet = new Set(
+        existingVendorNotifs
+          .map((n) => n.vendorId)
+          .filter((id): id is string => Boolean(id)),
+      );
+      newVendorIds = targetVendorIds.filter((id) => !existingVendorSet.has(id));
+      if (newVendorIds.length) {
+        await tx.notification.createMany({
+          data: newVendorIds.map((vendorId) => ({
+            vendorId,
+            surveyId: survey.id,
+            type: NotificationType.survey_invitation,
+            title: `[MIVA gửi Đối tác] ${survey.title}`,
+            content:
+              survey.description ||
+              'Ban quản trị MIVA trân trọng gửi khảo sát tới Quý Đối tác bán hàng.',
+            data: {
+              surveyId: survey.id,
+              status: SurveyResponseStatus.pending,
+            },
+            expiresAt: survey.endDate,
+          })),
+          skipDuplicates: true,
+        });
+      }
     }
 
+    if (!newSurveyResponseIds.length && !newVendorIds.length) {
+      return [];
+    }
+
+    const notificationFilter: Prisma.NotificationWhereInput =
+      newSurveyResponseIds.length && newVendorIds.length
+        ? {
+            surveyId: survey.id,
+            OR: [
+              { surveyResponseId: { in: newSurveyResponseIds } },
+              { vendorId: { in: newVendorIds } },
+            ],
+          }
+        : newSurveyResponseIds.length
+          ? {
+              surveyId: survey.id,
+              surveyResponseId: { in: newSurveyResponseIds },
+            }
+          : {
+              surveyId: survey.id,
+              vendorId: { in: newVendorIds },
+            };
+
     return tx.notification.findMany({
-      where: { surveyId: survey.id },
+      where: notificationFilter,
       select: {
         id: true,
         clientId: true,
@@ -1296,7 +1451,13 @@ export class SurveysService {
         take: itemPerPage,
         include: {
           admin: { select: { id: true, fullName: true } }, vendor: { select: { id: true, fullName: true } },
-          _count: { select: { questions: true, responses: true } }},
+          _count: {
+            select: {
+              questions: { where: { deletedAt: null } },
+              responses: true,
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' }}),
     ]);
     const vendorSurveyIds = list
@@ -1490,6 +1651,7 @@ export class SurveysService {
           admin: { select: { id: true, fullName: true } },
           vendor: { select: { id: true, fullName: true, storeName: true } },
           questions: {
+            where: { deletedAt: null },
             orderBy: { position: 'asc' as const },
             select: {
               id: true,
@@ -1498,6 +1660,7 @@ export class SurveysService {
               required: true,
               position: true,
               options: {
+                where: { deletedAt: null },
                 orderBy: { position: 'asc' as const },
                 select: { id: true, content: true, position: true }}}}}}} satisfies Prisma.SurveyResponseSelect;
   }
@@ -1547,8 +1710,15 @@ export class SurveysService {
     return {
       admin: { select: { id: true, fullName: true } }, vendor: { select: { id: true, fullName: true } },
       questions: {
+        where: { deletedAt: null },
         orderBy: { position: 'asc' as const },
-        include: { options: { orderBy: { position: 'asc' as const } } }},
+        include: {
+          options: {
+            where: { deletedAt: null },
+            orderBy: { position: 'asc' as const },
+          },
+        },
+      },
       _count: { select: { responses: true } }} satisfies Prisma.SurveyInclude;
   }
 }

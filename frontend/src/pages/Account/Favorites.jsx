@@ -1,35 +1,65 @@
-import React from 'react';
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { useFavorites } from '../../hooks/useFavorites';
-import ProductCard from '../../components/product/ProductCard/ProductCard';
+import { useVoucherOffers } from '../../hooks/useVoucherOffers';
+import { isOfferApplicableToProduct } from '../../utils/voucherPrice';
+import Loading from '../../components/common/Loading/Loading';
+import EmptyState from '../../components/common/EmptyState/EmptyState';
+import ProductGrid from '../../components/product/ProductGrid/ProductGrid';
 
 export default function Favorites() {
-  const { data: favorites = [], isLoading } = useFavorites();
+  const navigate = useNavigate();
+  const { favorites = [], isLoading } = useFavorites();
+
+  const rawProducts = useMemo(
+    () => favorites.map((fav) => fav?.product || fav).filter((p) => p?.id),
+    [favorites],
+  );
+  const offers = useVoucherOffers(rawProducts.map((p) => p.id));
+
+  const favoriteProducts = useMemo(
+    () =>
+      rawProducts.map((product) => ({
+        ...product,
+        voucherOffers: offers.filter((offer) => isOfferApplicableToProduct(offer, product.id)),
+      })),
+    [rawProducts, offers],
+  );
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl py-12">
+        <Loading text="Đang tải danh sách yêu thích..." />
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-8">Sản phẩm yêu thích</h1>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-light-text dark:text-dark-text">
+            Sản phẩm yêu thích
+          </h1>
+          <p className="text-sm text-light-muted dark:text-dark-muted mt-1">
+            Danh sách các sản phẩm bạn đã lưu để theo dõi và mua sắm nhanh ({favoriteProducts.length} sản phẩm)
+          </p>
+        </div>
+      </div>
 
-      {favorites.length === 0 ? (
-        <div className="text-center py-12">
-          <Heart className="mx-auto h-12 w-12 text-slate-300 mb-4" />
-          <h3 className="text-lg font-medium text-slate-900 dark:text-white">Chưa có sản phẩm nào</h3>
-          <p className="mt-2 text-slate-500 dark:text-slate-400">Bạn chưa thêm sản phẩm nào vào danh sách yêu thích.</p>
+      {favoriteProducts.length === 0 ? (
+        <div className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl py-10">
+          <EmptyState
+            icon={Heart}
+            title="Chưa có sản phẩm yêu thích"
+            description="Bạn chưa thêm sản phẩm nào vào danh sách yêu thích. Hãy khám phá bộ sưu tập MIVA nhé!"
+            actionText="Khám phá sản phẩm"
+            onAction={() => navigate('/products')}
+          />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:gap-6">
-          {favorites.map((favorite) => (
-            <ProductCard key={favorite.id} product={favorite.product || favorite} />
-          ))}
-        </div>
+        <ProductGrid products={favoriteProducts} columns={4} />
       )}
     </div>
   );

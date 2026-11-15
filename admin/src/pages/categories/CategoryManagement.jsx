@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Search, Edit, Lock, Unlock, Plus, Loader2, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { Search, Edit, Lock, Unlock, Plus, Loader2, RotateCcw } from 'lucide-react';
 import { categoriesApi } from '../../api';
 import { formatDate } from '../../utils/formatHelpers';
-import { Button, Badge } from '../../components/ui';
+import { Button, Badge, PaginationFooter } from '../../components/ui';
 import { usePaginatedCacheList } from '../../hooks/usePaginatedCacheList';
 import CategoryFormModal from './CategoryFormModal';
 
@@ -72,7 +72,7 @@ export default function CategoryManagement() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Quản lý Danh mục (Categories)</h1>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Quản lý Danh mục ngành hàng</h1>
             {reusedFromCache && (
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800">
                 ⚡ Tái sử dụng DS gốc (Cache)
@@ -175,37 +175,20 @@ export default function CategoryManagement() {
           )}
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Trang {page} / {totalPages} ({totalItems} danh mục)
-            </p>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                icon={ChevronLeft} 
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              />
-              <Button 
-                variant="outline" 
-                size="sm" 
-                icon={ChevronRight} 
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              />
-            </div>
-          </div>
-        )}
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          onPageChange={setPage}
+          itemLabel="danh mục"
+        />
       </div>
 
       <CategoryFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleSave}
-        initialData={categoryToEdit}
+        categoryToEdit={categoryToEdit}
       />
     </div>
   );

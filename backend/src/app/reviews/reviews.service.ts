@@ -7,10 +7,7 @@ import {
 import { OrderStatus, ProductStatus } from '@prisma/client';
 
 import { PrismaService } from 'src/common/prisma/prisma.service';
-import {
-  formatPaginatedList,
-  normalizePagination,
-} from 'src/common/utils/paginaton-util/pagintion-util.service';
+import { paginatePrismaQuery } from 'src/common/utils/paginaton-util/pagintion-util.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { GetReviewsPaginationDto } from './dto/get-review.dto';
@@ -20,21 +17,14 @@ export class ReviewsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listAll(query: GetReviewsPaginationDto) {
-    const { page, itemPerPage, skip } = normalizePagination(query);
-    const where = { deletedAt: null };
-    const totalItems = await this.prisma.extended.review.count({ where });
-    const list = await this.prisma.extended.review.findMany({
-      where,
-      skip,
-      take: itemPerPage,
+    return paginatePrismaQuery(this.prisma.extended.review, query, {
+      where: { deletedAt: null },
       include: {
         client: { select: { id: true, fullName: true, email: true } },
         product: { select: { id: true, name: true, slug: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
-
-    return formatPaginatedList(list, totalItems, { page, itemPerPage });
   }
 
   listByProduct(productId: string) {
@@ -76,8 +66,19 @@ export class ReviewsService {
       throw new ForbiddenException(
         'Chỉ được đánh giá sản phẩm trong đơn đã hoàn thành',
       );
-    if (detail.review)
+    if (detail.review && !detail.review.deletedAt)
       throw new ConflictException('Sản phẩm trong đơn này đã được đánh giá');
+    if (detail.review && detail.review.deletedAt) {
+      return this.prisma.extended.review.update({
+        where: { id: detail.review.id },
+        data: {
+          rating: dto.rating,
+          content: dto.content ?? null,
+          deletedAt: null,
+        },
+        include: { client: { select: { id: true, fullName: true } } },
+      });
+    }
     return this.prisma.extended.review.create({
       data: {
         clientId,

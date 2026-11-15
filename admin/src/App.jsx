@@ -1,56 +1,78 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
+import { ToastProvider } from './components/ui';
 import RealtimeBridge from './realtime/RealtimeBridge';
 import ProtectedRoute from './components/layout/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
-import Dashboard from './pages/dashboard/Dashboard';
+import AnalyticsWorkspace from './pages/analytics/AnalyticsWorkspace';
+import VendorWorkspace from './pages/vendors/VendorWorkspace';
+import OrderWorkspace from './pages/orders/OrderWorkspace';
+import CatalogWorkspace from './pages/categories/CatalogWorkspace';
+import EmployeeWorkspace from './pages/employees/EmployeeWorkspace';
 import UserManagement from './pages/users/UserManagement';
-import CategoryManagement from './pages/categories/CategoryManagement';
-import OrderManagement from './pages/orders/OrderManagement';
-import VoucherManagement from './pages/vouchers/VoucherManagement';
-import ReviewManagement from './pages/reviews/ReviewManagement';
-import VendorManagement from './pages/vendors/VendorManagement';
-import VendorRegistrationManagement from './pages/vendors/VendorRegistrationManagement';
-import EmployeeManagement from './pages/employees/EmployeeManagement';
-import Analytics from './pages/analytics/Analytics';
-import CustomerAnalytics from './pages/analytics/CustomerAnalytics';
-import ShippingManagement from './pages/shipping/ShippingManagement';
-import PayrollManagement from './pages/payroll/PayrollManagement';
-import SurveyManagement from './pages/surveys/SurveyManagement';
+import SurveyWorkspace from './pages/surveys/SurveyWorkspace';
 import Login from './pages/auth/Login';
 
 function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <RealtimeBridge />
-          <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<Login />} />
-          
-          <Route element={<ProtectedRoute />}>
-            <Route element={<DashboardLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/users" element={<UserManagement />} />
-              <Route path="/categories" element={<CategoryManagement />} />
-              <Route path="/orders" element={<OrderManagement />} />
-              <Route path="/shipping" element={<ShippingManagement />} />
-              <Route path="/vouchers" element={<VoucherManagement />} />
-              <Route path="/reviews" element={<ReviewManagement />} />
-              <Route path="/vendors" element={<VendorManagement />} />
-              <Route path="/vendor-registrations" element={<VendorRegistrationManagement />} />
-              <Route path="/employees" element={<EmployeeManagement />} />
-              <Route path="/payroll" element={<PayrollManagement />} />
-              <Route path="/surveys" element={<SurveyManagement />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/customer-analytics" element={<CustomerAnalytics />} />
-            </Route>
-          </Route>
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <AuthProvider>
+            <RealtimeBridge />
+            <Routes>
+              <Route path="/" element={<Navigate to="/analytics" replace />} />
+              <Route path="/login" element={<Login />} />
+
+              <Route element={<ProtectedRoute />}>
+                <Route element={<DashboardLayout />}>
+                  {/* 7 Consolidated Admin Workspaces */}
+                  <Route path="/analytics" element={<AnalyticsWorkspace />} />
+                  <Route path="/vendors" element={<VendorWorkspace />} />
+                  <Route path="/orders" element={<OrderWorkspace />} />
+                  <Route path="/catalog" element={<CatalogWorkspace />} />
+                  <Route path="/employees" element={<EmployeeWorkspace />} />
+                  <Route path="/users" element={<UserManagement />} />
+                  <Route path="/surveys" element={<SurveyWorkspace />} />
+
+                  {/* Legacy Route Redirects (100% backward-compatible) */}
+                  <Route path="/dashboard" element={<Navigate to="/analytics" replace />} />
+                  <Route
+                    path="/customer-analytics"
+                    element={<Navigate to="/analytics?tab=customers" replace />}
+                  />
+                  <Route
+                    path="/vendor-registrations"
+                    element={<Navigate to="/vendors?tab=registrations" replace />}
+                  />
+                  <Route
+                    path="/shipping"
+                    element={<Navigate to="/orders?tab=shipping" replace />}
+                  />
+                  <Route
+                    path="/categories"
+                    element={<Navigate to="/catalog?tab=categories" replace />}
+                  />
+                  <Route
+                    path="/vouchers"
+                    element={<Navigate to="/catalog?tab=vouchers" replace />}
+                  />
+                  <Route
+                    path="/payroll"
+                    element={<Navigate to="/employees?tab=payroll" replace />}
+                  />
+                  <Route
+                    path="/reviews"
+                    element={<Navigate to="/surveys?tab=reviews" replace />}
+                  />
+                  <Route path="*" element={<Navigate to="/analytics" replace />} />
+                </Route>
+              </Route>
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

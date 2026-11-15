@@ -87,9 +87,9 @@ export const VendorScalarFieldEnumSchema = z.enum(['id','fullName','email','pass
 
 export const SurveyScalarFieldEnumSchema = z.enum(['id','adminId','vendorId','title','description','imageUrl','scope','audienceType','triggerType','status','startDate','endDate','createdAt','updatedAt','deletedAt']);
 
-export const SurveyQuestionScalarFieldEnumSchema = z.enum(['id','surveyId','question','type','required','position','createdAt','updatedAt']);
+export const SurveyQuestionScalarFieldEnumSchema = z.enum(['id','surveyId','question','type','required','position','createdAt','updatedAt','deletedAt']);
 
-export const SurveyOptionScalarFieldEnumSchema = z.enum(['id','questionId','content','position','createdAt']);
+export const SurveyOptionScalarFieldEnumSchema = z.enum(['id','questionId','content','position','createdAt','deletedAt']);
 
 export const SurveyResponseScalarFieldEnumSchema = z.enum(['id','surveyId','clientId','orderId','deliveryKey','status','notifiedAt','openedAt','submittedAt','skippedAt','expiresAt','createdAt','updatedAt']);
 
@@ -105,7 +105,7 @@ export const CategoryScalarFieldEnumSchema = z.enum(['id','name','slug','created
 
 export const ProductScalarFieldEnumSchema = z.enum(['id','categoryId','vendorId','name','slug','description','status','createdAt','updatedAt','deletedAt']);
 
-export const ProductFavoriteScalarFieldEnumSchema = z.enum(['id','clientId','productId','createdAt']);
+export const ProductFavoriteScalarFieldEnumSchema = z.enum(['id','clientId','productId','createdAt','deletedAt']);
 
 export const ClientAddressScalarFieldEnumSchema = z.enum(['id','clientId','receiverName','phone','addressLine','ward','district','province','label','isDefault','createdAt','updatedAt','deletedAt']);
 
@@ -117,7 +117,7 @@ export const ReviewScalarFieldEnumSchema = z.enum(['id','clientId','productId','
 
 export const CartScalarFieldEnumSchema = z.enum(['id','clientId','createdAt','updatedAt','deletedAt']);
 
-export const CartItemScalarFieldEnumSchema = z.enum(['id','productVariantId','cartId','quantity','createdAt','updatedAt']);
+export const CartItemScalarFieldEnumSchema = z.enum(['id','productVariantId','cartId','quantity','createdAt','updatedAt','deletedAt']);
 
 export const OrderScalarFieldEnumSchema = z.enum(['id','orderCode','clientId','subtotalAmount','discountAmount','shippingFee','totalAmount','status','notes','receiverName','receiverPhone','shippingAddress','createdAt','updatedAt','cancelledAt']);
 
@@ -382,6 +382,7 @@ export const SurveyQuestionSchema = z.object({
   position: z.number().int(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
+  deletedAt: z.coerce.date().nullable(),
 })
 
 export type SurveyQuestion = z.infer<typeof SurveyQuestionSchema>
@@ -396,6 +397,7 @@ export const SurveyOptionSchema = z.object({
   content: z.string(),
   position: z.number().int(),
   createdAt: z.coerce.date(),
+  deletedAt: z.coerce.date().nullable(),
 })
 
 export type SurveyOption = z.infer<typeof SurveyOptionSchema>
@@ -550,6 +552,7 @@ export const ProductFavoriteSchema = z.object({
   clientId: z.string(),
   productId: z.string(),
   createdAt: z.coerce.date(),
+  deletedAt: z.coerce.date().nullable(),
 })
 
 export type ProductFavorite = z.infer<typeof ProductFavoriteSchema>
@@ -652,6 +655,7 @@ export const CartItemSchema = z.object({
   quantity: z.number().int(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
+  deletedAt: z.coerce.date().nullable(),
 })
 
 export type CartItem = z.infer<typeof CartItemSchema>
@@ -1195,6 +1199,7 @@ export const SurveyQuestionSelectSchema: z.ZodType<Prisma.SurveyQuestionSelect> 
   position: z.boolean().optional(),
   createdAt: z.boolean().optional(),
   updatedAt: z.boolean().optional(),
+  deletedAt: z.boolean().optional(),
   survey: z.union([z.boolean(),z.lazy(() => SurveyArgsSchema)]).optional(),
   options: z.union([z.boolean(),z.lazy(() => SurveyOptionFindManyArgsSchema)]).optional(),
   answers: z.union([z.boolean(),z.lazy(() => SurveyAnswerFindManyArgsSchema)]).optional(),
@@ -1229,6 +1234,7 @@ export const SurveyOptionSelectSchema: z.ZodType<Prisma.SurveyOptionSelect> = z.
   content: z.boolean().optional(),
   position: z.boolean().optional(),
   createdAt: z.boolean().optional(),
+  deletedAt: z.boolean().optional(),
   question: z.union([z.boolean(),z.lazy(() => SurveyQuestionArgsSchema)]).optional(),
   answers: z.union([z.boolean(),z.lazy(() => SurveyAnswerFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => SurveyOptionCountOutputTypeArgsSchema)]).optional(),
@@ -1523,6 +1529,7 @@ export const ProductFavoriteSelectSchema: z.ZodType<Prisma.ProductFavoriteSelect
   clientId: z.boolean().optional(),
   productId: z.boolean().optional(),
   createdAt: z.boolean().optional(),
+  deletedAt: z.boolean().optional(),
   client: z.union([z.boolean(),z.lazy(() => ClientArgsSchema)]).optional(),
   product: z.union([z.boolean(),z.lazy(() => ProductArgsSchema)]).optional(),
 }).strict()
@@ -1712,6 +1719,7 @@ export const CartItemSelectSchema: z.ZodType<Prisma.CartItemSelect> = z.object({
   quantity: z.boolean().optional(),
   createdAt: z.boolean().optional(),
   updatedAt: z.boolean().optional(),
+  deletedAt: z.boolean().optional(),
   productVariant: z.union([z.boolean(),z.lazy(() => ProductVariantArgsSchema)]).optional(),
   cart: z.union([z.boolean(),z.lazy(() => CartArgsSchema)]).optional(),
 }).strict()
@@ -2827,6 +2835,7 @@ export const SurveyQuestionWhereInputSchema: z.ZodType<Prisma.SurveyQuestionWher
   position: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   survey: z.union([ z.lazy(() => SurveyScalarRelationFilterSchema), z.lazy(() => SurveyWhereInputSchema) ]).optional(),
   options: z.lazy(() => SurveyOptionListRelationFilterSchema).optional(),
   answers: z.lazy(() => SurveyAnswerListRelationFilterSchema).optional(),
@@ -2841,6 +2850,7 @@ export const SurveyQuestionOrderByWithRelationInputSchema: z.ZodType<Prisma.Surv
   position: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   survey: z.lazy(() => SurveyOrderByWithRelationInputSchema).optional(),
   options: z.lazy(() => SurveyOptionOrderByRelationAggregateInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerOrderByRelationAggregateInputSchema).optional(),
@@ -2871,6 +2881,7 @@ export const SurveyQuestionWhereUniqueInputSchema: z.ZodType<Prisma.SurveyQuesti
   position: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   survey: z.union([ z.lazy(() => SurveyScalarRelationFilterSchema), z.lazy(() => SurveyWhereInputSchema) ]).optional(),
   options: z.lazy(() => SurveyOptionListRelationFilterSchema).optional(),
   answers: z.lazy(() => SurveyAnswerListRelationFilterSchema).optional(),
@@ -2885,6 +2896,7 @@ export const SurveyQuestionOrderByWithAggregationInputSchema: z.ZodType<Prisma.S
   position: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => SurveyQuestionCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => SurveyQuestionAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => SurveyQuestionMaxOrderByAggregateInputSchema).optional(),
@@ -2904,6 +2916,7 @@ export const SurveyQuestionScalarWhereWithAggregatesInputSchema: z.ZodType<Prism
   position: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const SurveyOptionWhereInputSchema: z.ZodType<Prisma.SurveyOptionWhereInput> = z.strictObject({
@@ -2915,6 +2928,7 @@ export const SurveyOptionWhereInputSchema: z.ZodType<Prisma.SurveyOptionWhereInp
   content: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   position: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   question: z.union([ z.lazy(() => SurveyQuestionScalarRelationFilterSchema), z.lazy(() => SurveyQuestionWhereInputSchema) ]).optional(),
   answers: z.lazy(() => SurveyAnswerListRelationFilterSchema).optional(),
 });
@@ -2925,6 +2939,7 @@ export const SurveyOptionOrderByWithRelationInputSchema: z.ZodType<Prisma.Survey
   content: z.lazy(() => SortOrderSchema).optional(),
   position: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   question: z.lazy(() => SurveyQuestionOrderByWithRelationInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerOrderByRelationAggregateInputSchema).optional(),
 });
@@ -2951,6 +2966,7 @@ export const SurveyOptionWhereUniqueInputSchema: z.ZodType<Prisma.SurveyOptionWh
   content: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   position: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   question: z.union([ z.lazy(() => SurveyQuestionScalarRelationFilterSchema), z.lazy(() => SurveyQuestionWhereInputSchema) ]).optional(),
   answers: z.lazy(() => SurveyAnswerListRelationFilterSchema).optional(),
 }));
@@ -2961,6 +2977,7 @@ export const SurveyOptionOrderByWithAggregationInputSchema: z.ZodType<Prisma.Sur
   content: z.lazy(() => SortOrderSchema).optional(),
   position: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => SurveyOptionCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => SurveyOptionAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => SurveyOptionMaxOrderByAggregateInputSchema).optional(),
@@ -2977,6 +2994,7 @@ export const SurveyOptionScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.
   content: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   position: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const SurveyResponseWhereInputSchema: z.ZodType<Prisma.SurveyResponseWhereInput> = z.strictObject({
@@ -3780,6 +3798,7 @@ export const ProductFavoriteWhereInputSchema: z.ZodType<Prisma.ProductFavoriteWh
   clientId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   productId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   client: z.union([ z.lazy(() => ClientScalarRelationFilterSchema), z.lazy(() => ClientWhereInputSchema) ]).optional(),
   product: z.union([ z.lazy(() => ProductScalarRelationFilterSchema), z.lazy(() => ProductWhereInputSchema) ]).optional(),
 });
@@ -3789,6 +3808,7 @@ export const ProductFavoriteOrderByWithRelationInputSchema: z.ZodType<Prisma.Pro
   clientId: z.lazy(() => SortOrderSchema).optional(),
   productId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   client: z.lazy(() => ClientOrderByWithRelationInputSchema).optional(),
   product: z.lazy(() => ProductOrderByWithRelationInputSchema).optional(),
 });
@@ -3814,6 +3834,7 @@ export const ProductFavoriteWhereUniqueInputSchema: z.ZodType<Prisma.ProductFavo
   clientId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   productId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   client: z.union([ z.lazy(() => ClientScalarRelationFilterSchema), z.lazy(() => ClientWhereInputSchema) ]).optional(),
   product: z.union([ z.lazy(() => ProductScalarRelationFilterSchema), z.lazy(() => ProductWhereInputSchema) ]).optional(),
 }));
@@ -3823,6 +3844,7 @@ export const ProductFavoriteOrderByWithAggregationInputSchema: z.ZodType<Prisma.
   clientId: z.lazy(() => SortOrderSchema).optional(),
   productId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => ProductFavoriteCountOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => ProductFavoriteMaxOrderByAggregateInputSchema).optional(),
   _min: z.lazy(() => ProductFavoriteMinOrderByAggregateInputSchema).optional(),
@@ -3836,6 +3858,7 @@ export const ProductFavoriteScalarWhereWithAggregatesInputSchema: z.ZodType<Pris
   clientId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
   productId: z.union([ z.lazy(() => UuidWithAggregatesFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const ClientAddressWhereInputSchema: z.ZodType<Prisma.ClientAddressWhereInput> = z.strictObject({
@@ -4283,6 +4306,7 @@ export const CartItemWhereInputSchema: z.ZodType<Prisma.CartItemWhereInput> = z.
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   productVariant: z.union([ z.lazy(() => ProductVariantScalarRelationFilterSchema), z.lazy(() => ProductVariantWhereInputSchema) ]).optional(),
   cart: z.union([ z.lazy(() => CartScalarRelationFilterSchema), z.lazy(() => CartWhereInputSchema) ]).optional(),
 });
@@ -4294,6 +4318,7 @@ export const CartItemOrderByWithRelationInputSchema: z.ZodType<Prisma.CartItemOr
   quantity: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   productVariant: z.lazy(() => ProductVariantOrderByWithRelationInputSchema).optional(),
   cart: z.lazy(() => CartOrderByWithRelationInputSchema).optional(),
 });
@@ -4321,6 +4346,7 @@ export const CartItemWhereUniqueInputSchema: z.ZodType<Prisma.CartItemWhereUniqu
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   productVariant: z.union([ z.lazy(() => ProductVariantScalarRelationFilterSchema), z.lazy(() => ProductVariantWhereInputSchema) ]).optional(),
   cart: z.union([ z.lazy(() => CartScalarRelationFilterSchema), z.lazy(() => CartWhereInputSchema) ]).optional(),
 }));
@@ -4332,6 +4358,7 @@ export const CartItemOrderByWithAggregationInputSchema: z.ZodType<Prisma.CartIte
   quantity: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   _count: z.lazy(() => CartItemCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => CartItemAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => CartItemMaxOrderByAggregateInputSchema).optional(),
@@ -4349,6 +4376,7 @@ export const CartItemScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.Cart
   quantity: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const OrderWhereInputSchema: z.ZodType<Prisma.OrderWhereInput> = z.strictObject({
@@ -6292,6 +6320,7 @@ export const SurveyQuestionCreateInputSchema: z.ZodType<Prisma.SurveyQuestionCre
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   survey: z.lazy(() => SurveyCreateNestedOneWithoutQuestionsInputSchema),
   options: z.lazy(() => SurveyOptionCreateNestedManyWithoutQuestionInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerCreateNestedManyWithoutQuestionInputSchema).optional(),
@@ -6306,6 +6335,7 @@ export const SurveyQuestionUncheckedCreateInputSchema: z.ZodType<Prisma.SurveyQu
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   options: z.lazy(() => SurveyOptionUncheckedCreateNestedManyWithoutQuestionInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerUncheckedCreateNestedManyWithoutQuestionInputSchema).optional(),
 });
@@ -6318,6 +6348,7 @@ export const SurveyQuestionUpdateInputSchema: z.ZodType<Prisma.SurveyQuestionUpd
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   survey: z.lazy(() => SurveyUpdateOneRequiredWithoutQuestionsNestedInputSchema).optional(),
   options: z.lazy(() => SurveyOptionUpdateManyWithoutQuestionNestedInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerUpdateManyWithoutQuestionNestedInputSchema).optional(),
@@ -6332,6 +6363,7 @@ export const SurveyQuestionUncheckedUpdateInputSchema: z.ZodType<Prisma.SurveyQu
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   options: z.lazy(() => SurveyOptionUncheckedUpdateManyWithoutQuestionNestedInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerUncheckedUpdateManyWithoutQuestionNestedInputSchema).optional(),
 });
@@ -6345,6 +6377,7 @@ export const SurveyQuestionCreateManyInputSchema: z.ZodType<Prisma.SurveyQuestio
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const SurveyQuestionUpdateManyMutationInputSchema: z.ZodType<Prisma.SurveyQuestionUpdateManyMutationInput> = z.strictObject({
@@ -6355,6 +6388,7 @@ export const SurveyQuestionUpdateManyMutationInputSchema: z.ZodType<Prisma.Surve
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const SurveyQuestionUncheckedUpdateManyInputSchema: z.ZodType<Prisma.SurveyQuestionUncheckedUpdateManyInput> = z.strictObject({
@@ -6366,6 +6400,7 @@ export const SurveyQuestionUncheckedUpdateManyInputSchema: z.ZodType<Prisma.Surv
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const SurveyOptionCreateInputSchema: z.ZodType<Prisma.SurveyOptionCreateInput> = z.strictObject({
@@ -6373,6 +6408,7 @@ export const SurveyOptionCreateInputSchema: z.ZodType<Prisma.SurveyOptionCreateI
   content: z.string(),
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   question: z.lazy(() => SurveyQuestionCreateNestedOneWithoutOptionsInputSchema),
   answers: z.lazy(() => SurveyAnswerCreateNestedManyWithoutOptionInputSchema).optional(),
 });
@@ -6383,6 +6419,7 @@ export const SurveyOptionUncheckedCreateInputSchema: z.ZodType<Prisma.SurveyOpti
   content: z.string(),
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   answers: z.lazy(() => SurveyAnswerUncheckedCreateNestedManyWithoutOptionInputSchema).optional(),
 });
 
@@ -6391,6 +6428,7 @@ export const SurveyOptionUpdateInputSchema: z.ZodType<Prisma.SurveyOptionUpdateI
   content: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   question: z.lazy(() => SurveyQuestionUpdateOneRequiredWithoutOptionsNestedInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerUpdateManyWithoutOptionNestedInputSchema).optional(),
 });
@@ -6401,6 +6439,7 @@ export const SurveyOptionUncheckedUpdateInputSchema: z.ZodType<Prisma.SurveyOpti
   content: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   answers: z.lazy(() => SurveyAnswerUncheckedUpdateManyWithoutOptionNestedInputSchema).optional(),
 });
 
@@ -6410,6 +6449,7 @@ export const SurveyOptionCreateManyInputSchema: z.ZodType<Prisma.SurveyOptionCre
   content: z.string(),
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const SurveyOptionUpdateManyMutationInputSchema: z.ZodType<Prisma.SurveyOptionUpdateManyMutationInput> = z.strictObject({
@@ -6417,6 +6457,7 @@ export const SurveyOptionUpdateManyMutationInputSchema: z.ZodType<Prisma.SurveyO
   content: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const SurveyOptionUncheckedUpdateManyInputSchema: z.ZodType<Prisma.SurveyOptionUncheckedUpdateManyInput> = z.strictObject({
@@ -6425,6 +6466,7 @@ export const SurveyOptionUncheckedUpdateManyInputSchema: z.ZodType<Prisma.Survey
   content: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const SurveyResponseCreateInputSchema: z.ZodType<Prisma.SurveyResponseCreateInput> = z.strictObject({
@@ -7137,6 +7179,7 @@ export const ProductUncheckedUpdateManyInputSchema: z.ZodType<Prisma.ProductUnch
 export const ProductFavoriteCreateInputSchema: z.ZodType<Prisma.ProductFavoriteCreateInput> = z.strictObject({
   id: z.uuid().optional(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   client: z.lazy(() => ClientCreateNestedOneWithoutProductFavoritesInputSchema),
   product: z.lazy(() => ProductCreateNestedOneWithoutFavoritesInputSchema),
 });
@@ -7146,11 +7189,13 @@ export const ProductFavoriteUncheckedCreateInputSchema: z.ZodType<Prisma.Product
   clientId: z.string(),
   productId: z.string(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ProductFavoriteUpdateInputSchema: z.ZodType<Prisma.ProductFavoriteUpdateInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   client: z.lazy(() => ClientUpdateOneRequiredWithoutProductFavoritesNestedInputSchema).optional(),
   product: z.lazy(() => ProductUpdateOneRequiredWithoutFavoritesNestedInputSchema).optional(),
 });
@@ -7160,6 +7205,7 @@ export const ProductFavoriteUncheckedUpdateInputSchema: z.ZodType<Prisma.Product
   clientId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ProductFavoriteCreateManyInputSchema: z.ZodType<Prisma.ProductFavoriteCreateManyInput> = z.strictObject({
@@ -7167,11 +7213,13 @@ export const ProductFavoriteCreateManyInputSchema: z.ZodType<Prisma.ProductFavor
   clientId: z.string(),
   productId: z.string(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ProductFavoriteUpdateManyMutationInputSchema: z.ZodType<Prisma.ProductFavoriteUpdateManyMutationInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ProductFavoriteUncheckedUpdateManyInputSchema: z.ZodType<Prisma.ProductFavoriteUncheckedUpdateManyInput> = z.strictObject({
@@ -7179,6 +7227,7 @@ export const ProductFavoriteUncheckedUpdateManyInputSchema: z.ZodType<Prisma.Pro
   clientId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ClientAddressCreateInputSchema: z.ZodType<Prisma.ClientAddressCreateInput> = z.strictObject({
@@ -7594,6 +7643,7 @@ export const CartItemCreateInputSchema: z.ZodType<Prisma.CartItemCreateInput> = 
   quantity: z.number().int().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   productVariant: z.lazy(() => ProductVariantCreateNestedOneWithoutCartItemsInputSchema),
   cart: z.lazy(() => CartCreateNestedOneWithoutItemsInputSchema),
 });
@@ -7605,6 +7655,7 @@ export const CartItemUncheckedCreateInputSchema: z.ZodType<Prisma.CartItemUnchec
   quantity: z.number().int().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const CartItemUpdateInputSchema: z.ZodType<Prisma.CartItemUpdateInput> = z.strictObject({
@@ -7612,6 +7663,7 @@ export const CartItemUpdateInputSchema: z.ZodType<Prisma.CartItemUpdateInput> = 
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   productVariant: z.lazy(() => ProductVariantUpdateOneRequiredWithoutCartItemsNestedInputSchema).optional(),
   cart: z.lazy(() => CartUpdateOneRequiredWithoutItemsNestedInputSchema).optional(),
 });
@@ -7623,6 +7675,7 @@ export const CartItemUncheckedUpdateInputSchema: z.ZodType<Prisma.CartItemUnchec
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const CartItemCreateManyInputSchema: z.ZodType<Prisma.CartItemCreateManyInput> = z.strictObject({
@@ -7632,6 +7685,7 @@ export const CartItemCreateManyInputSchema: z.ZodType<Prisma.CartItemCreateManyI
   quantity: z.number().int().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const CartItemUpdateManyMutationInputSchema: z.ZodType<Prisma.CartItemUpdateManyMutationInput> = z.strictObject({
@@ -7639,6 +7693,7 @@ export const CartItemUpdateManyMutationInputSchema: z.ZodType<Prisma.CartItemUpd
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const CartItemUncheckedUpdateManyInputSchema: z.ZodType<Prisma.CartItemUncheckedUpdateManyInput> = z.strictObject({
@@ -7648,6 +7703,7 @@ export const CartItemUncheckedUpdateManyInputSchema: z.ZodType<Prisma.CartItemUn
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const OrderCreateInputSchema: z.ZodType<Prisma.OrderCreateInput> = z.strictObject({
@@ -9719,6 +9775,7 @@ export const SurveyQuestionCountOrderByAggregateInputSchema: z.ZodType<Prisma.Su
   position: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const SurveyQuestionAvgOrderByAggregateInputSchema: z.ZodType<Prisma.SurveyQuestionAvgOrderByAggregateInput> = z.strictObject({
@@ -9734,6 +9791,7 @@ export const SurveyQuestionMaxOrderByAggregateInputSchema: z.ZodType<Prisma.Surv
   position: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const SurveyQuestionMinOrderByAggregateInputSchema: z.ZodType<Prisma.SurveyQuestionMinOrderByAggregateInput> = z.strictObject({
@@ -9745,6 +9803,7 @@ export const SurveyQuestionMinOrderByAggregateInputSchema: z.ZodType<Prisma.Surv
   position: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const SurveyQuestionSumOrderByAggregateInputSchema: z.ZodType<Prisma.SurveyQuestionSumOrderByAggregateInput> = z.strictObject({
@@ -9777,6 +9836,7 @@ export const SurveyOptionCountOrderByAggregateInputSchema: z.ZodType<Prisma.Surv
   content: z.lazy(() => SortOrderSchema).optional(),
   position: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const SurveyOptionAvgOrderByAggregateInputSchema: z.ZodType<Prisma.SurveyOptionAvgOrderByAggregateInput> = z.strictObject({
@@ -9789,6 +9849,7 @@ export const SurveyOptionMaxOrderByAggregateInputSchema: z.ZodType<Prisma.Survey
   content: z.lazy(() => SortOrderSchema).optional(),
   position: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const SurveyOptionMinOrderByAggregateInputSchema: z.ZodType<Prisma.SurveyOptionMinOrderByAggregateInput> = z.strictObject({
@@ -9797,6 +9858,7 @@ export const SurveyOptionMinOrderByAggregateInputSchema: z.ZodType<Prisma.Survey
   content: z.lazy(() => SortOrderSchema).optional(),
   position: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const SurveyOptionSumOrderByAggregateInputSchema: z.ZodType<Prisma.SurveyOptionSumOrderByAggregateInput> = z.strictObject({
@@ -10370,6 +10432,7 @@ export const ProductFavoriteCountOrderByAggregateInputSchema: z.ZodType<Prisma.P
   clientId: z.lazy(() => SortOrderSchema).optional(),
   productId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const ProductFavoriteMaxOrderByAggregateInputSchema: z.ZodType<Prisma.ProductFavoriteMaxOrderByAggregateInput> = z.strictObject({
@@ -10377,6 +10440,7 @@ export const ProductFavoriteMaxOrderByAggregateInputSchema: z.ZodType<Prisma.Pro
   clientId: z.lazy(() => SortOrderSchema).optional(),
   productId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const ProductFavoriteMinOrderByAggregateInputSchema: z.ZodType<Prisma.ProductFavoriteMinOrderByAggregateInput> = z.strictObject({
@@ -10384,6 +10448,7 @@ export const ProductFavoriteMinOrderByAggregateInputSchema: z.ZodType<Prisma.Pro
   clientId: z.lazy(() => SortOrderSchema).optional(),
   productId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const ClientAddressCountOrderByAggregateInputSchema: z.ZodType<Prisma.ClientAddressCountOrderByAggregateInput> = z.strictObject({
@@ -10653,6 +10718,7 @@ export const CartItemCountOrderByAggregateInputSchema: z.ZodType<Prisma.CartItem
   quantity: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const CartItemAvgOrderByAggregateInputSchema: z.ZodType<Prisma.CartItemAvgOrderByAggregateInput> = z.strictObject({
@@ -10666,6 +10732,7 @@ export const CartItemMaxOrderByAggregateInputSchema: z.ZodType<Prisma.CartItemMa
   quantity: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const CartItemMinOrderByAggregateInputSchema: z.ZodType<Prisma.CartItemMinOrderByAggregateInput> = z.strictObject({
@@ -10675,6 +10742,7 @@ export const CartItemMinOrderByAggregateInputSchema: z.ZodType<Prisma.CartItemMi
   quantity: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
+  deletedAt: z.lazy(() => SortOrderSchema).optional(),
 });
 
 export const CartItemSumOrderByAggregateInputSchema: z.ZodType<Prisma.CartItemSumOrderByAggregateInput> = z.strictObject({
@@ -16332,6 +16400,7 @@ export const NotificationCreateManyClientInputEnvelopeSchema: z.ZodType<Prisma.N
 export const ProductFavoriteCreateWithoutClientInputSchema: z.ZodType<Prisma.ProductFavoriteCreateWithoutClientInput> = z.strictObject({
   id: z.uuid().optional(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   product: z.lazy(() => ProductCreateNestedOneWithoutFavoritesInputSchema),
 });
 
@@ -16339,6 +16408,7 @@ export const ProductFavoriteUncheckedCreateWithoutClientInputSchema: z.ZodType<P
   id: z.uuid().optional(),
   productId: z.string(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ProductFavoriteCreateOrConnectWithoutClientInputSchema: z.ZodType<Prisma.ProductFavoriteCreateOrConnectWithoutClientInput> = z.strictObject({
@@ -16611,6 +16681,7 @@ export const ProductFavoriteScalarWhereInputSchema: z.ZodType<Prisma.ProductFavo
   clientId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   productId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const ClientAddressUpsertWithWhereUniqueWithoutClientInputSchema: z.ZodType<Prisma.ClientAddressUpsertWithWhereUniqueWithoutClientInput> = z.strictObject({
@@ -17270,6 +17341,7 @@ export const SurveyQuestionCreateWithoutSurveyInputSchema: z.ZodType<Prisma.Surv
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   options: z.lazy(() => SurveyOptionCreateNestedManyWithoutQuestionInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerCreateNestedManyWithoutQuestionInputSchema).optional(),
 });
@@ -17282,6 +17354,7 @@ export const SurveyQuestionUncheckedCreateWithoutSurveyInputSchema: z.ZodType<Pr
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   options: z.lazy(() => SurveyOptionUncheckedCreateNestedManyWithoutQuestionInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerUncheckedCreateNestedManyWithoutQuestionInputSchema).optional(),
 });
@@ -17534,6 +17607,7 @@ export const SurveyQuestionScalarWhereInputSchema: z.ZodType<Prisma.SurveyQuesti
   position: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const SurveyResponseUpsertWithWhereUniqueWithoutSurveyInputSchema: z.ZodType<Prisma.SurveyResponseUpsertWithWhereUniqueWithoutSurveyInput> = z.strictObject({
@@ -17618,6 +17692,7 @@ export const SurveyOptionCreateWithoutQuestionInputSchema: z.ZodType<Prisma.Surv
   content: z.string(),
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   answers: z.lazy(() => SurveyAnswerCreateNestedManyWithoutOptionInputSchema).optional(),
 });
 
@@ -17626,6 +17701,7 @@ export const SurveyOptionUncheckedCreateWithoutQuestionInputSchema: z.ZodType<Pr
   content: z.string(),
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   answers: z.lazy(() => SurveyAnswerUncheckedCreateNestedManyWithoutOptionInputSchema).optional(),
 });
 
@@ -17743,6 +17819,7 @@ export const SurveyOptionScalarWhereInputSchema: z.ZodType<Prisma.SurveyOptionSc
   content: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   position: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const SurveyAnswerUpsertWithWhereUniqueWithoutQuestionInputSchema: z.ZodType<Prisma.SurveyAnswerUpsertWithWhereUniqueWithoutQuestionInput> = z.strictObject({
@@ -17782,6 +17859,7 @@ export const SurveyQuestionCreateWithoutOptionsInputSchema: z.ZodType<Prisma.Sur
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   survey: z.lazy(() => SurveyCreateNestedOneWithoutQuestionsInputSchema),
   answers: z.lazy(() => SurveyAnswerCreateNestedManyWithoutQuestionInputSchema).optional(),
 });
@@ -17795,6 +17873,7 @@ export const SurveyQuestionUncheckedCreateWithoutOptionsInputSchema: z.ZodType<P
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   answers: z.lazy(() => SurveyAnswerUncheckedCreateNestedManyWithoutQuestionInputSchema).optional(),
 });
 
@@ -17850,6 +17929,7 @@ export const SurveyQuestionUpdateWithoutOptionsInputSchema: z.ZodType<Prisma.Sur
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   survey: z.lazy(() => SurveyUpdateOneRequiredWithoutQuestionsNestedInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerUpdateManyWithoutQuestionNestedInputSchema).optional(),
 });
@@ -17863,6 +17943,7 @@ export const SurveyQuestionUncheckedUpdateWithoutOptionsInputSchema: z.ZodType<P
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   answers: z.lazy(() => SurveyAnswerUncheckedUpdateManyWithoutQuestionNestedInputSchema).optional(),
 });
 
@@ -18893,6 +18974,7 @@ export const SurveyQuestionCreateWithoutAnswersInputSchema: z.ZodType<Prisma.Sur
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   survey: z.lazy(() => SurveyCreateNestedOneWithoutQuestionsInputSchema),
   options: z.lazy(() => SurveyOptionCreateNestedManyWithoutQuestionInputSchema).optional(),
 });
@@ -18906,6 +18988,7 @@ export const SurveyQuestionUncheckedCreateWithoutAnswersInputSchema: z.ZodType<P
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   options: z.lazy(() => SurveyOptionUncheckedCreateNestedManyWithoutQuestionInputSchema).optional(),
 });
 
@@ -18919,6 +19002,7 @@ export const SurveyOptionCreateWithoutAnswersInputSchema: z.ZodType<Prisma.Surve
   content: z.string(),
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   question: z.lazy(() => SurveyQuestionCreateNestedOneWithoutOptionsInputSchema),
 });
 
@@ -18928,6 +19012,7 @@ export const SurveyOptionUncheckedCreateWithoutAnswersInputSchema: z.ZodType<Pri
   content: z.string(),
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const SurveyOptionCreateOrConnectWithoutAnswersInputSchema: z.ZodType<Prisma.SurveyOptionCreateOrConnectWithoutAnswersInput> = z.strictObject({
@@ -18999,6 +19084,7 @@ export const SurveyQuestionUpdateWithoutAnswersInputSchema: z.ZodType<Prisma.Sur
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   survey: z.lazy(() => SurveyUpdateOneRequiredWithoutQuestionsNestedInputSchema).optional(),
   options: z.lazy(() => SurveyOptionUpdateManyWithoutQuestionNestedInputSchema).optional(),
 });
@@ -19012,6 +19098,7 @@ export const SurveyQuestionUncheckedUpdateWithoutAnswersInputSchema: z.ZodType<P
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   options: z.lazy(() => SurveyOptionUncheckedUpdateManyWithoutQuestionNestedInputSchema).optional(),
 });
 
@@ -19031,6 +19118,7 @@ export const SurveyOptionUpdateWithoutAnswersInputSchema: z.ZodType<Prisma.Surve
   content: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   question: z.lazy(() => SurveyQuestionUpdateOneRequiredWithoutOptionsNestedInputSchema).optional(),
 });
 
@@ -19040,6 +19128,7 @@ export const SurveyOptionUncheckedUpdateWithoutAnswersInputSchema: z.ZodType<Pri
   content: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const AdminCreateWithoutVouchersInputSchema: z.ZodType<Prisma.AdminCreateWithoutVouchersInput> = z.strictObject({
@@ -19884,6 +19973,7 @@ export const VoucherDetailCreateManyProductInputEnvelopeSchema: z.ZodType<Prisma
 export const ProductFavoriteCreateWithoutProductInputSchema: z.ZodType<Prisma.ProductFavoriteCreateWithoutProductInput> = z.strictObject({
   id: z.uuid().optional(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   client: z.lazy(() => ClientCreateNestedOneWithoutProductFavoritesInputSchema),
 });
 
@@ -19891,6 +19981,7 @@ export const ProductFavoriteUncheckedCreateWithoutProductInputSchema: z.ZodType<
   id: z.uuid().optional(),
   clientId: z.string(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ProductFavoriteCreateOrConnectWithoutProductInputSchema: z.ZodType<Prisma.ProductFavoriteCreateOrConnectWithoutProductInput> = z.strictObject({
@@ -20554,6 +20645,7 @@ export const CartItemCreateWithoutProductVariantInputSchema: z.ZodType<Prisma.Ca
   quantity: z.number().int().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   cart: z.lazy(() => CartCreateNestedOneWithoutItemsInputSchema),
 });
 
@@ -20563,6 +20655,7 @@ export const CartItemUncheckedCreateWithoutProductVariantInputSchema: z.ZodType<
   quantity: z.number().int().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const CartItemCreateOrConnectWithoutProductVariantInputSchema: z.ZodType<Prisma.CartItemCreateOrConnectWithoutProductVariantInput> = z.strictObject({
@@ -20668,6 +20761,7 @@ export const CartItemScalarWhereInputSchema: z.ZodType<Prisma.CartItemScalarWher
   quantity: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  deletedAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
 });
 
 export const OrderDetailUpsertWithWhereUniqueWithoutProductVariantInputSchema: z.ZodType<Prisma.OrderDetailUpsertWithWhereUniqueWithoutProductVariantInput> = z.strictObject({
@@ -21014,6 +21108,7 @@ export const CartItemCreateWithoutCartInputSchema: z.ZodType<Prisma.CartItemCrea
   quantity: z.number().int().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
   productVariant: z.lazy(() => ProductVariantCreateNestedOneWithoutCartItemsInputSchema),
 });
 
@@ -21023,6 +21118,7 @@ export const CartItemUncheckedCreateWithoutCartInputSchema: z.ZodType<Prisma.Car
   quantity: z.number().int().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const CartItemCreateOrConnectWithoutCartInputSchema: z.ZodType<Prisma.CartItemCreateOrConnectWithoutCartInput> = z.strictObject({
@@ -24927,6 +25023,7 @@ export const ProductFavoriteCreateManyClientInputSchema: z.ZodType<Prisma.Produc
   id: z.uuid().optional(),
   productId: z.string(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ClientAddressCreateManyClientInputSchema: z.ZodType<Prisma.ClientAddressCreateManyClientInput> = z.strictObject({
@@ -25084,6 +25181,7 @@ export const NotificationUncheckedUpdateManyWithoutClientInputSchema: z.ZodType<
 export const ProductFavoriteUpdateWithoutClientInputSchema: z.ZodType<Prisma.ProductFavoriteUpdateWithoutClientInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   product: z.lazy(() => ProductUpdateOneRequiredWithoutFavoritesNestedInputSchema).optional(),
 });
 
@@ -25091,12 +25189,14 @@ export const ProductFavoriteUncheckedUpdateWithoutClientInputSchema: z.ZodType<P
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ProductFavoriteUncheckedUpdateManyWithoutClientInputSchema: z.ZodType<Prisma.ProductFavoriteUncheckedUpdateManyWithoutClientInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   productId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ClientAddressUpdateWithoutClientInputSchema: z.ZodType<Prisma.ClientAddressUpdateWithoutClientInput> = z.strictObject({
@@ -25670,6 +25770,7 @@ export const SurveyQuestionCreateManySurveyInputSchema: z.ZodType<Prisma.SurveyQ
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const SurveyResponseCreateManySurveyInputSchema: z.ZodType<Prisma.SurveyResponseCreateManySurveyInput> = z.strictObject({
@@ -25711,6 +25812,7 @@ export const SurveyQuestionUpdateWithoutSurveyInputSchema: z.ZodType<Prisma.Surv
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   options: z.lazy(() => SurveyOptionUpdateManyWithoutQuestionNestedInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerUpdateManyWithoutQuestionNestedInputSchema).optional(),
 });
@@ -25723,6 +25825,7 @@ export const SurveyQuestionUncheckedUpdateWithoutSurveyInputSchema: z.ZodType<Pr
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   options: z.lazy(() => SurveyOptionUncheckedUpdateManyWithoutQuestionNestedInputSchema).optional(),
   answers: z.lazy(() => SurveyAnswerUncheckedUpdateManyWithoutQuestionNestedInputSchema).optional(),
 });
@@ -25735,6 +25838,7 @@ export const SurveyQuestionUncheckedUpdateManyWithoutSurveyInputSchema: z.ZodTyp
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const SurveyResponseUpdateWithoutSurveyInputSchema: z.ZodType<Prisma.SurveyResponseUpdateWithoutSurveyInput> = z.strictObject({
@@ -25839,6 +25943,7 @@ export const SurveyOptionCreateManyQuestionInputSchema: z.ZodType<Prisma.SurveyO
   content: z.string(),
   position: z.number().int(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const SurveyAnswerCreateManyQuestionInputSchema: z.ZodType<Prisma.SurveyAnswerCreateManyQuestionInput> = z.strictObject({
@@ -25855,6 +25960,7 @@ export const SurveyOptionUpdateWithoutQuestionInputSchema: z.ZodType<Prisma.Surv
   content: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   answers: z.lazy(() => SurveyAnswerUpdateManyWithoutOptionNestedInputSchema).optional(),
 });
 
@@ -25863,6 +25969,7 @@ export const SurveyOptionUncheckedUpdateWithoutQuestionInputSchema: z.ZodType<Pr
   content: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   answers: z.lazy(() => SurveyAnswerUncheckedUpdateManyWithoutOptionNestedInputSchema).optional(),
 });
 
@@ -25871,6 +25978,7 @@ export const SurveyOptionUncheckedUpdateManyWithoutQuestionInputSchema: z.ZodTyp
   content: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   position: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const SurveyAnswerUpdateWithoutQuestionInputSchema: z.ZodType<Prisma.SurveyAnswerUpdateWithoutQuestionInput> = z.strictObject({
@@ -26107,6 +26215,7 @@ export const ProductFavoriteCreateManyProductInputSchema: z.ZodType<Prisma.Produ
   id: z.uuid().optional(),
   clientId: z.string(),
   createdAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const ProductColorUpdateWithoutProductInputSchema: z.ZodType<Prisma.ProductColorUpdateWithoutProductInput> = z.strictObject({
@@ -26207,6 +26316,7 @@ export const VoucherDetailUncheckedUpdateManyWithoutProductInputSchema: z.ZodTyp
 export const ProductFavoriteUpdateWithoutProductInputSchema: z.ZodType<Prisma.ProductFavoriteUpdateWithoutProductInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   client: z.lazy(() => ClientUpdateOneRequiredWithoutProductFavoritesNestedInputSchema).optional(),
 });
 
@@ -26214,12 +26324,14 @@ export const ProductFavoriteUncheckedUpdateWithoutProductInputSchema: z.ZodType<
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   clientId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ProductFavoriteUncheckedUpdateManyWithoutProductInputSchema: z.ZodType<Prisma.ProductFavoriteUncheckedUpdateManyWithoutProductInput> = z.strictObject({
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   clientId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const ProductVariantCreateManyProductColorInputSchema: z.ZodType<Prisma.ProductVariantCreateManyProductColorInput> = z.strictObject({
@@ -26272,6 +26384,7 @@ export const CartItemCreateManyProductVariantInputSchema: z.ZodType<Prisma.CartI
   quantity: z.number().int().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const OrderDetailCreateManyProductVariantInputSchema: z.ZodType<Prisma.OrderDetailCreateManyProductVariantInput> = z.strictObject({
@@ -26291,6 +26404,7 @@ export const CartItemUpdateWithoutProductVariantInputSchema: z.ZodType<Prisma.Ca
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   cart: z.lazy(() => CartUpdateOneRequiredWithoutItemsNestedInputSchema).optional(),
 });
 
@@ -26300,6 +26414,7 @@ export const CartItemUncheckedUpdateWithoutProductVariantInputSchema: z.ZodType<
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const CartItemUncheckedUpdateManyWithoutProductVariantInputSchema: z.ZodType<Prisma.CartItemUncheckedUpdateManyWithoutProductVariantInput> = z.strictObject({
@@ -26308,6 +26423,7 @@ export const CartItemUncheckedUpdateManyWithoutProductVariantInputSchema: z.ZodT
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const OrderDetailUpdateWithoutProductVariantInputSchema: z.ZodType<Prisma.OrderDetailUpdateWithoutProductVariantInput> = z.strictObject({
@@ -26354,6 +26470,7 @@ export const CartItemCreateManyCartInputSchema: z.ZodType<Prisma.CartItemCreateM
   quantity: z.number().int().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
 });
 
 export const CartItemUpdateWithoutCartInputSchema: z.ZodType<Prisma.CartItemUpdateWithoutCartInput> = z.strictObject({
@@ -26361,6 +26478,7 @@ export const CartItemUpdateWithoutCartInputSchema: z.ZodType<Prisma.CartItemUpda
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   productVariant: z.lazy(() => ProductVariantUpdateOneRequiredWithoutCartItemsNestedInputSchema).optional(),
 });
 
@@ -26370,6 +26488,7 @@ export const CartItemUncheckedUpdateWithoutCartInputSchema: z.ZodType<Prisma.Car
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const CartItemUncheckedUpdateManyWithoutCartInputSchema: z.ZodType<Prisma.CartItemUncheckedUpdateManyWithoutCartInput> = z.strictObject({
@@ -26378,6 +26497,7 @@ export const CartItemUncheckedUpdateManyWithoutCartInputSchema: z.ZodType<Prisma
   quantity: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
 });
 
 export const OrderDetailCreateManyOrderInputSchema: z.ZodType<Prisma.OrderDetailCreateManyOrderInput> = z.strictObject({

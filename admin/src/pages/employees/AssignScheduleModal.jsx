@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Button, Input } from '../../components/ui';
-import { Clock, Calendar, AlertCircle, CheckCircle, Sparkles } from 'lucide-react';
+import { Clock, Calendar, AlertCircle, Sparkles } from 'lucide-react';
 import { employeesApi } from '../../api';
 
 const SHIFT_PRESETS = [
