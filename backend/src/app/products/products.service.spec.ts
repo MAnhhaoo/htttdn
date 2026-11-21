@@ -143,16 +143,10 @@ describe('ProductService', () => {
   });
 
   it('keeps sales from historical variants in the best-seller total', async () => {
-    const historicalVariantId = '77777777-7777-4777-8777-777777777777';
     const db = {
       extended: {
-        orderDetail: {
-          groupBy: jest.fn().mockResolvedValue([
-            { productVariantId: historicalVariantId, _sum: { quantity: 5 } },
-          ]),
-        },
         $queryRaw: jest.fn().mockResolvedValue([
-          { id: historicalVariantId, productId: product.id },
+          { productId: product.id, soldQty: 5 },
         ]),
         product: { findMany: jest.fn().mockResolvedValue([product]) },
       },

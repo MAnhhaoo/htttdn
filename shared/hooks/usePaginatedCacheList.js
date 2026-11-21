@@ -25,7 +25,10 @@ export function usePaginatedCacheList({
   const [reusedFromCache, setReusedFromCache] = useState(false);
 
   const defaultListCacheRef = useRef(null);
+  const requestIdRef = useRef(0);
+  const prevFilterKeyRef = useRef(null);
   const extraParamsJson = JSON.stringify(extraParams);
+  const filterKey = `${debouncedSearch}|${extraParamsJson}`;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -34,14 +37,11 @@ export function usePaginatedCacheList({
     return () => clearTimeout(timer);
   }, [search, debounceMs]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedSearch, extraParamsJson]);
-
   const fetchList = useCallback(
-    async (forceRefresh = false) => {
+    async (forceRefresh = false, pageOverride = null) => {
+      const targetPage = pageOverride ?? page;
       const isDefaultQuery =
-        page === 1 && !debouncedSearch && Boolean(isDefaultExtraParams);
+        targetPage === 1 && !debouncedSearch && Boolean(isDefaultExtraParams);
 
       if (!forceRefresh && isDefaultQuery && defaultListCacheRef.current) {
         const cached = defaultListCacheRef.current;
@@ -54,17 +54,19 @@ export function usePaginatedCacheList({
         return;
       }
 
+      const currentReqId = ++requestIdRef.current;
       setLoading(true);
       setReusedFromCache(false);
       try {
         const parsedExtra = JSON.parse(extraParamsJson);
         const params = {
-          page,
+          page: targetPage,
           itemPerPage: itemsPerPage,
           ...(debouncedSearch ? { search: debouncedSearch } : {}),
           ...parsedExtra,
         };
         const res = await fetcher(params);
+        if (currentReqId !== requestIdRef.current) return;
         const data = res?.data?.data ?? res?.data ?? res ?? {};
         const nextList = Array.isArray(data.list)
           ? data.list
@@ -89,17 +91,28 @@ export function usePaginatedCacheList({
           };
         }
       } catch (err) {
-        console.error('Error fetching paginated list:', err);
+        if (currentReqId === requestIdRef.current) {
+          console.error('Error fetching paginated list:', err);
+        }
       } finally {
-        setLoading(false);
+        if (currentReqId === requestIdRef.current) {
+          setLoading(false);
+        }
       }
     },
     [page, itemsPerPage, debouncedSearch, isDefaultExtraParams, extraParamsJson, fetcher],
   );
 
   useEffect(() => {
+    const filterChanged =
+      prevFilterKeyRef.current !== null && prevFilterKeyRef.current !== filterKey;
+    prevFilterKeyRef.current = filterKey;
+    if (filterChanged && page !== 1) {
+      setPage(1);
+      return;
+    }
     fetchList(false);
-  }, [fetchList]);
+  }, [fetchList, filterKey, page]);
 
   useEffect(() => {
     if (!realtimeEvent) return;

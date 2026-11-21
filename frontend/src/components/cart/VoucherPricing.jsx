@@ -108,14 +108,21 @@ export function VendorVoucherSelector({
             setDraft(event.target.value.toUpperCase());
             setError('');
           }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              handleApplyVendor();
+            }
+          }}
           className="min-w-0 flex-1 rounded-lg border border-light-border dark:border-dark-border px-2.5 py-1.5 text-xs bg-white dark:bg-dark-card text-light-text dark:text-dark-text focus:ring-1 focus:ring-primary focus:border-primary outline-none"
         />
         <button
           type="button"
+          disabled={pricing.loading}
           className="px-3 py-1.5 bg-primary hover:bg-primary-dark text-white font-semibold text-xs rounded-lg transition cursor-pointer shadow-xs disabled:opacity-50"
           onClick={handleApplyVendor}
         >
-          Áp dụng
+          {pricing.loading ? '...' : 'Áp dụng'}
         </button>
       </div>
 
@@ -141,19 +148,24 @@ export function VendorVoucherSelector({
         </div>
       )}
 
-      {groupOffers.length > 0 && (
+      {groupOffers.length > 0 ? (
         <div className="space-y-1 pt-1">
           <span className="text-[11px] font-medium text-light-muted dark:text-dark-muted block">
-            Mã shop có sẵn:
+            Mã shop có sẵn (bấm để chọn/bỏ):
           </span>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1.5">
             {groupOffers.map((offer) => {
               const isSelected = vendorCodes.includes(offer.code);
+              const discountText =
+                offer.discountType === 'percentage'
+                  ? `-${Number(offer.discountValue)}%`
+                  : `-${formatPrice(offer.discountValue)}`;
               return (
                 <button
                   key={offer.id}
                   type="button"
-                  className={`rounded border px-2 py-0.5 text-[11px] font-medium cursor-pointer transition ${
+                  aria-label={`Dùng mã ${offer.code}`}
+                  className={`rounded-md border px-2 py-1 text-[11px] font-medium cursor-pointer transition text-left ${
                     isSelected
                       ? 'bg-primary text-white border-primary'
                       : 'border-primary/30 text-primary bg-white/80 dark:bg-dark-card hover:bg-primary/10'
@@ -167,16 +179,31 @@ export function VendorVoucherSelector({
                   }`}
                   onClick={() => {
                     setError('');
-                    pricing.setVendorCodes(vendorId, [offer.code]);
-                    setDraft(offer.code);
+                    if (isSelected) {
+                      pricing.setVendorCodes(vendorId, []);
+                      setDraft('');
+                    } else {
+                      pricing.setVendorCodes(vendorId, [offer.code]);
+                      setDraft(offer.code);
+                    }
                   }}
                 >
-                  Dùng mã {offer.code}
+                  <span className="font-bold">{offer.code}</span>{' '}
+                  <span className="opacity-90">({discountText})</span>
+                  {offer.minOrderAmount ? (
+                    <span className="block text-[10px] opacity-80">
+                      Đơn từ {formatPrice(offer.minOrderAmount)}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
           </div>
         </div>
+      ) : (
+        <p className="text-[11px] text-light-muted dark:text-dark-muted">
+          Shop chưa có mã công khai cho sản phẩm này (có thể bỏ trống hoặc nhập mã riêng).
+        </p>
       )}
     </div>
   );
@@ -370,14 +397,21 @@ export function PlatformVoucherPricing({ items, pricing, offers: externalOffers 
                 setDraft(event.target.value.toUpperCase());
                 setError('');
               }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleApply();
+                }
+              }}
               className="min-w-0 flex-1 rounded-lg border border-light-border dark:border-dark-border px-2.5 py-1.5 text-xs bg-white dark:bg-dark-card text-light-text dark:text-dark-text focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none"
             />
             <button
               type="button"
+              disabled={pricing.loading}
               onClick={handleApply}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition cursor-pointer shadow-xs"
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-lg transition cursor-pointer shadow-xs disabled:opacity-50"
             >
-              Áp dụng
+              {pricing.loading ? '...' : 'Áp dụng'}
             </button>
           </div>
           <p className="text-[11px] text-light-muted dark:text-dark-muted">
@@ -404,6 +438,7 @@ export function PlatformVoucherPricing({ items, pricing, offers: externalOffers 
                 <button
                   key={offer.id}
                   type="button"
+                  aria-label={`Dùng mã ${offer.code}`}
                   className={`rounded border px-2 py-0.5 text-[11px] font-medium cursor-pointer transition ${
                     isSelected
                       ? 'bg-amber-600 text-white border-amber-600'

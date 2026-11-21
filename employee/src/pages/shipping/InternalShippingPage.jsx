@@ -99,10 +99,9 @@ export const InternalShippingPage = () => {
       const res = await shippingApi.getShipments(params);
       const rawList = res.list || res.data?.list || (Array.isArray(res) ? res : []);
       // Lớp bảo vệ kép: bưu tá chỉ thấy đúng kiện hàng được phân công cho chính mình
-      const list =
-        user && user.assignedOrderScope !== 'all_orders'
-          ? rawList.filter((item) => item.carrierId === user.id || item.carrier?.id === user.id)
-          : rawList;
+      const list = user
+        ? rawList.filter((item) => item.carrierId === user.id || item.carrier?.id === user.id)
+        : rawList;
       setShipments(list);
       if (res?.summary) {
         setSummary(res.summary);

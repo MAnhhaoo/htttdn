@@ -218,6 +218,8 @@ model Employee {
   payrolls             EmployeePayroll[]
   orderStatusHistories OrderStatusHistory[]    @relation("EmployeeOrderStatusActor")
   assignedShipments    Shipment[]              @relation("EmployeeAssignedShipment")
+  assignedOrders       Order[]                 @relation("EmployeeAssignedOrders")
+  notifications        Notification[]          @relation("EmployeeNotification")
 
   @@index([adminId])
   @@index([status])
@@ -383,6 +385,7 @@ model SurveyResponse {
   notification Notification?
 
   @@index([surveyId, status])
+  @@index([clientId, createdAt])
   @@index([clientId, status, createdAt])
   @@index([orderId, status])
 }
@@ -392,6 +395,7 @@ model Notification {
   adminId          String?          @db.Uuid
   clientId         String?          @db.Uuid
   vendorId         String?          @db.Uuid
+  employeeId       String?          @db.Uuid
   surveyId         String?          @db.Uuid
   surveyResponseId String?          @unique @db.Uuid
   type             NotificationType
@@ -406,16 +410,19 @@ model Notification {
   admin    Admin?          @relation("AdminNotification", fields: [adminId], references: [id], onDelete: Cascade)
   client   Client?         @relation("ClientNotification", fields: [clientId], references: [id], onDelete: Cascade)
   vendor   Vendor?         @relation("VendorNotification", fields: [vendorId], references: [id], onDelete: Cascade)
+  employee Employee?       @relation("EmployeeNotification", fields: [employeeId], references: [id], onDelete: Cascade)
   survey   Survey?         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
   response SurveyResponse? @relation(fields: [surveyResponseId], references: [id], onDelete: Cascade)
 
   @@index([adminId, isRead, createdAt])
   @@index([clientId, isRead, createdAt])
   @@index([vendorId, isRead, createdAt])
+  @@index([employeeId, isRead, createdAt])
   @@index([surveyId])
   @@index([clientId, createdAt])
   @@index([vendorId, createdAt])
   @@index([adminId, createdAt])
+  @@index([employeeId, createdAt])
   @@index([vendorId, type, createdAt])
   @@index([surveyId, vendorId, createdAt])
 }
@@ -551,6 +558,7 @@ model ProductFavorite {
   @@unique([clientId, productId])
   @@index([clientId, createdAt])
   @@index([clientId, deletedAt, createdAt])
+  @@index([deletedAt, createdAt])
   @@index([productId])
 }
 
@@ -659,6 +667,7 @@ model CartItem {
   @@index([productVariantId])
   @@index([cartId, createdAt])
   @@index([cartId, deletedAt, createdAt])
+  @@index([deletedAt, productVariantId])
 }
 
 model Order {
@@ -671,21 +680,23 @@ model Order {
   totalAmount     Decimal     @db.Decimal(12, 2)
   status          OrderStatus @default(pending)
   notes           String?     @db.VarChar(1000)
-  receiverName    String?     @db.VarChar(255)
-  receiverPhone   String?     @db.VarChar(50)
-  shippingAddress String?     @db.VarChar(500)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  cancelledAt     DateTime?
+  receiverName       String?     @db.VarChar(255)
+  receiverPhone      String?     @db.VarChar(50)
+  shippingAddress    String?     @db.VarChar(500)
+  assignedEmployeeId String?     @db.Uuid
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  cancelledAt        DateTime?
 
-  client          Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  details         OrderDetail[]
-  payment         Payment?
-  voucherDetails  VoucherDetail[]
-  statusHistory   OrderStatusHistory[]
-  surveyResponses SurveyResponse[]
-  vendorOrders    VendorOrder[]
-  shipments       Shipment[]
+  client           Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  assignedEmployee Employee?            @relation("EmployeeAssignedOrders", fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
+  details          OrderDetail[]
+  payment          Payment?
+  voucherDetails   VoucherDetail[]
+  statusHistory    OrderStatusHistory[]
+  surveyResponses  SurveyResponse[]
+  vendorOrders     VendorOrder[]
+  shipments        Shipment[]
 
   @@index([clientId])
   @@index([status])
@@ -693,6 +704,8 @@ model Order {
   @@index([clientId, createdAt])
   @@index([status, createdAt])
   @@index([status, createdAt, clientId])
+  @@index([assignedEmployeeId, createdAt])
+  @@index([assignedEmployeeId, status])
 }
 
 model OrderDetail {
@@ -849,6 +862,7 @@ model VendorOrder {
   shipment Shipment?
 
   @@index([orderId])
+  @@index([orderId, vendorId])
   @@index([vendorId])
   @@index([status])
   @@index([vendorId, createdAt])
@@ -881,7 +895,10 @@ model Shipment {
 
   @@index([orderId])
   @@index([carrierId])
+  @@index([carrierId, createdAt])
+  @@index([carrierId, orderId])
   @@index([status])
+  @@index([createdAt])
   @@index([carrierId, status, createdAt])
   @@index([status, createdAt])
 }

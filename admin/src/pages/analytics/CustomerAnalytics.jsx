@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
 import {
   Users,
   Heart,
@@ -24,7 +25,9 @@ export default function CustomerAnalytics() {
   const [data, setData] = useState(null);
   const [ageFilter, setAgeFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [clientPage, setClientPage] = useState(1);
+  const prevFilterRef = useRef(`${ageFilter}|${debouncedSearch}`);
 
   const fetchAnalytics = useCallback(async () => {
     setLoading(true);
@@ -33,7 +36,7 @@ export default function CustomerAnalytics() {
         page: clientPage,
         itemPerPage: 10,
         ageGroup: ageFilter !== 'all' ? ageFilter : undefined,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
       });
       const result = res.data?.data !== undefined ? res.data.data : res.data;
       if (result) {
@@ -44,15 +47,19 @@ export default function CustomerAnalytics() {
     } finally {
       setLoading(false);
     }
-  }, [clientPage, ageFilter, search]);
+  }, [clientPage, ageFilter, debouncedSearch]);
 
   useEffect(() => {
+    const filterKey = `${ageFilter}|${debouncedSearch}`;
+    if (prevFilterRef.current !== filterKey) {
+      prevFilterRef.current = filterKey;
+      if (clientPage !== 1) {
+        setClientPage(1);
+        return;
+      }
+    }
     fetchAnalytics();
-  }, [fetchAnalytics]);
-
-  useEffect(() => {
-    setClientPage(1);
-  }, [ageFilter, search]);
+  }, [fetchAnalytics, ageFilter, debouncedSearch, clientPage]);
 
   const formatDate = (dateStr) => formatDateOnly(dateStr, '—');
 

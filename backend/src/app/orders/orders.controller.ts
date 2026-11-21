@@ -14,6 +14,7 @@ import type { UserInfo } from 'src/common/decorators/user.decorator';
 import { Roles } from 'src/common/guards/access-control/roles.decorator';
 import { ParseParamsPaginationPipe } from 'src/common/pipes/parse-params-pagination.pipe';
 import { CheckoutDto, PreviewCheckoutDto } from './dto/checkout.dto';
+import { ReorderDto } from './dto/reorder.dto';
 import {
   UpdateOrderStatusDto,
   UpdateVendorOrderStatusDto,
@@ -36,6 +37,12 @@ export class OrdersController {
   @Roles('client')
   checkout(@Body() dto: CheckoutDto, @User() user: UserInfo) {
     return this.ordersService.checkout(user.userID, dto);
+  }
+
+  @Post('reorder')
+  @Roles('client')
+  reorder(@Body() dto: ReorderDto, @User() user: UserInfo) {
+    return this.ordersService.reorder(user.userID, dto.orderIds);
   }
 
   @Get('mine')

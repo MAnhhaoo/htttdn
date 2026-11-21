@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
 import {
   Truck,
   Search,
@@ -35,7 +36,9 @@ export default function ShippingManagement() {
 
   // Filters
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [statusFilter, setStatusFilter] = useState('');
+  const prevFilterRef = useRef(`${debouncedSearch}|${statusFilter}`);
 
   // Modals state
   const [selectedShipment, setSelectedShipment] = useState(null);
@@ -73,7 +76,7 @@ export default function ShippingManagement() {
       const params = {
         page,
         itemPerPage: 10,
-        ...(search ? { q: search } : {}),
+        ...(debouncedSearch ? { q: debouncedSearch } : {}),
         ...(statusFilter ? { status: statusFilter } : {}),
       };
 
@@ -101,11 +104,19 @@ export default function ShippingManagement() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter]);
+  }, [page, debouncedSearch, statusFilter]);
 
   useEffect(() => {
+    const filterKey = `${debouncedSearch}|${statusFilter}`;
+    if (prevFilterRef.current !== filterKey) {
+      prevFilterRef.current = filterKey;
+      if (page !== 1) {
+        setPage(1);
+        return;
+      }
+    }
     fetchShipments();
-  }, [fetchShipments]);
+  }, [fetchShipments, debouncedSearch, statusFilter, page]);
 
   useEffect(() => {
     window.addEventListener('miva:shipping', fetchShipments);

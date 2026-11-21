@@ -40,6 +40,14 @@ export default function Checkout() {
     [addressRes],
   );
 
+  const reorderData = location.state?.reorderData || null;
+  const REORDER_ADDRESS_ID = '__reorder_snapshot__';
+  const hasReorderAddress = Boolean(
+    reorderData?.receiverName?.trim() &&
+      reorderData?.receiverPhone?.trim() &&
+      reorderData?.shippingAddress?.trim(),
+  );
+
   const [selectedAddressId, setSelectedAddressId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const checkoutCompletedRef = useRef(false);
@@ -54,11 +62,40 @@ export default function Checkout() {
     isDefault: false,
   });
 
-  const [paymentMethod, setPaymentMethod] = useState('cod');
+  const [paymentMethod, setPaymentMethod] = useState(() => {
+    const allowed = ['cod', 'credit_card', 'pay_later'];
+    return allowed.includes(reorderData?.paymentMethod) ? reorderData.paymentMethod : 'cod';
+  });
 
-  // Auto-select default address or open new-address form once addresses load
+  // Auto-select previous reorder address (or matching saved address), else default address
   useEffect(() => {
     if (isLoadingAddresses || !user) return;
+
+    if (hasReorderAddress) {
+      const normalizedTarget = reorderData.shippingAddress.trim().toLowerCase();
+      const matched = addresses.find((a) => {
+        const full = [a.addressLine, a.ward, a.district, a.province]
+          .filter(Boolean)
+          .join(', ')
+          .trim()
+          .toLowerCase();
+        return (
+          full === normalizedTarget &&
+          (a.receiverName || '').trim().toLowerCase() ===
+            reorderData.receiverName.trim().toLowerCase() &&
+          (a.phone || '').trim() === reorderData.receiverPhone.trim()
+        );
+      });
+      setSelectedAddressId((prev) => {
+        if (prev && (prev === REORDER_ADDRESS_ID || addresses.some((a) => a.id === prev))) {
+          return prev;
+        }
+        return matched ? matched.id : REORDER_ADDRESS_ID;
+      });
+      setIsAddingNewAddress(false);
+      return;
+    }
+
     if (addresses.length > 0) {
       setSelectedAddressId((prev) => {
         if (prev && addresses.some((a) => a.id === prev)) return prev;
@@ -68,7 +105,7 @@ export default function Checkout() {
     } else {
       setIsAddingNewAddress(true);
     }
-  }, [addresses, isLoadingAddresses, user]);
+  }, [addresses, isLoadingAddresses, user, hasReorderAddress, reorderData]);
 
   // Determine which items are being checked out
   const checkoutItems = useMemo(() => {
@@ -168,7 +205,11 @@ export default function Checkout() {
       let receiverPhone = '';
       let shippingAddress = '';
 
-      if (selectedAddressId && Array.isArray(addresses)) {
+      if (selectedAddressId === REORDER_ADDRESS_ID && hasReorderAddress) {
+        receiverName = reorderData.receiverName;
+        receiverPhone = reorderData.receiverPhone;
+        shippingAddress = reorderData.shippingAddress;
+      } else if (selectedAddressId && Array.isArray(addresses)) {
         const addr = addresses.find((a) => a.id === selectedAddressId);
         if (addr) {
           receiverName = addr.receiverName;
@@ -224,6 +265,7 @@ export default function Checkout() {
         receiverName: receiverName.trim(),
         receiverPhone: receiverPhone.trim(),
         shippingAddress: shippingAddress.trim(),
+        ...(reorderData?.notes ? { notes: reorderData.notes } : {}),
         paymentMethod,
         voucherCodes: pricing.platformCode ? [pricing.platformCode] : [],
         voucherSelections: pricing.selections,
@@ -272,14 +314,24 @@ export default function Checkout() {
 
   return (
     <div className="mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-light-text dark:text-dark-text">
-          Thanh toán đơn hàng
-        </h1>
-        <p className="text-sm text-light-muted dark:text-dark-muted mt-1">
-          Đơn hàng sẽ được tách thành {vendorPackages.length} kiện hàng tương ứng với{' '}
-          {vendorPackages.length} nhà bán hàng
-        </p>
+      <div className="mb-8 space-y-3">
+        <div>
+          <h1 className="text-3xl font-bold text-light-text dark:text-dark-text">
+            Thanh toán đơn hàng
+          </h1>
+          <p className="text-sm text-light-muted dark:text-dark-muted mt-1">
+            Đơn hàng sẽ được tách thành {vendorPackages.length} kiện hàng tương ứng với{' '}
+            {vendorPackages.length} nhà bán hàng
+          </p>
+        </div>
+        {reorderData && (
+          <div className="p-3.5 rounded-xl bg-primary/10 border border-primary/25 text-xs sm:text-sm text-light-text dark:text-dark-text flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+            <span>
+              Đang <strong>mua lại theo thông tin đơn hàng trước</strong> (sản phẩm, số lượng, địa chỉ nhận hàng, phương thức thanh toán và ưu đãi còn hiệu lực). Vui lòng kiểm tra lại tổng tiền hiện tại trước khi xác nhận.
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8">
@@ -326,11 +378,58 @@ export default function Checkout() {
                 </div>
               )}
 
-              {addresses.length > 0 && !isAddingNewAddress ? (
+              {(addresses.length > 0 || hasReorderAddress) && !isAddingNewAddress ? (
                 <div className="space-y-3 mb-4">
                   <p className="font-medium text-xs text-light-muted dark:text-dark-muted">
-                    Chọn địa chỉ giao hàng của bạn ({addresses.length} địa chỉ):
+                    Chọn địa chỉ giao hàng của bạn ({addresses.length + (hasReorderAddress && selectedAddressId === REORDER_ADDRESS_ID ? 1 : 0)} địa chỉ):
                   </p>
+                  {hasReorderAddress &&
+                    !addresses.some((a) => {
+                      const full = [a.addressLine, a.ward, a.district, a.province]
+                        .filter(Boolean)
+                        .join(', ')
+                        .trim()
+                        .toLowerCase();
+                      return (
+                        full === reorderData.shippingAddress.trim().toLowerCase() &&
+                        (a.receiverName || '').trim().toLowerCase() ===
+                          reorderData.receiverName.trim().toLowerCase() &&
+                        (a.phone || '').trim() === reorderData.receiverPhone.trim()
+                      );
+                    }) && (
+                      <label
+                        className={`flex items-start gap-3 p-4 border rounded-xl cursor-pointer transition ${
+                          selectedAddressId === REORDER_ADDRESS_ID
+                            ? 'border-primary bg-primary/5 dark:bg-primary/10 shadow-xs'
+                            : 'border-light-border dark:border-dark-border hover:bg-light-bg dark:hover:bg-dark-bg'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="address"
+                          value={REORDER_ADDRESS_ID}
+                          checked={selectedAddressId === REORDER_ADDRESS_ID}
+                          onChange={() => setSelectedAddressId(REORDER_ADDRESS_ID)}
+                          className="mt-1 text-primary focus:ring-primary h-4 w-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-sm text-light-text dark:text-dark-text">
+                              {reorderData.receiverName}
+                            </p>
+                            <span className="text-xs text-light-muted dark:text-dark-muted">
+                              • {reorderData.receiverPhone}
+                            </span>
+                            <span className="text-[10px] px-2 py-0.5 bg-primary/15 text-primary font-bold rounded-full">
+                              Từ đơn hàng trước
+                            </span>
+                          </div>
+                          <p className="text-xs text-light-muted dark:text-dark-muted mt-1 leading-relaxed">
+                            {reorderData.shippingAddress}
+                          </p>
+                        </div>
+                      </label>
+                    )}
                   {addresses.map((addr) => (
                     <label
                       key={addr.id}
@@ -373,7 +472,7 @@ export default function Checkout() {
                 </div>
               ) : null}
 
-              {(addresses.length === 0 || isAddingNewAddress) && (
+              {((addresses.length === 0 && !hasReorderAddress) || isAddingNewAddress) && (
                 <div className="p-4 bg-light-bg dark:bg-dark-bg rounded-xl border border-light-border dark:border-dark-border space-y-4">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-bold text-light-text dark:text-dark-text uppercase tracking-wider">

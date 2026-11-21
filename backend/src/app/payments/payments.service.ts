@@ -25,6 +25,20 @@ const paymentInclude = {
   },
 };
 
+const paymentListInclude = {
+  order: {
+    select: {
+      id: true,
+      orderCode: true,
+      clientId: true,
+      status: true,
+      totalAmount: true,
+      receiverName: true,
+      createdAt: true,
+    },
+  },
+};
+
 @Injectable()
 export class PaymentsService {
   constructor(
@@ -32,10 +46,15 @@ export class PaymentsService {
     private readonly realtime: RealtimeService,
   ) {}
 
-  listAll() {
+  listAll(page?: number, itemPerPage?: number) {
+    const take = Math.min(Math.max(Number(itemPerPage) || 100, 1), 200);
+    const skip = page && page > 1 ? (page - 1) * take : 0;
     return this.prisma.extended.payment.findMany({
-      include: paymentInclude,
-      orderBy: { createdAt: 'desc' }});
+      include: paymentListInclude,
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take,
+    });
   }
 
   async getByOrder(orderId: string, user: UserInfo) {

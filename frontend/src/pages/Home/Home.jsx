@@ -56,7 +56,7 @@ export default function Home() {
               Lựa chọn mới cho mỗi ngày
             </div>
 
-            <h1 className="text-6xl md:text-7xl lg:text-8xl font-serif text-[#1A3A2C] dark:text-dark-text leading-tight tracking-tight">
+            <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-serif text-[#1A3A2C] dark:text-dark-text leading-tight tracking-tight">
               Everything<br />
               <span className="italic text-[#2A5C4A]">You Need.</span>
             </h1>
@@ -80,14 +80,18 @@ export default function Home() {
             {/* Circle image container */}
             <div className="relative w-[300px] h-[400px] md:w-[450px] md:h-[550px] bg-[#E8DCD0] rounded-t-full overflow-hidden shadow-xl">
               <img 
-                src="https://images.unsplash.com/photo-1511511450040-677116ff389e?q=80&w=1473&auto=format&fit=crop" 
+                src="https://images.unsplash.com/photo-1511511450040-677116ff389e?q=80&w=900&auto=format&fit=crop" 
                 alt="Miva Lifestyle" 
+                width={450}
+                height={550}
+                fetchPriority="high"
+                decoding="async"
                 className="w-full h-full object-cover object-center opacity-90"
               />
             </div>
             
             {/* Floating badge */}
-            <div className="absolute top-10 -left-10 md:-left-16 bg-white p-4 py-3 shadow-lg flex items-center gap-4">
+            <div className="absolute top-10 left-2 sm:-left-10 md:-left-16 bg-white p-4 py-3 shadow-lg flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-[#E2F2E9] text-[#2A5C4A] flex items-center justify-center">
                 <Sparkles className="w-5 h-5" />
               </div>

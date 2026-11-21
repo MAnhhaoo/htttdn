@@ -1011,13 +1011,21 @@ export class ReportsService {
                 totalOrderAmount: number;
               }>
             >`
-              WITH emp_orders AS (
+              WITH period_orders AS (
+                SELECT id, status, "subtotalAmount", "discountAmount", "totalAmount"
+                FROM "Order"
+                WHERE "createdAt" >= ${startDate}
+                  AND "createdAt" <= ${endDate}
+              ),
+              emp_orders AS (
                 SELECT s."carrierId" AS "employeeId", s."orderId" AS "orderId"
                 FROM "Shipment" s
+                JOIN period_orders po ON po.id = s."orderId"
                 WHERE s."carrierId" IS NOT NULL
                 UNION
                 SELECT h."employeeId" AS "employeeId", h."orderId" AS "orderId"
                 FROM "OrderStatusHistory" h
+                JOIN period_orders po ON po.id = h."orderId"
                 WHERE h."employeeId" IS NOT NULL
               )
               SELECT
@@ -1035,9 +1043,7 @@ export class ReportsService {
                 COALESCE(SUM(o."totalAmount"), 0)::float8 AS "totalOrderAmount"
               FROM "Employee" e
               LEFT JOIN emp_orders eo ON eo."employeeId" = e.id
-              LEFT JOIN "Order" o ON o.id = eo."orderId"
-                AND o."createdAt" >= ${startDate}
-                AND o."createdAt" <= ${endDate}
+              LEFT JOIN period_orders o ON o.id = eo."orderId"
               WHERE e."deletedAt" IS NULL
               GROUP BY e.id, e."employeeCode", e."fullName", e.department, e.position
               ORDER BY "completedAmount" DESC, "totalOrders" DESC, e."employeeCode" ASC
@@ -1322,8 +1328,6 @@ export class ReportsService {
             select: {
               id: true,
               name: true,
-              categoryId: true,
-              category: { select: { name: true } },
               vendorId: true,
               vendor: { select: { id: true, storeName: true, fullName: true, avatarUrl: true } },
             },
@@ -1343,7 +1347,6 @@ export class ReportsService {
             select: {
               id: true,
               clientId: true,
-              status: true,
               subtotalAmount: true,
               discountAmount: true,
             },
@@ -1354,10 +1357,6 @@ export class ReportsService {
                 select: {
                   product: {
                     select: {
-                      id: true,
-                      name: true,
-                      categoryId: true,
-                      category: { select: { name: true } },
                       vendorId: true,
                       vendor: { select: { id: true, storeName: true, fullName: true, avatarUrl: true } },
                     },

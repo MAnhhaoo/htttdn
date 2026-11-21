@@ -31,6 +31,18 @@ export class ReviewsController {
     return this.reviewsService.listByProduct(productId);
   }
 
+  @Get('vendor/mine')
+  @Roles('vendor')
+  listForVendor(
+    @User() user: UserInfo,
+    @Query('summaryOnly') summaryOnly?: string,
+  ) {
+    return this.reviewsService.listForVendor(
+      user.userID,
+      summaryOnly === 'true',
+    );
+  }
+
   @Get('admin/all')
   @Roles('admin')
   listAll(

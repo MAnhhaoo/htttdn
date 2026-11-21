@@ -21,6 +21,19 @@ export default defineConfig({
       { find: /^socket\.io-client$/, replacement: path.resolve(rootDir, './node_modules/socket.io-client') },
     ],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('react-dom') || id.includes('react-router') || id.includes('/react/')) return 'vendor-react';
+          if (id.includes('@tanstack') || id.includes('@reduxjs') || id.includes('react-redux')) return 'vendor-state';
+          if (id.includes('socket.io')) return 'vendor-socket';
+          if (id.includes('lucide-react')) return 'vendor-icons';
+        },
+      },
+    },
+  },
   server: {
     fs: { allow: ['..'] },
     proxy: {

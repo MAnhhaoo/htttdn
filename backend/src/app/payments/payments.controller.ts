@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 
 
@@ -25,8 +26,14 @@ export class PaymentsController {
 
   @Get('admin/all')
   @Roles('admin')
-  all() {
-    return this.paymentsService.listAll();
+  all(
+    @Query('page') page?: string,
+    @Query('itemPerPage') itemPerPage?: string,
+  ) {
+    return this.paymentsService.listAll(
+      page ? Number(page) : undefined,
+      itemPerPage ? Number(itemPerPage) : undefined,
+    );
   }
 
   @Get('order/:orderId')

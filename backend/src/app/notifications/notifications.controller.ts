@@ -19,25 +19,25 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get()
-  @Roles('client', 'vendor', 'admin')
+  @Roles('client', 'vendor', 'admin', 'employee')
   list(@Query() query: GetNotificationsQueryDto, @User() user: UserInfo) {
     return this.notificationsService.list(user, query);
   }
 
   @Get('unread-count')
-  @Roles('client', 'vendor', 'admin')
+  @Roles('client', 'vendor', 'admin', 'employee')
   unreadCount(@User() user: UserInfo) {
     return this.notificationsService.unreadCount(user);
   }
 
   @Patch('read-all')
-  @Roles('client', 'vendor', 'admin')
+  @Roles('client', 'vendor', 'admin', 'employee')
   markAllRead(@User() user: UserInfo) {
     return this.notificationsService.markAllRead(user);
   }
 
   @Patch(':id/read')
-  @Roles('client', 'vendor', 'admin')
+  @Roles('client', 'vendor', 'admin', 'employee')
   markRead(@Param('id', ParseUUIDPipe) id: string, @User() user: UserInfo) {
     return this.notificationsService.markRead(id, user);
   }

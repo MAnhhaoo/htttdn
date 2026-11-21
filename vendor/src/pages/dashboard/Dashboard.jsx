@@ -67,39 +67,23 @@ export default function Dashboard() {
 
   const currentVendorId = user?.id || user?.userID;
 
-  const fetchDashboardData = useCallback(async () => {
+  const fetchDashboardData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
-      const [productsRes, ordersRes] = await Promise.all([
+      if (!silent) setLoading(true);
+      const [productsRes, ordersRes, reviewSummaryRes] = await Promise.all([
         dashboardService.getProducts(),
         dashboardService.getOrders(),
+        reviewService.getVendorReviews({ summaryOnly: 'true' }).catch(() => null),
       ]);
 
       const products = Array.isArray(productsRes) ? productsRes : productsRes?.list || [];
       const orders = Array.isArray(ordersRes) ? ordersRes : ordersRes?.list || [];
       setAllProducts(products);
 
-      // Chỉ gọi song song tối đa 30 sản phẩm MỘT lần duy nhất cho cả tổng quan & biểu đồ
-      const reviewResults = await Promise.allSettled(
-        products.slice(0, 30).map((product) => reviewService.getReviewsByProduct(product.id)),
-      );
-
-      let totalRating = 0;
-      let reviewCount = 0;
-      reviewResults.forEach((res) => {
-        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
-          res.value.forEach((r) => {
-            if (r?.rating) {
-              totalRating += Number(r.rating);
-              reviewCount += 1;
-            }
-          });
-        }
-      });
-
+      const summary = reviewSummaryRes?.summary;
       setReviewSummary({
-        avgRating: reviewCount > 0 ? (totalRating / reviewCount).toFixed(1) : '0.0',
-        reviewCount,
+        avgRating: summary?.avgRating || '0.0',
+        reviewCount: Number(summary?.reviewCount || 0),
       });
 
       const vendorDetails = [];
@@ -132,9 +116,10 @@ export default function Dashboard() {
   }, [currentVendorId]);
 
   useEffect(() => {
-    fetchDashboardData();
-    window.addEventListener('miva:dashboard', fetchDashboardData);
-    return () => window.removeEventListener('miva:dashboard', fetchDashboardData);
+    fetchDashboardData(false);
+    const handleRealtimeRefresh = () => fetchDashboardData(true);
+    window.addEventListener('miva:dashboard', handleRealtimeRefresh);
+    return () => window.removeEventListener('miva:dashboard', handleRealtimeRefresh);
   }, [fetchDashboardData]);
 
   const { overviewStats, revenueData, topProductsData, recentOrderDetails } = useMemo(() => {

@@ -159,70 +159,49 @@ export class ProductService extends PrismaBaseService<'product'> {
   }
 
   async getBestSellingProducts(limit = 4) {
-    const topVariants = await this.prismaService.extended.orderDetail.groupBy({
-      by: ['productVariantId'],
-      where: {
-        order: {
-          status: { not: 'cancelled' },
-        },
-      },
-      _sum: {
-        quantity: true,
-      },
-      orderBy: {
-        _sum: {
-          quantity: 'desc',
-        },
-      },
-    });
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 4, 50));
+    const topProducts = await this.prismaService.extended.$queryRaw<
+      Array<{ productId: string; soldQty: number }>
+    >(Prisma.sql`
+      SELECT
+        color."productId" AS "productId",
+        COALESCE(SUM(od.quantity), 0)::int AS "soldQty"
+      FROM "OrderDetail" od
+      JOIN "Order" o ON o.id = od."orderId"
+      JOIN "ProductVariant" variant ON variant.id = od."productVariantId"
+      JOIN "ProductColor" color ON color.id = variant."productColorId"
+      JOIN "Product" p ON p.id = color."productId"
+      JOIN "Category" c ON c.id = p."categoryId"
+      WHERE o.status <> 'cancelled'
+        AND p."deletedAt" IS NULL
+        AND p.status = 'active'
+        AND c."deletedAt" IS NULL
+      GROUP BY color."productId"
+      ORDER BY "soldQty" DESC
+      LIMIT ${safeLimit}
+    `);
 
-    const variantIds = topVariants.map((tv) => tv.productVariantId);
-    // Sales history can reference a soft-deleted variant or color.
-    const variants = variantIds.length
-      ? await this.prismaService.extended.$queryRaw<
-          Array<{ id: string; productId: string }>
-        >(Prisma.sql`
-          SELECT variant.id, color."productId"
-          FROM "ProductVariant" AS variant
-          JOIN "ProductColor" AS color ON color.id = variant."productColorId"
-          WHERE variant.id IN (${Prisma.join(variantIds.map((id) => Prisma.sql`${id}::uuid`))})
-        `)
+    const productQuantityMap = new Map<string, number>(
+      topProducts.map((row) => [row.productId, Number(row.soldQty) || 0]),
+    );
+    const sortedProductIds = topProducts.map((row) => row.productId);
+
+    const products = sortedProductIds.length
+      ? await this.extended.findMany({
+          where: {
+            id: { in: sortedProductIds },
+            deletedAt: null,
+            status: ProductStatus.active,
+            category: { deletedAt: null },
+          },
+          include: productRelations,
+        })
       : [];
-
-    const variantToProduct = new Map<string, string>();
-    for (const v of variants) {
-      if (v.productId) {
-        variantToProduct.set(v.id, v.productId);
-      }
-    }
-
-    const productQuantityMap = new Map<string, number>();
-    for (const item of topVariants) {
-      const productId = variantToProduct.get(item.productVariantId);
-      if (productId) {
-        const current = productQuantityMap.get(productId) || 0;
-        productQuantityMap.set(productId, current + (item._sum.quantity || 0));
-      }
-    }
-
-    const sortedProductIds = Array.from(productQuantityMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([productId]) => productId);
-
-    const products = await this.extended.findMany({
-      where: {
-        id: { in: sortedProductIds.slice(0, limit * 2) },
-        deletedAt: null,
-        status: ProductStatus.active,
-        category: { deletedAt: null },
-      },
-      include: productRelations,
-    });
 
     const productMap = new Map(products.map((p) => [p.id, p]));
     const result: any[] = [];
     for (const id of sortedProductIds) {
-      if (result.length >= limit) break;
+      if (result.length >= safeLimit) break;
       const p = productMap.get(id);
       if (p) {
         const catalogProd = this.toCatalogProduct(p);
@@ -304,7 +283,18 @@ export class ProductService extends PrismaBaseService<'product'> {
   }
 
   async addFavorite(productId: string, clientId: string) {
-    await this.getProductById(productId);
+    const exists = await this.extended.findFirst({
+      where: {
+        id: productId,
+        deletedAt: null,
+        status: ProductStatus.active,
+        category: { deletedAt: null },
+      },
+      select: { id: true },
+    });
+    if (!exists) {
+      throw new NotFoundException('Sản phẩm không tồn tại');
+    }
     const favorite = await this.prismaService.extended.productFavorite.upsert({
       where: { clientId_productId: { clientId, productId } },
       create: { clientId, productId },

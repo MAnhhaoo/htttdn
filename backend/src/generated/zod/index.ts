@@ -93,7 +93,7 @@ export const SurveyOptionScalarFieldEnumSchema = z.enum(['id','questionId','cont
 
 export const SurveyResponseScalarFieldEnumSchema = z.enum(['id','surveyId','clientId','orderId','deliveryKey','status','notifiedAt','openedAt','submittedAt','skippedAt','expiresAt','createdAt','updatedAt']);
 
-export const NotificationScalarFieldEnumSchema = z.enum(['id','adminId','clientId','vendorId','surveyId','surveyResponseId','type','title','content','data','isRead','readAt','expiresAt','createdAt']);
+export const NotificationScalarFieldEnumSchema = z.enum(['id','adminId','clientId','vendorId','employeeId','surveyId','surveyResponseId','type','title','content','data','isRead','readAt','expiresAt','createdAt']);
 
 export const SurveyAnswerScalarFieldEnumSchema = z.enum(['id','responseId','questionId','optionId','textAnswer','ratingValue','createdAt']);
 
@@ -119,7 +119,7 @@ export const CartScalarFieldEnumSchema = z.enum(['id','clientId','createdAt','up
 
 export const CartItemScalarFieldEnumSchema = z.enum(['id','productVariantId','cartId','quantity','createdAt','updatedAt','deletedAt']);
 
-export const OrderScalarFieldEnumSchema = z.enum(['id','orderCode','clientId','subtotalAmount','discountAmount','shippingFee','totalAmount','status','notes','receiverName','receiverPhone','shippingAddress','createdAt','updatedAt','cancelledAt']);
+export const OrderScalarFieldEnumSchema = z.enum(['id','orderCode','clientId','subtotalAmount','discountAmount','shippingFee','totalAmount','status','notes','receiverName','receiverPhone','shippingAddress','assignedEmployeeId','createdAt','updatedAt','cancelledAt']);
 
 export const OrderDetailScalarFieldEnumSchema = z.enum(['id','orderId','productVariantId','quantity','price','productName','colorName','sizeName','imageUrl','vendorOrderId']);
 
@@ -434,6 +434,7 @@ export const NotificationSchema = z.object({
   adminId: z.string().nullable(),
   clientId: z.string().nullable(),
   vendorId: z.string().nullable(),
+  employeeId: z.string().nullable(),
   surveyId: z.string().nullable(),
   surveyResponseId: z.string().nullable(),
   title: z.string(),
@@ -677,6 +678,7 @@ export const OrderSchema = z.object({
   receiverName: z.string().nullable(),
   receiverPhone: z.string().nullable(),
   shippingAddress: z.string().nullable(),
+  assignedEmployeeId: z.string().nullable(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
   cancelledAt: z.coerce.date().nullable(),
@@ -937,6 +939,8 @@ export const EmployeeIncludeSchema: z.ZodType<Prisma.EmployeeInclude> = z.object
   payrolls: z.union([z.boolean(),z.lazy(() => EmployeePayrollFindManyArgsSchema)]).optional(),
   orderStatusHistories: z.union([z.boolean(),z.lazy(() => OrderStatusHistoryFindManyArgsSchema)]).optional(),
   assignedShipments: z.union([z.boolean(),z.lazy(() => ShipmentFindManyArgsSchema)]).optional(),
+  assignedOrders: z.union([z.boolean(),z.lazy(() => OrderFindManyArgsSchema)]).optional(),
+  notifications: z.union([z.boolean(),z.lazy(() => NotificationFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => EmployeeCountOutputTypeArgsSchema)]).optional(),
 }).strict();
 
@@ -955,6 +959,8 @@ export const EmployeeCountOutputTypeSelectSchema: z.ZodType<Prisma.EmployeeCount
   payrolls: z.boolean().optional(),
   orderStatusHistories: z.boolean().optional(),
   assignedShipments: z.boolean().optional(),
+  assignedOrders: z.boolean().optional(),
+  notifications: z.boolean().optional(),
 }).strict();
 
 export const EmployeeSelectSchema: z.ZodType<Prisma.EmployeeSelect> = z.object({
@@ -988,6 +994,8 @@ export const EmployeeSelectSchema: z.ZodType<Prisma.EmployeeSelect> = z.object({
   payrolls: z.union([z.boolean(),z.lazy(() => EmployeePayrollFindManyArgsSchema)]).optional(),
   orderStatusHistories: z.union([z.boolean(),z.lazy(() => OrderStatusHistoryFindManyArgsSchema)]).optional(),
   assignedShipments: z.union([z.boolean(),z.lazy(() => ShipmentFindManyArgsSchema)]).optional(),
+  assignedOrders: z.union([z.boolean(),z.lazy(() => OrderFindManyArgsSchema)]).optional(),
+  notifications: z.union([z.boolean(),z.lazy(() => NotificationFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => EmployeeCountOutputTypeArgsSchema)]).optional(),
 }).strict()
 
@@ -1294,6 +1302,7 @@ export const NotificationIncludeSchema: z.ZodType<Prisma.NotificationInclude> = 
   admin: z.union([z.boolean(),z.lazy(() => AdminArgsSchema)]).optional(),
   client: z.union([z.boolean(),z.lazy(() => ClientArgsSchema)]).optional(),
   vendor: z.union([z.boolean(),z.lazy(() => VendorArgsSchema)]).optional(),
+  employee: z.union([z.boolean(),z.lazy(() => EmployeeArgsSchema)]).optional(),
   survey: z.union([z.boolean(),z.lazy(() => SurveyArgsSchema)]).optional(),
   response: z.union([z.boolean(),z.lazy(() => SurveyResponseArgsSchema)]).optional(),
 }).strict();
@@ -1308,6 +1317,7 @@ export const NotificationSelectSchema: z.ZodType<Prisma.NotificationSelect> = z.
   adminId: z.boolean().optional(),
   clientId: z.boolean().optional(),
   vendorId: z.boolean().optional(),
+  employeeId: z.boolean().optional(),
   surveyId: z.boolean().optional(),
   surveyResponseId: z.boolean().optional(),
   type: z.boolean().optional(),
@@ -1321,6 +1331,7 @@ export const NotificationSelectSchema: z.ZodType<Prisma.NotificationSelect> = z.
   admin: z.union([z.boolean(),z.lazy(() => AdminArgsSchema)]).optional(),
   client: z.union([z.boolean(),z.lazy(() => ClientArgsSchema)]).optional(),
   vendor: z.union([z.boolean(),z.lazy(() => VendorArgsSchema)]).optional(),
+  employee: z.union([z.boolean(),z.lazy(() => EmployeeArgsSchema)]).optional(),
   survey: z.union([z.boolean(),z.lazy(() => SurveyArgsSchema)]).optional(),
   response: z.union([z.boolean(),z.lazy(() => SurveyResponseArgsSchema)]).optional(),
 }).strict()
@@ -1729,6 +1740,7 @@ export const CartItemSelectSchema: z.ZodType<Prisma.CartItemSelect> = z.object({
 
 export const OrderIncludeSchema: z.ZodType<Prisma.OrderInclude> = z.object({
   client: z.union([z.boolean(),z.lazy(() => ClientArgsSchema)]).optional(),
+  assignedEmployee: z.union([z.boolean(),z.lazy(() => EmployeeArgsSchema)]).optional(),
   details: z.union([z.boolean(),z.lazy(() => OrderDetailFindManyArgsSchema)]).optional(),
   payment: z.union([z.boolean(),z.lazy(() => PaymentArgsSchema)]).optional(),
   voucherDetails: z.union([z.boolean(),z.lazy(() => VoucherDetailFindManyArgsSchema)]).optional(),
@@ -1770,10 +1782,12 @@ export const OrderSelectSchema: z.ZodType<Prisma.OrderSelect> = z.object({
   receiverName: z.boolean().optional(),
   receiverPhone: z.boolean().optional(),
   shippingAddress: z.boolean().optional(),
+  assignedEmployeeId: z.boolean().optional(),
   createdAt: z.boolean().optional(),
   updatedAt: z.boolean().optional(),
   cancelledAt: z.boolean().optional(),
   client: z.union([z.boolean(),z.lazy(() => ClientArgsSchema)]).optional(),
+  assignedEmployee: z.union([z.boolean(),z.lazy(() => EmployeeArgsSchema)]).optional(),
   details: z.union([z.boolean(),z.lazy(() => OrderDetailFindManyArgsSchema)]).optional(),
   payment: z.union([z.boolean(),z.lazy(() => PaymentArgsSchema)]).optional(),
   voucherDetails: z.union([z.boolean(),z.lazy(() => VoucherDetailFindManyArgsSchema)]).optional(),
@@ -2233,6 +2247,8 @@ export const EmployeeWhereInputSchema: z.ZodType<Prisma.EmployeeWhereInput> = z.
   payrolls: z.lazy(() => EmployeePayrollListRelationFilterSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryListRelationFilterSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentListRelationFilterSchema).optional(),
+  assignedOrders: z.lazy(() => OrderListRelationFilterSchema).optional(),
+  notifications: z.lazy(() => NotificationListRelationFilterSchema).optional(),
 });
 
 export const EmployeeOrderByWithRelationInputSchema: z.ZodType<Prisma.EmployeeOrderByWithRelationInput> = z.strictObject({
@@ -2266,6 +2282,8 @@ export const EmployeeOrderByWithRelationInputSchema: z.ZodType<Prisma.EmployeeOr
   payrolls: z.lazy(() => EmployeePayrollOrderByRelationAggregateInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryOrderByRelationAggregateInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentOrderByRelationAggregateInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderOrderByRelationAggregateInputSchema).optional(),
+  notifications: z.lazy(() => NotificationOrderByRelationAggregateInputSchema).optional(),
 });
 
 export const EmployeeWhereUniqueInputSchema: z.ZodType<Prisma.EmployeeWhereUniqueInput> = z.union([
@@ -2330,6 +2348,8 @@ export const EmployeeWhereUniqueInputSchema: z.ZodType<Prisma.EmployeeWhereUniqu
   payrolls: z.lazy(() => EmployeePayrollListRelationFilterSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryListRelationFilterSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentListRelationFilterSchema).optional(),
+  assignedOrders: z.lazy(() => OrderListRelationFilterSchema).optional(),
+  notifications: z.lazy(() => NotificationListRelationFilterSchema).optional(),
 }));
 
 export const EmployeeOrderByWithAggregationInputSchema: z.ZodType<Prisma.EmployeeOrderByWithAggregationInput> = z.strictObject({
@@ -3124,6 +3144,7 @@ export const NotificationWhereInputSchema: z.ZodType<Prisma.NotificationWhereInp
   adminId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   clientId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   vendorId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
+  employeeId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   surveyId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   surveyResponseId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   type: z.union([ z.lazy(() => EnumNotificationTypeFilterSchema), z.lazy(() => NotificationTypeSchema) ]).optional(),
@@ -3137,6 +3158,7 @@ export const NotificationWhereInputSchema: z.ZodType<Prisma.NotificationWhereInp
   admin: z.union([ z.lazy(() => AdminNullableScalarRelationFilterSchema), z.lazy(() => AdminWhereInputSchema) ]).optional().nullable(),
   client: z.union([ z.lazy(() => ClientNullableScalarRelationFilterSchema), z.lazy(() => ClientWhereInputSchema) ]).optional().nullable(),
   vendor: z.union([ z.lazy(() => VendorNullableScalarRelationFilterSchema), z.lazy(() => VendorWhereInputSchema) ]).optional().nullable(),
+  employee: z.union([ z.lazy(() => EmployeeNullableScalarRelationFilterSchema), z.lazy(() => EmployeeWhereInputSchema) ]).optional().nullable(),
   survey: z.union([ z.lazy(() => SurveyNullableScalarRelationFilterSchema), z.lazy(() => SurveyWhereInputSchema) ]).optional().nullable(),
   response: z.union([ z.lazy(() => SurveyResponseNullableScalarRelationFilterSchema), z.lazy(() => SurveyResponseWhereInputSchema) ]).optional().nullable(),
 });
@@ -3146,6 +3168,7 @@ export const NotificationOrderByWithRelationInputSchema: z.ZodType<Prisma.Notifi
   adminId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   clientId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   vendorId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  employeeId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   surveyId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   surveyResponseId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   type: z.lazy(() => SortOrderSchema).optional(),
@@ -3159,6 +3182,7 @@ export const NotificationOrderByWithRelationInputSchema: z.ZodType<Prisma.Notifi
   admin: z.lazy(() => AdminOrderByWithRelationInputSchema).optional(),
   client: z.lazy(() => ClientOrderByWithRelationInputSchema).optional(),
   vendor: z.lazy(() => VendorOrderByWithRelationInputSchema).optional(),
+  employee: z.lazy(() => EmployeeOrderByWithRelationInputSchema).optional(),
   survey: z.lazy(() => SurveyOrderByWithRelationInputSchema).optional(),
   response: z.lazy(() => SurveyResponseOrderByWithRelationInputSchema).optional(),
 });
@@ -3184,6 +3208,7 @@ export const NotificationWhereUniqueInputSchema: z.ZodType<Prisma.NotificationWh
   adminId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   clientId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   vendorId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
+  employeeId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   surveyId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   type: z.union([ z.lazy(() => EnumNotificationTypeFilterSchema), z.lazy(() => NotificationTypeSchema) ]).optional(),
   title: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
@@ -3196,6 +3221,7 @@ export const NotificationWhereUniqueInputSchema: z.ZodType<Prisma.NotificationWh
   admin: z.union([ z.lazy(() => AdminNullableScalarRelationFilterSchema), z.lazy(() => AdminWhereInputSchema) ]).optional().nullable(),
   client: z.union([ z.lazy(() => ClientNullableScalarRelationFilterSchema), z.lazy(() => ClientWhereInputSchema) ]).optional().nullable(),
   vendor: z.union([ z.lazy(() => VendorNullableScalarRelationFilterSchema), z.lazy(() => VendorWhereInputSchema) ]).optional().nullable(),
+  employee: z.union([ z.lazy(() => EmployeeNullableScalarRelationFilterSchema), z.lazy(() => EmployeeWhereInputSchema) ]).optional().nullable(),
   survey: z.union([ z.lazy(() => SurveyNullableScalarRelationFilterSchema), z.lazy(() => SurveyWhereInputSchema) ]).optional().nullable(),
   response: z.union([ z.lazy(() => SurveyResponseNullableScalarRelationFilterSchema), z.lazy(() => SurveyResponseWhereInputSchema) ]).optional().nullable(),
 }));
@@ -3205,6 +3231,7 @@ export const NotificationOrderByWithAggregationInputSchema: z.ZodType<Prisma.Not
   adminId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   clientId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   vendorId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  employeeId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   surveyId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   surveyResponseId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   type: z.lazy(() => SortOrderSchema).optional(),
@@ -3228,6 +3255,7 @@ export const NotificationScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.
   adminId: z.union([ z.lazy(() => UuidNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   clientId: z.union([ z.lazy(() => UuidNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   vendorId: z.union([ z.lazy(() => UuidNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  employeeId: z.union([ z.lazy(() => UuidNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   surveyId: z.union([ z.lazy(() => UuidNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   surveyResponseId: z.union([ z.lazy(() => UuidNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   type: z.union([ z.lazy(() => EnumNotificationTypeWithAggregatesFilterSchema), z.lazy(() => NotificationTypeSchema) ]).optional(),
@@ -4395,10 +4423,12 @@ export const OrderWhereInputSchema: z.ZodType<Prisma.OrderWhereInput> = z.strict
   receiverName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   receiverPhone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   shippingAddress: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   cancelledAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   client: z.union([ z.lazy(() => ClientScalarRelationFilterSchema), z.lazy(() => ClientWhereInputSchema) ]).optional(),
+  assignedEmployee: z.union([ z.lazy(() => EmployeeNullableScalarRelationFilterSchema), z.lazy(() => EmployeeWhereInputSchema) ]).optional().nullable(),
   details: z.lazy(() => OrderDetailListRelationFilterSchema).optional(),
   payment: z.union([ z.lazy(() => PaymentNullableScalarRelationFilterSchema), z.lazy(() => PaymentWhereInputSchema) ]).optional().nullable(),
   voucherDetails: z.lazy(() => VoucherDetailListRelationFilterSchema).optional(),
@@ -4421,10 +4451,12 @@ export const OrderOrderByWithRelationInputSchema: z.ZodType<Prisma.OrderOrderByW
   receiverName: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   receiverPhone: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   shippingAddress: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  assignedEmployeeId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   cancelledAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   client: z.lazy(() => ClientOrderByWithRelationInputSchema).optional(),
+  assignedEmployee: z.lazy(() => EmployeeOrderByWithRelationInputSchema).optional(),
   details: z.lazy(() => OrderDetailOrderByRelationAggregateInputSchema).optional(),
   payment: z.lazy(() => PaymentOrderByWithRelationInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailOrderByRelationAggregateInputSchema).optional(),
@@ -4462,10 +4494,12 @@ export const OrderWhereUniqueInputSchema: z.ZodType<Prisma.OrderWhereUniqueInput
   receiverName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   receiverPhone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   shippingAddress: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   cancelledAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   client: z.union([ z.lazy(() => ClientScalarRelationFilterSchema), z.lazy(() => ClientWhereInputSchema) ]).optional(),
+  assignedEmployee: z.union([ z.lazy(() => EmployeeNullableScalarRelationFilterSchema), z.lazy(() => EmployeeWhereInputSchema) ]).optional().nullable(),
   details: z.lazy(() => OrderDetailListRelationFilterSchema).optional(),
   payment: z.union([ z.lazy(() => PaymentNullableScalarRelationFilterSchema), z.lazy(() => PaymentWhereInputSchema) ]).optional().nullable(),
   voucherDetails: z.lazy(() => VoucherDetailListRelationFilterSchema).optional(),
@@ -4488,6 +4522,7 @@ export const OrderOrderByWithAggregationInputSchema: z.ZodType<Prisma.OrderOrder
   receiverName: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   receiverPhone: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   shippingAddress: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  assignedEmployeeId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   cancelledAt: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
@@ -4514,6 +4549,7 @@ export const OrderScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.OrderSc
   receiverName: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   receiverPhone: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   shippingAddress: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.lazy(() => UuidNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   cancelledAt: z.union([ z.lazy(() => DateTimeNullableWithAggregatesFilterSchema), z.coerce.date() ]).optional().nullable(),
@@ -5641,6 +5677,8 @@ export const EmployeeCreateInputSchema: z.ZodType<Prisma.EmployeeCreateInput> = 
   payrolls: z.lazy(() => EmployeePayrollCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeUncheckedCreateInputSchema: z.ZodType<Prisma.EmployeeUncheckedCreateInput> = z.strictObject({
@@ -5673,6 +5711,8 @@ export const EmployeeUncheckedCreateInputSchema: z.ZodType<Prisma.EmployeeUnchec
   payrolls: z.lazy(() => EmployeePayrollUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeUpdateInputSchema: z.ZodType<Prisma.EmployeeUpdateInput> = z.strictObject({
@@ -5705,6 +5745,8 @@ export const EmployeeUpdateInputSchema: z.ZodType<Prisma.EmployeeUpdateInput> = 
   payrolls: z.lazy(() => EmployeePayrollUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeUncheckedUpdateInputSchema: z.ZodType<Prisma.EmployeeUncheckedUpdateInput> = z.strictObject({
@@ -5737,6 +5779,8 @@ export const EmployeeUncheckedUpdateInputSchema: z.ZodType<Prisma.EmployeeUnchec
   payrolls: z.lazy(() => EmployeePayrollUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeCreateManyInputSchema: z.ZodType<Prisma.EmployeeCreateManyInput> = z.strictObject({
@@ -6599,6 +6643,7 @@ export const NotificationCreateInputSchema: z.ZodType<Prisma.NotificationCreateI
   admin: z.lazy(() => AdminCreateNestedOneWithoutNotificationsInputSchema).optional(),
   client: z.lazy(() => ClientCreateNestedOneWithoutNotificationsInputSchema).optional(),
   vendor: z.lazy(() => VendorCreateNestedOneWithoutNotificationsInputSchema).optional(),
+  employee: z.lazy(() => EmployeeCreateNestedOneWithoutNotificationsInputSchema).optional(),
   survey: z.lazy(() => SurveyCreateNestedOneWithoutNotificationsInputSchema).optional(),
   response: z.lazy(() => SurveyResponseCreateNestedOneWithoutNotificationInputSchema).optional(),
 });
@@ -6608,6 +6653,7 @@ export const NotificationUncheckedCreateInputSchema: z.ZodType<Prisma.Notificati
   adminId: z.string().optional().nullable(),
   clientId: z.string().optional().nullable(),
   vendorId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyId: z.string().optional().nullable(),
   surveyResponseId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
@@ -6633,6 +6679,7 @@ export const NotificationUpdateInputSchema: z.ZodType<Prisma.NotificationUpdateI
   admin: z.lazy(() => AdminUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   client: z.lazy(() => ClientUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   vendor: z.lazy(() => VendorUpdateOneWithoutNotificationsNestedInputSchema).optional(),
+  employee: z.lazy(() => EmployeeUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   survey: z.lazy(() => SurveyUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   response: z.lazy(() => SurveyResponseUpdateOneWithoutNotificationNestedInputSchema).optional(),
 });
@@ -6642,6 +6689,7 @@ export const NotificationUncheckedUpdateInputSchema: z.ZodType<Prisma.Notificati
   adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -6659,6 +6707,7 @@ export const NotificationCreateManyInputSchema: z.ZodType<Prisma.NotificationCre
   adminId: z.string().optional().nullable(),
   clientId: z.string().optional().nullable(),
   vendorId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyId: z.string().optional().nullable(),
   surveyResponseId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
@@ -6688,6 +6737,7 @@ export const NotificationUncheckedUpdateManyInputSchema: z.ZodType<Prisma.Notifi
   adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -7722,6 +7772,7 @@ export const OrderCreateInputSchema: z.ZodType<Prisma.OrderCreateInput> = z.stri
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
   client: z.lazy(() => ClientCreateNestedOneWithoutOrdersInputSchema),
+  assignedEmployee: z.lazy(() => EmployeeCreateNestedOneWithoutAssignedOrdersInputSchema).optional(),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
@@ -7744,6 +7795,7 @@ export const OrderUncheckedCreateInputSchema: z.ZodType<Prisma.OrderUncheckedCre
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -7772,6 +7824,7 @@ export const OrderUpdateInputSchema: z.ZodType<Prisma.OrderUpdateInput> = z.stri
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   client: z.lazy(() => ClientUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  assignedEmployee: z.lazy(() => EmployeeUpdateOneWithoutAssignedOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
@@ -7794,6 +7847,7 @@ export const OrderUncheckedUpdateInputSchema: z.ZodType<Prisma.OrderUncheckedUpd
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -7819,6 +7873,7 @@ export const OrderCreateManyInputSchema: z.ZodType<Prisma.OrderCreateManyInput> 
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -7854,6 +7909,7 @@ export const OrderUncheckedUpdateManyInputSchema: z.ZodType<Prisma.OrderUnchecke
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -9142,6 +9198,12 @@ export const ShipmentListRelationFilterSchema: z.ZodType<Prisma.ShipmentListRela
   none: z.lazy(() => ShipmentWhereInputSchema).optional(),
 });
 
+export const OrderListRelationFilterSchema: z.ZodType<Prisma.OrderListRelationFilter> = z.strictObject({
+  every: z.lazy(() => OrderWhereInputSchema).optional(),
+  some: z.lazy(() => OrderWhereInputSchema).optional(),
+  none: z.lazy(() => OrderWhereInputSchema).optional(),
+});
+
 export const EmployeeAttendanceOrderByRelationAggregateInputSchema: z.ZodType<Prisma.EmployeeAttendanceOrderByRelationAggregateInput> = z.strictObject({
   _count: z.lazy(() => SortOrderSchema).optional(),
 });
@@ -9151,6 +9213,10 @@ export const EmployeePayrollOrderByRelationAggregateInputSchema: z.ZodType<Prism
 });
 
 export const ShipmentOrderByRelationAggregateInputSchema: z.ZodType<Prisma.ShipmentOrderByRelationAggregateInput> = z.strictObject({
+  _count: z.lazy(() => SortOrderSchema).optional(),
+});
+
+export const OrderOrderByRelationAggregateInputSchema: z.ZodType<Prisma.OrderOrderByRelationAggregateInput> = z.strictObject({
   _count: z.lazy(() => SortOrderSchema).optional(),
 });
 
@@ -9370,12 +9436,6 @@ export const CartNullableScalarRelationFilterSchema: z.ZodType<Prisma.CartNullab
   isNot: z.lazy(() => CartWhereInputSchema).optional().nullable(),
 });
 
-export const OrderListRelationFilterSchema: z.ZodType<Prisma.OrderListRelationFilter> = z.strictObject({
-  every: z.lazy(() => OrderWhereInputSchema).optional(),
-  some: z.lazy(() => OrderWhereInputSchema).optional(),
-  none: z.lazy(() => OrderWhereInputSchema).optional(),
-});
-
 export const SurveyResponseOrderByRelationAggregateInputSchema: z.ZodType<Prisma.SurveyResponseOrderByRelationAggregateInput> = z.strictObject({
   _count: z.lazy(() => SortOrderSchema).optional(),
 });
@@ -9389,10 +9449,6 @@ export const ClientAddressOrderByRelationAggregateInputSchema: z.ZodType<Prisma.
 });
 
 export const ReviewOrderByRelationAggregateInputSchema: z.ZodType<Prisma.ReviewOrderByRelationAggregateInput> = z.strictObject({
-  _count: z.lazy(() => SortOrderSchema).optional(),
-});
-
-export const OrderOrderByRelationAggregateInputSchema: z.ZodType<Prisma.OrderOrderByRelationAggregateInput> = z.strictObject({
   _count: z.lazy(() => SortOrderSchema).optional(),
 });
 
@@ -9957,6 +10013,11 @@ export const ClientNullableScalarRelationFilterSchema: z.ZodType<Prisma.ClientNu
   isNot: z.lazy(() => ClientWhereInputSchema).optional().nullable(),
 });
 
+export const EmployeeNullableScalarRelationFilterSchema: z.ZodType<Prisma.EmployeeNullableScalarRelationFilter> = z.strictObject({
+  is: z.lazy(() => EmployeeWhereInputSchema).optional().nullable(),
+  isNot: z.lazy(() => EmployeeWhereInputSchema).optional().nullable(),
+});
+
 export const SurveyNullableScalarRelationFilterSchema: z.ZodType<Prisma.SurveyNullableScalarRelationFilter> = z.strictObject({
   is: z.lazy(() => SurveyWhereInputSchema).optional().nullable(),
   isNot: z.lazy(() => SurveyWhereInputSchema).optional().nullable(),
@@ -9972,6 +10033,7 @@ export const NotificationCountOrderByAggregateInputSchema: z.ZodType<Prisma.Noti
   adminId: z.lazy(() => SortOrderSchema).optional(),
   clientId: z.lazy(() => SortOrderSchema).optional(),
   vendorId: z.lazy(() => SortOrderSchema).optional(),
+  employeeId: z.lazy(() => SortOrderSchema).optional(),
   surveyId: z.lazy(() => SortOrderSchema).optional(),
   surveyResponseId: z.lazy(() => SortOrderSchema).optional(),
   type: z.lazy(() => SortOrderSchema).optional(),
@@ -9989,6 +10051,7 @@ export const NotificationMaxOrderByAggregateInputSchema: z.ZodType<Prisma.Notifi
   adminId: z.lazy(() => SortOrderSchema).optional(),
   clientId: z.lazy(() => SortOrderSchema).optional(),
   vendorId: z.lazy(() => SortOrderSchema).optional(),
+  employeeId: z.lazy(() => SortOrderSchema).optional(),
   surveyId: z.lazy(() => SortOrderSchema).optional(),
   surveyResponseId: z.lazy(() => SortOrderSchema).optional(),
   type: z.lazy(() => SortOrderSchema).optional(),
@@ -10005,6 +10068,7 @@ export const NotificationMinOrderByAggregateInputSchema: z.ZodType<Prisma.Notifi
   adminId: z.lazy(() => SortOrderSchema).optional(),
   clientId: z.lazy(() => SortOrderSchema).optional(),
   vendorId: z.lazy(() => SortOrderSchema).optional(),
+  employeeId: z.lazy(() => SortOrderSchema).optional(),
   surveyId: z.lazy(() => SortOrderSchema).optional(),
   surveyResponseId: z.lazy(() => SortOrderSchema).optional(),
   type: z.lazy(() => SortOrderSchema).optional(),
@@ -10774,6 +10838,7 @@ export const OrderCountOrderByAggregateInputSchema: z.ZodType<Prisma.OrderCountO
   receiverName: z.lazy(() => SortOrderSchema).optional(),
   receiverPhone: z.lazy(() => SortOrderSchema).optional(),
   shippingAddress: z.lazy(() => SortOrderSchema).optional(),
+  assignedEmployeeId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   cancelledAt: z.lazy(() => SortOrderSchema).optional(),
@@ -10799,6 +10864,7 @@ export const OrderMaxOrderByAggregateInputSchema: z.ZodType<Prisma.OrderMaxOrder
   receiverName: z.lazy(() => SortOrderSchema).optional(),
   receiverPhone: z.lazy(() => SortOrderSchema).optional(),
   shippingAddress: z.lazy(() => SortOrderSchema).optional(),
+  assignedEmployeeId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   cancelledAt: z.lazy(() => SortOrderSchema).optional(),
@@ -10817,6 +10883,7 @@ export const OrderMinOrderByAggregateInputSchema: z.ZodType<Prisma.OrderMinOrder
   receiverName: z.lazy(() => SortOrderSchema).optional(),
   receiverPhone: z.lazy(() => SortOrderSchema).optional(),
   shippingAddress: z.lazy(() => SortOrderSchema).optional(),
+  assignedEmployeeId: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   cancelledAt: z.lazy(() => SortOrderSchema).optional(),
@@ -10998,11 +11065,6 @@ export const EnumOrderStatusNullableFilterSchema: z.ZodType<Prisma.EnumOrderStat
   in: z.lazy(() => OrderStatusSchema).array().optional().nullable(),
   notIn: z.lazy(() => OrderStatusSchema).array().optional().nullable(),
   not: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => NestedEnumOrderStatusNullableFilterSchema) ]).optional().nullable(),
-});
-
-export const EmployeeNullableScalarRelationFilterSchema: z.ZodType<Prisma.EmployeeNullableScalarRelationFilter> = z.strictObject({
-  is: z.lazy(() => EmployeeWhereInputSchema).optional().nullable(),
-  isNot: z.lazy(() => EmployeeWhereInputSchema).optional().nullable(),
 });
 
 export const OrderStatusHistoryCountOrderByAggregateInputSchema: z.ZodType<Prisma.OrderStatusHistoryCountOrderByAggregateInput> = z.strictObject({
@@ -11810,6 +11872,20 @@ export const ShipmentCreateNestedManyWithoutCarrierInputSchema: z.ZodType<Prisma
   connect: z.union([ z.lazy(() => ShipmentWhereUniqueInputSchema), z.lazy(() => ShipmentWhereUniqueInputSchema).array() ]).optional(),
 });
 
+export const OrderCreateNestedManyWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderCreateNestedManyWithoutAssignedEmployeeInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderCreateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderCreateWithoutAssignedEmployeeInputSchema).array(), z.lazy(() => OrderUncheckedCreateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUncheckedCreateWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderCreateOrConnectWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderCreateOrConnectWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderCreateManyAssignedEmployeeInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+});
+
+export const NotificationCreateNestedManyWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationCreateNestedManyWithoutEmployeeInput> = z.strictObject({
+  create: z.union([ z.lazy(() => NotificationCreateWithoutEmployeeInputSchema), z.lazy(() => NotificationCreateWithoutEmployeeInputSchema).array(), z.lazy(() => NotificationUncheckedCreateWithoutEmployeeInputSchema), z.lazy(() => NotificationUncheckedCreateWithoutEmployeeInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => NotificationCreateOrConnectWithoutEmployeeInputSchema), z.lazy(() => NotificationCreateOrConnectWithoutEmployeeInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => NotificationCreateManyEmployeeInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => NotificationWhereUniqueInputSchema), z.lazy(() => NotificationWhereUniqueInputSchema).array() ]).optional(),
+});
+
 export const EmployeeSalaryHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema: z.ZodType<Prisma.EmployeeSalaryHistoryUncheckedCreateNestedManyWithoutEmployeeInput> = z.strictObject({
   create: z.union([ z.lazy(() => EmployeeSalaryHistoryCreateWithoutEmployeeInputSchema), z.lazy(() => EmployeeSalaryHistoryCreateWithoutEmployeeInputSchema).array(), z.lazy(() => EmployeeSalaryHistoryUncheckedCreateWithoutEmployeeInputSchema), z.lazy(() => EmployeeSalaryHistoryUncheckedCreateWithoutEmployeeInputSchema).array() ]).optional(),
   connectOrCreate: z.union([ z.lazy(() => EmployeeSalaryHistoryCreateOrConnectWithoutEmployeeInputSchema), z.lazy(() => EmployeeSalaryHistoryCreateOrConnectWithoutEmployeeInputSchema).array() ]).optional(),
@@ -11843,6 +11919,20 @@ export const ShipmentUncheckedCreateNestedManyWithoutCarrierInputSchema: z.ZodTy
   connectOrCreate: z.union([ z.lazy(() => ShipmentCreateOrConnectWithoutCarrierInputSchema), z.lazy(() => ShipmentCreateOrConnectWithoutCarrierInputSchema).array() ]).optional(),
   createMany: z.lazy(() => ShipmentCreateManyCarrierInputEnvelopeSchema).optional(),
   connect: z.union([ z.lazy(() => ShipmentWhereUniqueInputSchema), z.lazy(() => ShipmentWhereUniqueInputSchema).array() ]).optional(),
+});
+
+export const OrderUncheckedCreateNestedManyWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderUncheckedCreateNestedManyWithoutAssignedEmployeeInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderCreateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderCreateWithoutAssignedEmployeeInputSchema).array(), z.lazy(() => OrderUncheckedCreateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUncheckedCreateWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderCreateOrConnectWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderCreateOrConnectWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderCreateManyAssignedEmployeeInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+});
+
+export const NotificationUncheckedCreateNestedManyWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationUncheckedCreateNestedManyWithoutEmployeeInput> = z.strictObject({
+  create: z.union([ z.lazy(() => NotificationCreateWithoutEmployeeInputSchema), z.lazy(() => NotificationCreateWithoutEmployeeInputSchema).array(), z.lazy(() => NotificationUncheckedCreateWithoutEmployeeInputSchema), z.lazy(() => NotificationUncheckedCreateWithoutEmployeeInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => NotificationCreateOrConnectWithoutEmployeeInputSchema), z.lazy(() => NotificationCreateOrConnectWithoutEmployeeInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => NotificationCreateManyEmployeeInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => NotificationWhereUniqueInputSchema), z.lazy(() => NotificationWhereUniqueInputSchema).array() ]).optional(),
 });
 
 export const NullableEnumGenderFieldUpdateOperationsInputSchema: z.ZodType<Prisma.NullableEnumGenderFieldUpdateOperationsInput> = z.strictObject({
@@ -11949,6 +12039,34 @@ export const ShipmentUpdateManyWithoutCarrierNestedInputSchema: z.ZodType<Prisma
   deleteMany: z.union([ z.lazy(() => ShipmentScalarWhereInputSchema), z.lazy(() => ShipmentScalarWhereInputSchema).array() ]).optional(),
 });
 
+export const OrderUpdateManyWithoutAssignedEmployeeNestedInputSchema: z.ZodType<Prisma.OrderUpdateManyWithoutAssignedEmployeeNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderCreateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderCreateWithoutAssignedEmployeeInputSchema).array(), z.lazy(() => OrderUncheckedCreateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUncheckedCreateWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderCreateOrConnectWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderCreateOrConnectWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => OrderUpsertWithWhereUniqueWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUpsertWithWhereUniqueWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderCreateManyAssignedEmployeeInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => OrderUpdateWithWhereUniqueWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUpdateWithWhereUniqueWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => OrderUpdateManyWithWhereWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUpdateManyWithWhereWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => OrderScalarWhereInputSchema), z.lazy(() => OrderScalarWhereInputSchema).array() ]).optional(),
+});
+
+export const NotificationUpdateManyWithoutEmployeeNestedInputSchema: z.ZodType<Prisma.NotificationUpdateManyWithoutEmployeeNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => NotificationCreateWithoutEmployeeInputSchema), z.lazy(() => NotificationCreateWithoutEmployeeInputSchema).array(), z.lazy(() => NotificationUncheckedCreateWithoutEmployeeInputSchema), z.lazy(() => NotificationUncheckedCreateWithoutEmployeeInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => NotificationCreateOrConnectWithoutEmployeeInputSchema), z.lazy(() => NotificationCreateOrConnectWithoutEmployeeInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => NotificationUpsertWithWhereUniqueWithoutEmployeeInputSchema), z.lazy(() => NotificationUpsertWithWhereUniqueWithoutEmployeeInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => NotificationCreateManyEmployeeInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => NotificationWhereUniqueInputSchema), z.lazy(() => NotificationWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => NotificationWhereUniqueInputSchema), z.lazy(() => NotificationWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => NotificationWhereUniqueInputSchema), z.lazy(() => NotificationWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => NotificationWhereUniqueInputSchema), z.lazy(() => NotificationWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => NotificationUpdateWithWhereUniqueWithoutEmployeeInputSchema), z.lazy(() => NotificationUpdateWithWhereUniqueWithoutEmployeeInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => NotificationUpdateManyWithWhereWithoutEmployeeInputSchema), z.lazy(() => NotificationUpdateManyWithWhereWithoutEmployeeInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => NotificationScalarWhereInputSchema), z.lazy(() => NotificationScalarWhereInputSchema).array() ]).optional(),
+});
+
 export const EmployeeSalaryHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema: z.ZodType<Prisma.EmployeeSalaryHistoryUncheckedUpdateManyWithoutEmployeeNestedInput> = z.strictObject({
   create: z.union([ z.lazy(() => EmployeeSalaryHistoryCreateWithoutEmployeeInputSchema), z.lazy(() => EmployeeSalaryHistoryCreateWithoutEmployeeInputSchema).array(), z.lazy(() => EmployeeSalaryHistoryUncheckedCreateWithoutEmployeeInputSchema), z.lazy(() => EmployeeSalaryHistoryUncheckedCreateWithoutEmployeeInputSchema).array() ]).optional(),
   connectOrCreate: z.union([ z.lazy(() => EmployeeSalaryHistoryCreateOrConnectWithoutEmployeeInputSchema), z.lazy(() => EmployeeSalaryHistoryCreateOrConnectWithoutEmployeeInputSchema).array() ]).optional(),
@@ -12017,6 +12135,34 @@ export const ShipmentUncheckedUpdateManyWithoutCarrierNestedInputSchema: z.ZodTy
   update: z.union([ z.lazy(() => ShipmentUpdateWithWhereUniqueWithoutCarrierInputSchema), z.lazy(() => ShipmentUpdateWithWhereUniqueWithoutCarrierInputSchema).array() ]).optional(),
   updateMany: z.union([ z.lazy(() => ShipmentUpdateManyWithWhereWithoutCarrierInputSchema), z.lazy(() => ShipmentUpdateManyWithWhereWithoutCarrierInputSchema).array() ]).optional(),
   deleteMany: z.union([ z.lazy(() => ShipmentScalarWhereInputSchema), z.lazy(() => ShipmentScalarWhereInputSchema).array() ]).optional(),
+});
+
+export const OrderUncheckedUpdateManyWithoutAssignedEmployeeNestedInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateManyWithoutAssignedEmployeeNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => OrderCreateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderCreateWithoutAssignedEmployeeInputSchema).array(), z.lazy(() => OrderUncheckedCreateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUncheckedCreateWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => OrderCreateOrConnectWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderCreateOrConnectWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => OrderUpsertWithWhereUniqueWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUpsertWithWhereUniqueWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => OrderCreateManyAssignedEmployeeInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => OrderWhereUniqueInputSchema), z.lazy(() => OrderWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => OrderUpdateWithWhereUniqueWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUpdateWithWhereUniqueWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => OrderUpdateManyWithWhereWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUpdateManyWithWhereWithoutAssignedEmployeeInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => OrderScalarWhereInputSchema), z.lazy(() => OrderScalarWhereInputSchema).array() ]).optional(),
+});
+
+export const NotificationUncheckedUpdateManyWithoutEmployeeNestedInputSchema: z.ZodType<Prisma.NotificationUncheckedUpdateManyWithoutEmployeeNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => NotificationCreateWithoutEmployeeInputSchema), z.lazy(() => NotificationCreateWithoutEmployeeInputSchema).array(), z.lazy(() => NotificationUncheckedCreateWithoutEmployeeInputSchema), z.lazy(() => NotificationUncheckedCreateWithoutEmployeeInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => NotificationCreateOrConnectWithoutEmployeeInputSchema), z.lazy(() => NotificationCreateOrConnectWithoutEmployeeInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => NotificationUpsertWithWhereUniqueWithoutEmployeeInputSchema), z.lazy(() => NotificationUpsertWithWhereUniqueWithoutEmployeeInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => NotificationCreateManyEmployeeInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => NotificationWhereUniqueInputSchema), z.lazy(() => NotificationWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => NotificationWhereUniqueInputSchema), z.lazy(() => NotificationWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => NotificationWhereUniqueInputSchema), z.lazy(() => NotificationWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => NotificationWhereUniqueInputSchema), z.lazy(() => NotificationWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => NotificationUpdateWithWhereUniqueWithoutEmployeeInputSchema), z.lazy(() => NotificationUpdateWithWhereUniqueWithoutEmployeeInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => NotificationUpdateManyWithWhereWithoutEmployeeInputSchema), z.lazy(() => NotificationUpdateManyWithWhereWithoutEmployeeInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => NotificationScalarWhereInputSchema), z.lazy(() => NotificationScalarWhereInputSchema).array() ]).optional(),
 });
 
 export const SurveyResponseCreateNestedManyWithoutClientInputSchema: z.ZodType<Prisma.SurveyResponseCreateNestedManyWithoutClientInput> = z.strictObject({
@@ -13081,6 +13227,12 @@ export const VendorCreateNestedOneWithoutNotificationsInputSchema: z.ZodType<Pri
   connect: z.lazy(() => VendorWhereUniqueInputSchema).optional(),
 });
 
+export const EmployeeCreateNestedOneWithoutNotificationsInputSchema: z.ZodType<Prisma.EmployeeCreateNestedOneWithoutNotificationsInput> = z.strictObject({
+  create: z.union([ z.lazy(() => EmployeeCreateWithoutNotificationsInputSchema), z.lazy(() => EmployeeUncheckedCreateWithoutNotificationsInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => EmployeeCreateOrConnectWithoutNotificationsInputSchema).optional(),
+  connect: z.lazy(() => EmployeeWhereUniqueInputSchema).optional(),
+});
+
 export const SurveyCreateNestedOneWithoutNotificationsInputSchema: z.ZodType<Prisma.SurveyCreateNestedOneWithoutNotificationsInput> = z.strictObject({
   create: z.union([ z.lazy(() => SurveyCreateWithoutNotificationsInputSchema), z.lazy(() => SurveyUncheckedCreateWithoutNotificationsInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => SurveyCreateOrConnectWithoutNotificationsInputSchema).optional(),
@@ -13125,6 +13277,16 @@ export const VendorUpdateOneWithoutNotificationsNestedInputSchema: z.ZodType<Pri
   delete: z.union([ z.boolean(),z.lazy(() => VendorWhereInputSchema) ]).optional(),
   connect: z.lazy(() => VendorWhereUniqueInputSchema).optional(),
   update: z.union([ z.lazy(() => VendorUpdateToOneWithWhereWithoutNotificationsInputSchema), z.lazy(() => VendorUpdateWithoutNotificationsInputSchema), z.lazy(() => VendorUncheckedUpdateWithoutNotificationsInputSchema) ]).optional(),
+});
+
+export const EmployeeUpdateOneWithoutNotificationsNestedInputSchema: z.ZodType<Prisma.EmployeeUpdateOneWithoutNotificationsNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => EmployeeCreateWithoutNotificationsInputSchema), z.lazy(() => EmployeeUncheckedCreateWithoutNotificationsInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => EmployeeCreateOrConnectWithoutNotificationsInputSchema).optional(),
+  upsert: z.lazy(() => EmployeeUpsertWithoutNotificationsInputSchema).optional(),
+  disconnect: z.union([ z.boolean(),z.lazy(() => EmployeeWhereInputSchema) ]).optional(),
+  delete: z.union([ z.boolean(),z.lazy(() => EmployeeWhereInputSchema) ]).optional(),
+  connect: z.lazy(() => EmployeeWhereUniqueInputSchema).optional(),
+  update: z.union([ z.lazy(() => EmployeeUpdateToOneWithWhereWithoutNotificationsInputSchema), z.lazy(() => EmployeeUpdateWithoutNotificationsInputSchema), z.lazy(() => EmployeeUncheckedUpdateWithoutNotificationsInputSchema) ]).optional(),
 });
 
 export const SurveyUpdateOneWithoutNotificationsNestedInputSchema: z.ZodType<Prisma.SurveyUpdateOneWithoutNotificationsNestedInput> = z.strictObject({
@@ -13912,6 +14074,12 @@ export const ClientCreateNestedOneWithoutOrdersInputSchema: z.ZodType<Prisma.Cli
   connect: z.lazy(() => ClientWhereUniqueInputSchema).optional(),
 });
 
+export const EmployeeCreateNestedOneWithoutAssignedOrdersInputSchema: z.ZodType<Prisma.EmployeeCreateNestedOneWithoutAssignedOrdersInput> = z.strictObject({
+  create: z.union([ z.lazy(() => EmployeeCreateWithoutAssignedOrdersInputSchema), z.lazy(() => EmployeeUncheckedCreateWithoutAssignedOrdersInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => EmployeeCreateOrConnectWithoutAssignedOrdersInputSchema).optional(),
+  connect: z.lazy(() => EmployeeWhereUniqueInputSchema).optional(),
+});
+
 export const OrderDetailCreateNestedManyWithoutOrderInputSchema: z.ZodType<Prisma.OrderDetailCreateNestedManyWithoutOrderInput> = z.strictObject({
   create: z.union([ z.lazy(() => OrderDetailCreateWithoutOrderInputSchema), z.lazy(() => OrderDetailCreateWithoutOrderInputSchema).array(), z.lazy(() => OrderDetailUncheckedCreateWithoutOrderInputSchema), z.lazy(() => OrderDetailUncheckedCreateWithoutOrderInputSchema).array() ]).optional(),
   connectOrCreate: z.union([ z.lazy(() => OrderDetailCreateOrConnectWithoutOrderInputSchema), z.lazy(() => OrderDetailCreateOrConnectWithoutOrderInputSchema).array() ]).optional(),
@@ -14018,6 +14186,16 @@ export const ClientUpdateOneRequiredWithoutOrdersNestedInputSchema: z.ZodType<Pr
   upsert: z.lazy(() => ClientUpsertWithoutOrdersInputSchema).optional(),
   connect: z.lazy(() => ClientWhereUniqueInputSchema).optional(),
   update: z.union([ z.lazy(() => ClientUpdateToOneWithWhereWithoutOrdersInputSchema), z.lazy(() => ClientUpdateWithoutOrdersInputSchema), z.lazy(() => ClientUncheckedUpdateWithoutOrdersInputSchema) ]).optional(),
+});
+
+export const EmployeeUpdateOneWithoutAssignedOrdersNestedInputSchema: z.ZodType<Prisma.EmployeeUpdateOneWithoutAssignedOrdersNestedInput> = z.strictObject({
+  create: z.union([ z.lazy(() => EmployeeCreateWithoutAssignedOrdersInputSchema), z.lazy(() => EmployeeUncheckedCreateWithoutAssignedOrdersInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => EmployeeCreateOrConnectWithoutAssignedOrdersInputSchema).optional(),
+  upsert: z.lazy(() => EmployeeUpsertWithoutAssignedOrdersInputSchema).optional(),
+  disconnect: z.union([ z.boolean(),z.lazy(() => EmployeeWhereInputSchema) ]).optional(),
+  delete: z.union([ z.boolean(),z.lazy(() => EmployeeWhereInputSchema) ]).optional(),
+  connect: z.lazy(() => EmployeeWhereUniqueInputSchema).optional(),
+  update: z.union([ z.lazy(() => EmployeeUpdateToOneWithWhereWithoutAssignedOrdersInputSchema), z.lazy(() => EmployeeUpdateWithoutAssignedOrdersInputSchema), z.lazy(() => EmployeeUncheckedUpdateWithoutAssignedOrdersInputSchema) ]).optional(),
 });
 
 export const OrderDetailUpdateManyWithoutOrderNestedInputSchema: z.ZodType<Prisma.OrderDetailUpdateManyWithoutOrderNestedInput> = z.strictObject({
@@ -15424,6 +15602,7 @@ export const NotificationCreateWithoutAdminInputSchema: z.ZodType<Prisma.Notific
   createdAt: z.coerce.date().optional(),
   client: z.lazy(() => ClientCreateNestedOneWithoutNotificationsInputSchema).optional(),
   vendor: z.lazy(() => VendorCreateNestedOneWithoutNotificationsInputSchema).optional(),
+  employee: z.lazy(() => EmployeeCreateNestedOneWithoutNotificationsInputSchema).optional(),
   survey: z.lazy(() => SurveyCreateNestedOneWithoutNotificationsInputSchema).optional(),
   response: z.lazy(() => SurveyResponseCreateNestedOneWithoutNotificationInputSchema).optional(),
 });
@@ -15432,6 +15611,7 @@ export const NotificationUncheckedCreateWithoutAdminInputSchema: z.ZodType<Prism
   id: z.uuid().optional(),
   clientId: z.string().optional().nullable(),
   vendorId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyId: z.string().optional().nullable(),
   surveyResponseId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
@@ -15571,6 +15751,8 @@ export const EmployeeCreateWithoutCreatedByInputSchema: z.ZodType<Prisma.Employe
   payrolls: z.lazy(() => EmployeePayrollCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeUncheckedCreateWithoutCreatedByInputSchema: z.ZodType<Prisma.EmployeeUncheckedCreateWithoutCreatedByInput> = z.strictObject({
@@ -15602,6 +15784,8 @@ export const EmployeeUncheckedCreateWithoutCreatedByInputSchema: z.ZodType<Prism
   payrolls: z.lazy(() => EmployeePayrollUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeCreateOrConnectWithoutCreatedByInputSchema: z.ZodType<Prisma.EmployeeCreateOrConnectWithoutCreatedByInput> = z.strictObject({
@@ -15711,6 +15895,7 @@ export const NotificationScalarWhereInputSchema: z.ZodType<Prisma.NotificationSc
   adminId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   clientId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   vendorId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
+  employeeId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   surveyId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   surveyResponseId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
   type: z.union([ z.lazy(() => EnumNotificationTypeFilterSchema), z.lazy(() => NotificationTypeSchema) ]).optional(),
@@ -16120,6 +16305,110 @@ export const ShipmentCreateManyCarrierInputEnvelopeSchema: z.ZodType<Prisma.Ship
   skipDuplicates: z.boolean().optional(),
 });
 
+export const OrderCreateWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderCreateWithoutAssignedEmployeeInput> = z.strictObject({
+  id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  status: z.lazy(() => OrderStatusSchema).optional(),
+  notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
+  client: z.lazy(() => ClientCreateNestedOneWithoutOrdersInputSchema),
+  details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
+  payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
+  voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
+  surveyResponses: z.lazy(() => SurveyResponseCreateNestedManyWithoutOrderInputSchema).optional(),
+  vendorOrders: z.lazy(() => VendorOrderCreateNestedManyWithoutOrderInputSchema).optional(),
+  shipments: z.lazy(() => ShipmentCreateNestedManyWithoutOrderInputSchema).optional(),
+});
+
+export const OrderUncheckedCreateWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderUncheckedCreateWithoutAssignedEmployeeInput> = z.strictObject({
+  id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  clientId: z.string(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  status: z.lazy(() => OrderStatusSchema).optional(),
+  notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
+  details: z.lazy(() => OrderDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+  payment: z.lazy(() => PaymentUncheckedCreateNestedOneWithoutOrderInputSchema).optional(),
+  voucherDetails: z.lazy(() => VoucherDetailUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+  surveyResponses: z.lazy(() => SurveyResponseUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+  vendorOrders: z.lazy(() => VendorOrderUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+  shipments: z.lazy(() => ShipmentUncheckedCreateNestedManyWithoutOrderInputSchema).optional(),
+});
+
+export const OrderCreateOrConnectWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderCreateOrConnectWithoutAssignedEmployeeInput> = z.strictObject({
+  where: z.lazy(() => OrderWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => OrderCreateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUncheckedCreateWithoutAssignedEmployeeInputSchema) ]),
+});
+
+export const OrderCreateManyAssignedEmployeeInputEnvelopeSchema: z.ZodType<Prisma.OrderCreateManyAssignedEmployeeInputEnvelope> = z.strictObject({
+  data: z.union([ z.lazy(() => OrderCreateManyAssignedEmployeeInputSchema), z.lazy(() => OrderCreateManyAssignedEmployeeInputSchema).array() ]),
+  skipDuplicates: z.boolean().optional(),
+});
+
+export const NotificationCreateWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationCreateWithoutEmployeeInput> = z.strictObject({
+  id: z.uuid().optional(),
+  type: z.lazy(() => NotificationTypeSchema),
+  title: z.string(),
+  content: z.string().optional().nullable(),
+  data: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  isRead: z.boolean().optional(),
+  readAt: z.coerce.date().optional().nullable(),
+  expiresAt: z.coerce.date().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  admin: z.lazy(() => AdminCreateNestedOneWithoutNotificationsInputSchema).optional(),
+  client: z.lazy(() => ClientCreateNestedOneWithoutNotificationsInputSchema).optional(),
+  vendor: z.lazy(() => VendorCreateNestedOneWithoutNotificationsInputSchema).optional(),
+  survey: z.lazy(() => SurveyCreateNestedOneWithoutNotificationsInputSchema).optional(),
+  response: z.lazy(() => SurveyResponseCreateNestedOneWithoutNotificationInputSchema).optional(),
+});
+
+export const NotificationUncheckedCreateWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationUncheckedCreateWithoutEmployeeInput> = z.strictObject({
+  id: z.uuid().optional(),
+  adminId: z.string().optional().nullable(),
+  clientId: z.string().optional().nullable(),
+  vendorId: z.string().optional().nullable(),
+  surveyId: z.string().optional().nullable(),
+  surveyResponseId: z.string().optional().nullable(),
+  type: z.lazy(() => NotificationTypeSchema),
+  title: z.string(),
+  content: z.string().optional().nullable(),
+  data: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  isRead: z.boolean().optional(),
+  readAt: z.coerce.date().optional().nullable(),
+  expiresAt: z.coerce.date().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+});
+
+export const NotificationCreateOrConnectWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationCreateOrConnectWithoutEmployeeInput> = z.strictObject({
+  where: z.lazy(() => NotificationWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => NotificationCreateWithoutEmployeeInputSchema), z.lazy(() => NotificationUncheckedCreateWithoutEmployeeInputSchema) ]),
+});
+
+export const NotificationCreateManyEmployeeInputEnvelopeSchema: z.ZodType<Prisma.NotificationCreateManyEmployeeInputEnvelope> = z.strictObject({
+  data: z.union([ z.lazy(() => NotificationCreateManyEmployeeInputSchema), z.lazy(() => NotificationCreateManyEmployeeInputSchema).array() ]),
+  skipDuplicates: z.boolean().optional(),
+});
+
 export const AdminUpsertWithoutCreatedEmployeesInputSchema: z.ZodType<Prisma.AdminUpsertWithoutCreatedEmployeesInput> = z.strictObject({
   update: z.union([ z.lazy(() => AdminUpdateWithoutCreatedEmployeesInputSchema), z.lazy(() => AdminUncheckedUpdateWithoutCreatedEmployeesInputSchema) ]),
   create: z.union([ z.lazy(() => AdminCreateWithoutCreatedEmployeesInputSchema), z.lazy(() => AdminUncheckedCreateWithoutCreatedEmployeesInputSchema) ]),
@@ -16311,6 +16600,60 @@ export const ShipmentScalarWhereInputSchema: z.ZodType<Prisma.ShipmentScalarWher
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
 });
 
+export const OrderUpsertWithWhereUniqueWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderUpsertWithWhereUniqueWithoutAssignedEmployeeInput> = z.strictObject({
+  where: z.lazy(() => OrderWhereUniqueInputSchema),
+  update: z.union([ z.lazy(() => OrderUpdateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUncheckedUpdateWithoutAssignedEmployeeInputSchema) ]),
+  create: z.union([ z.lazy(() => OrderCreateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUncheckedCreateWithoutAssignedEmployeeInputSchema) ]),
+});
+
+export const OrderUpdateWithWhereUniqueWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderUpdateWithWhereUniqueWithoutAssignedEmployeeInput> = z.strictObject({
+  where: z.lazy(() => OrderWhereUniqueInputSchema),
+  data: z.union([ z.lazy(() => OrderUpdateWithoutAssignedEmployeeInputSchema), z.lazy(() => OrderUncheckedUpdateWithoutAssignedEmployeeInputSchema) ]),
+});
+
+export const OrderUpdateManyWithWhereWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderUpdateManyWithWhereWithoutAssignedEmployeeInput> = z.strictObject({
+  where: z.lazy(() => OrderScalarWhereInputSchema),
+  data: z.union([ z.lazy(() => OrderUpdateManyMutationInputSchema), z.lazy(() => OrderUncheckedUpdateManyWithoutAssignedEmployeeInputSchema) ]),
+});
+
+export const OrderScalarWhereInputSchema: z.ZodType<Prisma.OrderScalarWhereInput> = z.strictObject({
+  AND: z.union([ z.lazy(() => OrderScalarWhereInputSchema), z.lazy(() => OrderScalarWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => OrderScalarWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => OrderScalarWhereInputSchema), z.lazy(() => OrderScalarWhereInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  orderCode: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  clientId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
+  subtotalAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  discountAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  shippingFee: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  totalAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
+  status: z.union([ z.lazy(() => EnumOrderStatusFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional(),
+  notes: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  receiverName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  receiverPhone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  shippingAddress: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.lazy(() => UuidNullableFilterSchema), z.string() ]).optional().nullable(),
+  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  cancelledAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
+});
+
+export const NotificationUpsertWithWhereUniqueWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationUpsertWithWhereUniqueWithoutEmployeeInput> = z.strictObject({
+  where: z.lazy(() => NotificationWhereUniqueInputSchema),
+  update: z.union([ z.lazy(() => NotificationUpdateWithoutEmployeeInputSchema), z.lazy(() => NotificationUncheckedUpdateWithoutEmployeeInputSchema) ]),
+  create: z.union([ z.lazy(() => NotificationCreateWithoutEmployeeInputSchema), z.lazy(() => NotificationUncheckedCreateWithoutEmployeeInputSchema) ]),
+});
+
+export const NotificationUpdateWithWhereUniqueWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationUpdateWithWhereUniqueWithoutEmployeeInput> = z.strictObject({
+  where: z.lazy(() => NotificationWhereUniqueInputSchema),
+  data: z.union([ z.lazy(() => NotificationUpdateWithoutEmployeeInputSchema), z.lazy(() => NotificationUncheckedUpdateWithoutEmployeeInputSchema) ]),
+});
+
+export const NotificationUpdateManyWithWhereWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationUpdateManyWithWhereWithoutEmployeeInput> = z.strictObject({
+  where: z.lazy(() => NotificationScalarWhereInputSchema),
+  data: z.union([ z.lazy(() => NotificationUpdateManyMutationInputSchema), z.lazy(() => NotificationUncheckedUpdateManyWithoutEmployeeInputSchema) ]),
+});
+
 export const SurveyResponseCreateWithoutClientInputSchema: z.ZodType<Prisma.SurveyResponseCreateWithoutClientInput> = z.strictObject({
   id: z.uuid().optional(),
   deliveryKey: z.string(),
@@ -16367,6 +16710,7 @@ export const NotificationCreateWithoutClientInputSchema: z.ZodType<Prisma.Notifi
   createdAt: z.coerce.date().optional(),
   admin: z.lazy(() => AdminCreateNestedOneWithoutNotificationsInputSchema).optional(),
   vendor: z.lazy(() => VendorCreateNestedOneWithoutNotificationsInputSchema).optional(),
+  employee: z.lazy(() => EmployeeCreateNestedOneWithoutNotificationsInputSchema).optional(),
   survey: z.lazy(() => SurveyCreateNestedOneWithoutNotificationsInputSchema).optional(),
   response: z.lazy(() => SurveyResponseCreateNestedOneWithoutNotificationInputSchema).optional(),
 });
@@ -16375,6 +16719,7 @@ export const NotificationUncheckedCreateWithoutClientInputSchema: z.ZodType<Pris
   id: z.uuid().optional(),
   adminId: z.string().optional().nullable(),
   vendorId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyId: z.string().optional().nullable(),
   surveyResponseId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
@@ -16529,6 +16874,7 @@ export const OrderCreateWithoutClientInputSchema: z.ZodType<Prisma.OrderCreateWi
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
+  assignedEmployee: z.lazy(() => EmployeeCreateNestedOneWithoutAssignedOrdersInputSchema).optional(),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
@@ -16550,6 +16896,7 @@ export const OrderUncheckedCreateWithoutClientInputSchema: z.ZodType<Prisma.Orde
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -16793,27 +17140,6 @@ export const OrderUpdateManyWithWhereWithoutClientInputSchema: z.ZodType<Prisma.
   data: z.union([ z.lazy(() => OrderUpdateManyMutationInputSchema), z.lazy(() => OrderUncheckedUpdateManyWithoutClientInputSchema) ]),
 });
 
-export const OrderScalarWhereInputSchema: z.ZodType<Prisma.OrderScalarWhereInput> = z.strictObject({
-  AND: z.union([ z.lazy(() => OrderScalarWhereInputSchema), z.lazy(() => OrderScalarWhereInputSchema).array() ]).optional(),
-  OR: z.lazy(() => OrderScalarWhereInputSchema).array().optional(),
-  NOT: z.union([ z.lazy(() => OrderScalarWhereInputSchema), z.lazy(() => OrderScalarWhereInputSchema).array() ]).optional(),
-  id: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
-  orderCode: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
-  clientId: z.union([ z.lazy(() => UuidFilterSchema), z.string() ]).optional(),
-  subtotalAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
-  discountAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
-  shippingFee: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
-  totalAmount: z.union([ z.lazy(() => DecimalFilterSchema), z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }) ]).optional(),
-  status: z.union([ z.lazy(() => EnumOrderStatusFilterSchema), z.lazy(() => OrderStatusSchema) ]).optional(),
-  notes: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
-  receiverName: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
-  receiverPhone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
-  shippingAddress: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
-  createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
-  updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
-  cancelledAt: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
-});
-
 export const OrderStatusHistoryUpsertWithWhereUniqueWithoutClientInputSchema: z.ZodType<Prisma.OrderStatusHistoryUpsertWithWhereUniqueWithoutClientInput> = z.strictObject({
   where: z.lazy(() => OrderStatusHistoryWhereUniqueInputSchema),
   update: z.union([ z.lazy(() => OrderStatusHistoryUpdateWithoutClientInputSchema), z.lazy(() => OrderStatusHistoryUncheckedUpdateWithoutClientInputSchema) ]),
@@ -16892,6 +17218,7 @@ export const NotificationCreateWithoutVendorInputSchema: z.ZodType<Prisma.Notifi
   createdAt: z.coerce.date().optional(),
   admin: z.lazy(() => AdminCreateNestedOneWithoutNotificationsInputSchema).optional(),
   client: z.lazy(() => ClientCreateNestedOneWithoutNotificationsInputSchema).optional(),
+  employee: z.lazy(() => EmployeeCreateNestedOneWithoutNotificationsInputSchema).optional(),
   survey: z.lazy(() => SurveyCreateNestedOneWithoutNotificationsInputSchema).optional(),
   response: z.lazy(() => SurveyResponseCreateNestedOneWithoutNotificationInputSchema).optional(),
 });
@@ -16900,6 +17227,7 @@ export const NotificationUncheckedCreateWithoutVendorInputSchema: z.ZodType<Pris
   id: z.uuid().optional(),
   adminId: z.string().optional().nullable(),
   clientId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyId: z.string().optional().nullable(),
   surveyResponseId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
@@ -17426,6 +17754,7 @@ export const NotificationCreateWithoutSurveyInputSchema: z.ZodType<Prisma.Notifi
   admin: z.lazy(() => AdminCreateNestedOneWithoutNotificationsInputSchema).optional(),
   client: z.lazy(() => ClientCreateNestedOneWithoutNotificationsInputSchema).optional(),
   vendor: z.lazy(() => VendorCreateNestedOneWithoutNotificationsInputSchema).optional(),
+  employee: z.lazy(() => EmployeeCreateNestedOneWithoutNotificationsInputSchema).optional(),
   response: z.lazy(() => SurveyResponseCreateNestedOneWithoutNotificationInputSchema).optional(),
 });
 
@@ -17434,6 +17763,7 @@ export const NotificationUncheckedCreateWithoutSurveyInputSchema: z.ZodType<Pris
   adminId: z.string().optional().nullable(),
   clientId: z.string().optional().nullable(),
   vendorId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyResponseId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
   title: z.string(),
@@ -18075,6 +18405,7 @@ export const OrderCreateWithoutSurveyResponsesInputSchema: z.ZodType<Prisma.Orde
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
   client: z.lazy(() => ClientCreateNestedOneWithoutOrdersInputSchema),
+  assignedEmployee: z.lazy(() => EmployeeCreateNestedOneWithoutAssignedOrdersInputSchema).optional(),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
@@ -18096,6 +18427,7 @@ export const OrderUncheckedCreateWithoutSurveyResponsesInputSchema: z.ZodType<Pr
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -18153,6 +18485,7 @@ export const NotificationCreateWithoutResponseInputSchema: z.ZodType<Prisma.Noti
   admin: z.lazy(() => AdminCreateNestedOneWithoutNotificationsInputSchema).optional(),
   client: z.lazy(() => ClientCreateNestedOneWithoutNotificationsInputSchema).optional(),
   vendor: z.lazy(() => VendorCreateNestedOneWithoutNotificationsInputSchema).optional(),
+  employee: z.lazy(() => EmployeeCreateNestedOneWithoutNotificationsInputSchema).optional(),
   survey: z.lazy(() => SurveyCreateNestedOneWithoutNotificationsInputSchema).optional(),
 });
 
@@ -18161,6 +18494,7 @@ export const NotificationUncheckedCreateWithoutResponseInputSchema: z.ZodType<Pr
   adminId: z.string().optional().nullable(),
   clientId: z.string().optional().nullable(),
   vendorId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
   title: z.string(),
@@ -18312,6 +18646,7 @@ export const OrderUpdateWithoutSurveyResponsesInputSchema: z.ZodType<Prisma.Orde
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   client: z.lazy(() => ClientUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  assignedEmployee: z.lazy(() => EmployeeUpdateOneWithoutAssignedOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
@@ -18333,6 +18668,7 @@ export const OrderUncheckedUpdateWithoutSurveyResponsesInputSchema: z.ZodType<Pr
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -18384,6 +18720,7 @@ export const NotificationUpdateWithoutResponseInputSchema: z.ZodType<Prisma.Noti
   admin: z.lazy(() => AdminUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   client: z.lazy(() => ClientUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   vendor: z.lazy(() => VendorUpdateOneWithoutNotificationsNestedInputSchema).optional(),
+  employee: z.lazy(() => EmployeeUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   survey: z.lazy(() => SurveyUpdateOneWithoutNotificationsNestedInputSchema).optional(),
 });
 
@@ -18392,6 +18729,7 @@ export const NotificationUncheckedUpdateWithoutResponseInputSchema: z.ZodType<Pr
   adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
   title: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -18564,6 +18902,77 @@ export const VendorUncheckedCreateWithoutNotificationsInputSchema: z.ZodType<Pri
 export const VendorCreateOrConnectWithoutNotificationsInputSchema: z.ZodType<Prisma.VendorCreateOrConnectWithoutNotificationsInput> = z.strictObject({
   where: z.lazy(() => VendorWhereUniqueInputSchema),
   create: z.union([ z.lazy(() => VendorCreateWithoutNotificationsInputSchema), z.lazy(() => VendorUncheckedCreateWithoutNotificationsInputSchema) ]),
+});
+
+export const EmployeeCreateWithoutNotificationsInputSchema: z.ZodType<Prisma.EmployeeCreateWithoutNotificationsInput> = z.strictObject({
+  id: z.uuid().optional(),
+  employeeCode: z.string(),
+  fullName: z.string(),
+  email: z.string(),
+  password: z.string(),
+  phone: z.string().optional().nullable(),
+  avatarUrl: z.string().optional().nullable(),
+  dateOfBirth: z.coerce.date().optional().nullable(),
+  gender: z.lazy(() => GenderSchema).optional().nullable(),
+  citizenId: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  department: z.string(),
+  position: z.string(),
+  employmentType: z.lazy(() => EmploymentTypeSchema).optional(),
+  salary: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  hourlyRate: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  hireDate: z.coerce.date(),
+  status: z.lazy(() => UserStatusSchema).optional(),
+  assignedOrderScope: z.string().optional(),
+  permissions: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+  createdBy: z.lazy(() => AdminCreateNestedOneWithoutCreatedEmployeesInputSchema).optional(),
+  salaryHistories: z.lazy(() => EmployeeSalaryHistoryCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  attendances: z.lazy(() => EmployeeAttendanceCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  payrolls: z.lazy(() => EmployeePayrollCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  assignedShipments: z.lazy(() => ShipmentCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+});
+
+export const EmployeeUncheckedCreateWithoutNotificationsInputSchema: z.ZodType<Prisma.EmployeeUncheckedCreateWithoutNotificationsInput> = z.strictObject({
+  id: z.uuid().optional(),
+  employeeCode: z.string(),
+  fullName: z.string(),
+  email: z.string(),
+  password: z.string(),
+  phone: z.string().optional().nullable(),
+  avatarUrl: z.string().optional().nullable(),
+  dateOfBirth: z.coerce.date().optional().nullable(),
+  gender: z.lazy(() => GenderSchema).optional().nullable(),
+  citizenId: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  department: z.string(),
+  position: z.string(),
+  employmentType: z.lazy(() => EmploymentTypeSchema).optional(),
+  salary: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  hourlyRate: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  hireDate: z.coerce.date(),
+  status: z.lazy(() => UserStatusSchema).optional(),
+  assignedOrderScope: z.string().optional(),
+  permissions: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  adminId: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+  salaryHistories: z.lazy(() => EmployeeSalaryHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  attendances: z.lazy(() => EmployeeAttendanceUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  payrolls: z.lazy(() => EmployeePayrollUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  assignedShipments: z.lazy(() => ShipmentUncheckedCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+});
+
+export const EmployeeCreateOrConnectWithoutNotificationsInputSchema: z.ZodType<Prisma.EmployeeCreateOrConnectWithoutNotificationsInput> = z.strictObject({
+  where: z.lazy(() => EmployeeWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => EmployeeCreateWithoutNotificationsInputSchema), z.lazy(() => EmployeeUncheckedCreateWithoutNotificationsInputSchema) ]),
 });
 
 export const SurveyCreateWithoutNotificationsInputSchema: z.ZodType<Prisma.SurveyCreateWithoutNotificationsInput> = z.strictObject({
@@ -18829,6 +19238,83 @@ export const VendorUncheckedUpdateWithoutNotificationsInputSchema: z.ZodType<Pri
   vouchers: z.lazy(() => VoucherUncheckedUpdateManyWithoutVendorNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutVendorNestedInputSchema).optional(),
   vendorOrders: z.lazy(() => VendorOrderUncheckedUpdateManyWithoutVendorNestedInputSchema).optional(),
+});
+
+export const EmployeeUpsertWithoutNotificationsInputSchema: z.ZodType<Prisma.EmployeeUpsertWithoutNotificationsInput> = z.strictObject({
+  update: z.union([ z.lazy(() => EmployeeUpdateWithoutNotificationsInputSchema), z.lazy(() => EmployeeUncheckedUpdateWithoutNotificationsInputSchema) ]),
+  create: z.union([ z.lazy(() => EmployeeCreateWithoutNotificationsInputSchema), z.lazy(() => EmployeeUncheckedCreateWithoutNotificationsInputSchema) ]),
+  where: z.lazy(() => EmployeeWhereInputSchema).optional(),
+});
+
+export const EmployeeUpdateToOneWithWhereWithoutNotificationsInputSchema: z.ZodType<Prisma.EmployeeUpdateToOneWithWhereWithoutNotificationsInput> = z.strictObject({
+  where: z.lazy(() => EmployeeWhereInputSchema).optional(),
+  data: z.union([ z.lazy(() => EmployeeUpdateWithoutNotificationsInputSchema), z.lazy(() => EmployeeUncheckedUpdateWithoutNotificationsInputSchema) ]),
+});
+
+export const EmployeeUpdateWithoutNotificationsInputSchema: z.ZodType<Prisma.EmployeeUpdateWithoutNotificationsInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  employeeCode: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fullName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  password: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  avatarUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dateOfBirth: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gender: z.union([ z.lazy(() => GenderSchema), z.lazy(() => NullableEnumGenderFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  citizenId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  address: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  department: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  position: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  employmentType: z.union([ z.lazy(() => EmploymentTypeSchema), z.lazy(() => EnumEmploymentTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  salary: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  hourlyRate: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  hireDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => UserStatusSchema), z.lazy(() => EnumUserStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  assignedOrderScope: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  permissions: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdBy: z.lazy(() => AdminUpdateOneWithoutCreatedEmployeesNestedInputSchema).optional(),
+  salaryHistories: z.lazy(() => EmployeeSalaryHistoryUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  attendances: z.lazy(() => EmployeeAttendanceUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  payrolls: z.lazy(() => EmployeePayrollUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  assignedShipments: z.lazy(() => ShipmentUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+});
+
+export const EmployeeUncheckedUpdateWithoutNotificationsInputSchema: z.ZodType<Prisma.EmployeeUncheckedUpdateWithoutNotificationsInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  employeeCode: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fullName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  password: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  avatarUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dateOfBirth: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gender: z.union([ z.lazy(() => GenderSchema), z.lazy(() => NullableEnumGenderFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  citizenId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  address: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  department: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  position: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  employmentType: z.union([ z.lazy(() => EmploymentTypeSchema), z.lazy(() => EnumEmploymentTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  salary: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  hourlyRate: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  hireDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => UserStatusSchema), z.lazy(() => EnumUserStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  assignedOrderScope: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  permissions: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  salaryHistories: z.lazy(() => EmployeeSalaryHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  attendances: z.lazy(() => EmployeeAttendanceUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  payrolls: z.lazy(() => EmployeePayrollUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  assignedShipments: z.lazy(() => ShipmentUncheckedUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
 });
 
 export const SurveyUpsertWithoutNotificationsInputSchema: z.ZodType<Prisma.SurveyUpsertWithoutNotificationsInput> = z.strictObject({
@@ -19532,6 +20018,7 @@ export const OrderCreateWithoutVoucherDetailsInputSchema: z.ZodType<Prisma.Order
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
   client: z.lazy(() => ClientCreateNestedOneWithoutOrdersInputSchema),
+  assignedEmployee: z.lazy(() => EmployeeCreateNestedOneWithoutAssignedOrdersInputSchema).optional(),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   statusHistory: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
@@ -19553,6 +20040,7 @@ export const OrderUncheckedCreateWithoutVoucherDetailsInputSchema: z.ZodType<Pri
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -19694,6 +20182,7 @@ export const OrderUpdateWithoutVoucherDetailsInputSchema: z.ZodType<Prisma.Order
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   client: z.lazy(() => ClientUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  assignedEmployee: z.lazy(() => EmployeeUpdateOneWithoutAssignedOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   statusHistory: z.lazy(() => OrderStatusHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
@@ -19715,6 +20204,7 @@ export const OrderUncheckedUpdateWithoutVoucherDetailsInputSchema: z.ZodType<Pri
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -21367,6 +21857,77 @@ export const ClientCreateOrConnectWithoutOrdersInputSchema: z.ZodType<Prisma.Cli
   create: z.union([ z.lazy(() => ClientCreateWithoutOrdersInputSchema), z.lazy(() => ClientUncheckedCreateWithoutOrdersInputSchema) ]),
 });
 
+export const EmployeeCreateWithoutAssignedOrdersInputSchema: z.ZodType<Prisma.EmployeeCreateWithoutAssignedOrdersInput> = z.strictObject({
+  id: z.uuid().optional(),
+  employeeCode: z.string(),
+  fullName: z.string(),
+  email: z.string(),
+  password: z.string(),
+  phone: z.string().optional().nullable(),
+  avatarUrl: z.string().optional().nullable(),
+  dateOfBirth: z.coerce.date().optional().nullable(),
+  gender: z.lazy(() => GenderSchema).optional().nullable(),
+  citizenId: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  department: z.string(),
+  position: z.string(),
+  employmentType: z.lazy(() => EmploymentTypeSchema).optional(),
+  salary: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  hourlyRate: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  hireDate: z.coerce.date(),
+  status: z.lazy(() => UserStatusSchema).optional(),
+  assignedOrderScope: z.string().optional(),
+  permissions: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+  createdBy: z.lazy(() => AdminCreateNestedOneWithoutCreatedEmployeesInputSchema).optional(),
+  salaryHistories: z.lazy(() => EmployeeSalaryHistoryCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  attendances: z.lazy(() => EmployeeAttendanceCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  payrolls: z.lazy(() => EmployeePayrollCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  assignedShipments: z.lazy(() => ShipmentCreateNestedManyWithoutCarrierInputSchema).optional(),
+  notifications: z.lazy(() => NotificationCreateNestedManyWithoutEmployeeInputSchema).optional(),
+});
+
+export const EmployeeUncheckedCreateWithoutAssignedOrdersInputSchema: z.ZodType<Prisma.EmployeeUncheckedCreateWithoutAssignedOrdersInput> = z.strictObject({
+  id: z.uuid().optional(),
+  employeeCode: z.string(),
+  fullName: z.string(),
+  email: z.string(),
+  password: z.string(),
+  phone: z.string().optional().nullable(),
+  avatarUrl: z.string().optional().nullable(),
+  dateOfBirth: z.coerce.date().optional().nullable(),
+  gender: z.lazy(() => GenderSchema).optional().nullable(),
+  citizenId: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  department: z.string(),
+  position: z.string(),
+  employmentType: z.lazy(() => EmploymentTypeSchema).optional(),
+  salary: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  hourlyRate: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional().nullable(),
+  hireDate: z.coerce.date(),
+  status: z.lazy(() => UserStatusSchema).optional(),
+  assignedOrderScope: z.string().optional(),
+  permissions: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  adminId: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  deletedAt: z.coerce.date().optional().nullable(),
+  salaryHistories: z.lazy(() => EmployeeSalaryHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  attendances: z.lazy(() => EmployeeAttendanceUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  payrolls: z.lazy(() => EmployeePayrollUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  assignedShipments: z.lazy(() => ShipmentUncheckedCreateNestedManyWithoutCarrierInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
+});
+
+export const EmployeeCreateOrConnectWithoutAssignedOrdersInputSchema: z.ZodType<Prisma.EmployeeCreateOrConnectWithoutAssignedOrdersInput> = z.strictObject({
+  where: z.lazy(() => EmployeeWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => EmployeeCreateWithoutAssignedOrdersInputSchema), z.lazy(() => EmployeeUncheckedCreateWithoutAssignedOrdersInputSchema) ]),
+});
+
 export const OrderDetailCreateWithoutOrderInputSchema: z.ZodType<Prisma.OrderDetailCreateWithoutOrderInput> = z.strictObject({
   id: z.uuid().optional(),
   quantity: z.number().int(),
@@ -21693,6 +22254,83 @@ export const ClientUncheckedUpdateWithoutOrdersInputSchema: z.ZodType<Prisma.Cli
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutClientNestedInputSchema).optional(),
 });
 
+export const EmployeeUpsertWithoutAssignedOrdersInputSchema: z.ZodType<Prisma.EmployeeUpsertWithoutAssignedOrdersInput> = z.strictObject({
+  update: z.union([ z.lazy(() => EmployeeUpdateWithoutAssignedOrdersInputSchema), z.lazy(() => EmployeeUncheckedUpdateWithoutAssignedOrdersInputSchema) ]),
+  create: z.union([ z.lazy(() => EmployeeCreateWithoutAssignedOrdersInputSchema), z.lazy(() => EmployeeUncheckedCreateWithoutAssignedOrdersInputSchema) ]),
+  where: z.lazy(() => EmployeeWhereInputSchema).optional(),
+});
+
+export const EmployeeUpdateToOneWithWhereWithoutAssignedOrdersInputSchema: z.ZodType<Prisma.EmployeeUpdateToOneWithWhereWithoutAssignedOrdersInput> = z.strictObject({
+  where: z.lazy(() => EmployeeWhereInputSchema).optional(),
+  data: z.union([ z.lazy(() => EmployeeUpdateWithoutAssignedOrdersInputSchema), z.lazy(() => EmployeeUncheckedUpdateWithoutAssignedOrdersInputSchema) ]),
+});
+
+export const EmployeeUpdateWithoutAssignedOrdersInputSchema: z.ZodType<Prisma.EmployeeUpdateWithoutAssignedOrdersInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  employeeCode: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fullName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  password: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  avatarUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dateOfBirth: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gender: z.union([ z.lazy(() => GenderSchema), z.lazy(() => NullableEnumGenderFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  citizenId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  address: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  department: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  position: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  employmentType: z.union([ z.lazy(() => EmploymentTypeSchema), z.lazy(() => EnumEmploymentTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  salary: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  hourlyRate: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  hireDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => UserStatusSchema), z.lazy(() => EnumUserStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  assignedOrderScope: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  permissions: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdBy: z.lazy(() => AdminUpdateOneWithoutCreatedEmployeesNestedInputSchema).optional(),
+  salaryHistories: z.lazy(() => EmployeeSalaryHistoryUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  attendances: z.lazy(() => EmployeeAttendanceUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  payrolls: z.lazy(() => EmployeePayrollUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  assignedShipments: z.lazy(() => ShipmentUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+});
+
+export const EmployeeUncheckedUpdateWithoutAssignedOrdersInputSchema: z.ZodType<Prisma.EmployeeUncheckedUpdateWithoutAssignedOrdersInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  employeeCode: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  fullName: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  email: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  password: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  avatarUrl: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  dateOfBirth: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  gender: z.union([ z.lazy(() => GenderSchema), z.lazy(() => NullableEnumGenderFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  citizenId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  address: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  department: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  position: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  employmentType: z.union([ z.lazy(() => EmploymentTypeSchema), z.lazy(() => EnumEmploymentTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  salary: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  hourlyRate: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => NullableDecimalFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  hireDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => UserStatusSchema), z.lazy(() => EnumUserStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  assignedOrderScope: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  permissions: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  deletedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  salaryHistories: z.lazy(() => EmployeeSalaryHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  attendances: z.lazy(() => EmployeeAttendanceUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  payrolls: z.lazy(() => EmployeePayrollUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  assignedShipments: z.lazy(() => ShipmentUncheckedUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+});
+
 export const OrderDetailUpsertWithWhereUniqueWithoutOrderInputSchema: z.ZodType<Prisma.OrderDetailUpsertWithWhereUniqueWithoutOrderInput> = z.strictObject({
   where: z.lazy(() => OrderDetailWhereUniqueInputSchema),
   update: z.union([ z.lazy(() => OrderDetailUpdateWithoutOrderInputSchema), z.lazy(() => OrderDetailUncheckedUpdateWithoutOrderInputSchema) ]),
@@ -21844,6 +22482,7 @@ export const OrderCreateWithoutDetailsInputSchema: z.ZodType<Prisma.OrderCreateW
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
   client: z.lazy(() => ClientCreateNestedOneWithoutOrdersInputSchema),
+  assignedEmployee: z.lazy(() => EmployeeCreateNestedOneWithoutAssignedOrdersInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   statusHistory: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
@@ -21865,6 +22504,7 @@ export const OrderUncheckedCreateWithoutDetailsInputSchema: z.ZodType<Prisma.Ord
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -21999,6 +22639,7 @@ export const OrderUpdateWithoutDetailsInputSchema: z.ZodType<Prisma.OrderUpdateW
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   client: z.lazy(() => ClientUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  assignedEmployee: z.lazy(() => EmployeeUpdateOneWithoutAssignedOrdersNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   statusHistory: z.lazy(() => OrderStatusHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
@@ -22020,6 +22661,7 @@ export const OrderUncheckedUpdateWithoutDetailsInputSchema: z.ZodType<Prisma.Ord
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -22156,6 +22798,7 @@ export const OrderCreateWithoutPaymentInputSchema: z.ZodType<Prisma.OrderCreateW
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
   client: z.lazy(() => ClientCreateNestedOneWithoutOrdersInputSchema),
+  assignedEmployee: z.lazy(() => EmployeeCreateNestedOneWithoutAssignedOrdersInputSchema).optional(),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   statusHistory: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutOrderInputSchema).optional(),
@@ -22177,6 +22820,7 @@ export const OrderUncheckedCreateWithoutPaymentInputSchema: z.ZodType<Prisma.Ord
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -22220,6 +22864,7 @@ export const OrderUpdateWithoutPaymentInputSchema: z.ZodType<Prisma.OrderUpdateW
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   client: z.lazy(() => ClientUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  assignedEmployee: z.lazy(() => EmployeeUpdateOneWithoutAssignedOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   statusHistory: z.lazy(() => OrderStatusHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
@@ -22241,6 +22886,7 @@ export const OrderUncheckedUpdateWithoutPaymentInputSchema: z.ZodType<Prisma.Ord
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -22268,6 +22914,7 @@ export const OrderCreateWithoutStatusHistoryInputSchema: z.ZodType<Prisma.OrderC
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
   client: z.lazy(() => ClientCreateNestedOneWithoutOrdersInputSchema),
+  assignedEmployee: z.lazy(() => EmployeeCreateNestedOneWithoutAssignedOrdersInputSchema).optional(),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
@@ -22289,6 +22936,7 @@ export const OrderUncheckedCreateWithoutStatusHistoryInputSchema: z.ZodType<Pris
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -22497,6 +23145,8 @@ export const EmployeeCreateWithoutOrderStatusHistoriesInputSchema: z.ZodType<Pri
   attendances: z.lazy(() => EmployeeAttendanceCreateNestedManyWithoutEmployeeInputSchema).optional(),
   payrolls: z.lazy(() => EmployeePayrollCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeUncheckedCreateWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.EmployeeUncheckedCreateWithoutOrderStatusHistoriesInput> = z.strictObject({
@@ -22528,6 +23178,8 @@ export const EmployeeUncheckedCreateWithoutOrderStatusHistoriesInputSchema: z.Zo
   attendances: z.lazy(() => EmployeeAttendanceUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   payrolls: z.lazy(() => EmployeePayrollUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeCreateOrConnectWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.EmployeeCreateOrConnectWithoutOrderStatusHistoriesInput> = z.strictObject({
@@ -22562,6 +23214,7 @@ export const OrderUpdateWithoutStatusHistoryInputSchema: z.ZodType<Prisma.OrderU
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   client: z.lazy(() => ClientUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  assignedEmployee: z.lazy(() => EmployeeUpdateOneWithoutAssignedOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
@@ -22583,6 +23236,7 @@ export const OrderUncheckedUpdateWithoutStatusHistoryInputSchema: z.ZodType<Pris
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -22815,6 +23469,8 @@ export const EmployeeUpdateWithoutOrderStatusHistoriesInputSchema: z.ZodType<Pri
   attendances: z.lazy(() => EmployeeAttendanceUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   payrolls: z.lazy(() => EmployeePayrollUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeUncheckedUpdateWithoutOrderStatusHistoriesInputSchema: z.ZodType<Prisma.EmployeeUncheckedUpdateWithoutOrderStatusHistoriesInput> = z.strictObject({
@@ -22846,6 +23502,8 @@ export const EmployeeUncheckedUpdateWithoutOrderStatusHistoriesInputSchema: z.Zo
   attendances: z.lazy(() => EmployeeAttendanceUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   payrolls: z.lazy(() => EmployeePayrollUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeCreateWithoutSalaryHistoriesInputSchema: z.ZodType<Prisma.EmployeeCreateWithoutSalaryHistoriesInput> = z.strictObject({
@@ -22877,6 +23535,8 @@ export const EmployeeCreateWithoutSalaryHistoriesInputSchema: z.ZodType<Prisma.E
   payrolls: z.lazy(() => EmployeePayrollCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeUncheckedCreateWithoutSalaryHistoriesInputSchema: z.ZodType<Prisma.EmployeeUncheckedCreateWithoutSalaryHistoriesInput> = z.strictObject({
@@ -22908,6 +23568,8 @@ export const EmployeeUncheckedCreateWithoutSalaryHistoriesInputSchema: z.ZodType
   payrolls: z.lazy(() => EmployeePayrollUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeCreateOrConnectWithoutSalaryHistoriesInputSchema: z.ZodType<Prisma.EmployeeCreateOrConnectWithoutSalaryHistoriesInput> = z.strictObject({
@@ -22998,6 +23660,8 @@ export const EmployeeUpdateWithoutSalaryHistoriesInputSchema: z.ZodType<Prisma.E
   payrolls: z.lazy(() => EmployeePayrollUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeUncheckedUpdateWithoutSalaryHistoriesInputSchema: z.ZodType<Prisma.EmployeeUncheckedUpdateWithoutSalaryHistoriesInput> = z.strictObject({
@@ -23029,6 +23693,8 @@ export const EmployeeUncheckedUpdateWithoutSalaryHistoriesInputSchema: z.ZodType
   payrolls: z.lazy(() => EmployeePayrollUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const AdminUpsertWithoutCreatedSalaryHistoriesInputSchema: z.ZodType<Prisma.AdminUpsertWithoutCreatedSalaryHistoriesInput> = z.strictObject({
@@ -23109,6 +23775,8 @@ export const EmployeeCreateWithoutAttendancesInputSchema: z.ZodType<Prisma.Emplo
   payrolls: z.lazy(() => EmployeePayrollCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeUncheckedCreateWithoutAttendancesInputSchema: z.ZodType<Prisma.EmployeeUncheckedCreateWithoutAttendancesInput> = z.strictObject({
@@ -23140,6 +23808,8 @@ export const EmployeeUncheckedCreateWithoutAttendancesInputSchema: z.ZodType<Pri
   payrolls: z.lazy(() => EmployeePayrollUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeCreateOrConnectWithoutAttendancesInputSchema: z.ZodType<Prisma.EmployeeCreateOrConnectWithoutAttendancesInput> = z.strictObject({
@@ -23187,6 +23857,8 @@ export const EmployeeUpdateWithoutAttendancesInputSchema: z.ZodType<Prisma.Emplo
   payrolls: z.lazy(() => EmployeePayrollUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeUncheckedUpdateWithoutAttendancesInputSchema: z.ZodType<Prisma.EmployeeUncheckedUpdateWithoutAttendancesInput> = z.strictObject({
@@ -23218,6 +23890,8 @@ export const EmployeeUncheckedUpdateWithoutAttendancesInputSchema: z.ZodType<Pri
   payrolls: z.lazy(() => EmployeePayrollUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeCreateWithoutPayrollsInputSchema: z.ZodType<Prisma.EmployeeCreateWithoutPayrollsInput> = z.strictObject({
@@ -23249,6 +23923,8 @@ export const EmployeeCreateWithoutPayrollsInputSchema: z.ZodType<Prisma.Employee
   attendances: z.lazy(() => EmployeeAttendanceCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeUncheckedCreateWithoutPayrollsInputSchema: z.ZodType<Prisma.EmployeeUncheckedCreateWithoutPayrollsInput> = z.strictObject({
@@ -23280,6 +23956,8 @@ export const EmployeeUncheckedCreateWithoutPayrollsInputSchema: z.ZodType<Prisma
   attendances: z.lazy(() => EmployeeAttendanceUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedCreateNestedManyWithoutCarrierInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeCreateOrConnectWithoutPayrollsInputSchema: z.ZodType<Prisma.EmployeeCreateOrConnectWithoutPayrollsInput> = z.strictObject({
@@ -23327,6 +24005,8 @@ export const EmployeeUpdateWithoutPayrollsInputSchema: z.ZodType<Prisma.Employee
   attendances: z.lazy(() => EmployeeAttendanceUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeUncheckedUpdateWithoutPayrollsInputSchema: z.ZodType<Prisma.EmployeeUncheckedUpdateWithoutPayrollsInput> = z.strictObject({
@@ -23358,6 +24038,8 @@ export const EmployeeUncheckedUpdateWithoutPayrollsInputSchema: z.ZodType<Prisma
   attendances: z.lazy(() => EmployeeAttendanceUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const OrderCreateWithoutVendorOrdersInputSchema: z.ZodType<Prisma.OrderCreateWithoutVendorOrdersInput> = z.strictObject({
@@ -23376,6 +24058,7 @@ export const OrderCreateWithoutVendorOrdersInputSchema: z.ZodType<Prisma.OrderCr
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
   client: z.lazy(() => ClientCreateNestedOneWithoutOrdersInputSchema),
+  assignedEmployee: z.lazy(() => EmployeeCreateNestedOneWithoutAssignedOrdersInputSchema).optional(),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
@@ -23397,6 +24080,7 @@ export const OrderUncheckedCreateWithoutVendorOrdersInputSchema: z.ZodType<Prism
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -23590,6 +24274,7 @@ export const OrderUpdateWithoutVendorOrdersInputSchema: z.ZodType<Prisma.OrderUp
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   client: z.lazy(() => ClientUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  assignedEmployee: z.lazy(() => EmployeeUpdateOneWithoutAssignedOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
@@ -23611,6 +24296,7 @@ export const OrderUncheckedUpdateWithoutVendorOrdersInputSchema: z.ZodType<Prism
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -23780,6 +24466,7 @@ export const OrderCreateWithoutShipmentsInputSchema: z.ZodType<Prisma.OrderCreat
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
   client: z.lazy(() => ClientCreateNestedOneWithoutOrdersInputSchema),
+  assignedEmployee: z.lazy(() => EmployeeCreateNestedOneWithoutAssignedOrdersInputSchema).optional(),
   details: z.lazy(() => OrderDetailCreateNestedManyWithoutOrderInputSchema).optional(),
   payment: z.lazy(() => PaymentCreateNestedOneWithoutOrderInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailCreateNestedManyWithoutOrderInputSchema).optional(),
@@ -23801,6 +24488,7 @@ export const OrderUncheckedCreateWithoutShipmentsInputSchema: z.ZodType<Prisma.O
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -23881,6 +24569,8 @@ export const EmployeeCreateWithoutAssignedShipmentsInputSchema: z.ZodType<Prisma
   attendances: z.lazy(() => EmployeeAttendanceCreateNestedManyWithoutEmployeeInputSchema).optional(),
   payrolls: z.lazy(() => EmployeePayrollCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeUncheckedCreateWithoutAssignedShipmentsInputSchema: z.ZodType<Prisma.EmployeeUncheckedCreateWithoutAssignedShipmentsInput> = z.strictObject({
@@ -23912,6 +24602,8 @@ export const EmployeeUncheckedCreateWithoutAssignedShipmentsInputSchema: z.ZodTy
   attendances: z.lazy(() => EmployeeAttendanceUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   payrolls: z.lazy(() => EmployeePayrollUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutAssignedEmployeeInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedCreateNestedManyWithoutEmployeeInputSchema).optional(),
 });
 
 export const EmployeeCreateOrConnectWithoutAssignedShipmentsInputSchema: z.ZodType<Prisma.EmployeeCreateOrConnectWithoutAssignedShipmentsInput> = z.strictObject({
@@ -23976,6 +24668,7 @@ export const OrderUpdateWithoutShipmentsInputSchema: z.ZodType<Prisma.OrderUpdat
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   client: z.lazy(() => ClientUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  assignedEmployee: z.lazy(() => EmployeeUpdateOneWithoutAssignedOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
@@ -23997,6 +24690,7 @@ export const OrderUncheckedUpdateWithoutShipmentsInputSchema: z.ZodType<Prisma.O
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -24089,6 +24783,8 @@ export const EmployeeUpdateWithoutAssignedShipmentsInputSchema: z.ZodType<Prisma
   attendances: z.lazy(() => EmployeeAttendanceUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   payrolls: z.lazy(() => EmployeePayrollUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeUncheckedUpdateWithoutAssignedShipmentsInputSchema: z.ZodType<Prisma.EmployeeUncheckedUpdateWithoutAssignedShipmentsInput> = z.strictObject({
@@ -24120,6 +24816,8 @@ export const EmployeeUncheckedUpdateWithoutAssignedShipmentsInputSchema: z.ZodTy
   attendances: z.lazy(() => EmployeeAttendanceUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   payrolls: z.lazy(() => EmployeePayrollUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const ShipmentEventUpsertWithWhereUniqueWithoutShipmentInputSchema: z.ZodType<Prisma.ShipmentEventUpsertWithWhereUniqueWithoutShipmentInput> = z.strictObject({
@@ -24269,6 +24967,7 @@ export const NotificationCreateManyAdminInputSchema: z.ZodType<Prisma.Notificati
   id: z.uuid().optional(),
   clientId: z.string().optional().nullable(),
   vendorId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyId: z.string().optional().nullable(),
   surveyResponseId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
@@ -24422,6 +25121,7 @@ export const NotificationUpdateWithoutAdminInputSchema: z.ZodType<Prisma.Notific
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   client: z.lazy(() => ClientUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   vendor: z.lazy(() => VendorUpdateOneWithoutNotificationsNestedInputSchema).optional(),
+  employee: z.lazy(() => EmployeeUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   survey: z.lazy(() => SurveyUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   response: z.lazy(() => SurveyResponseUpdateOneWithoutNotificationNestedInputSchema).optional(),
 });
@@ -24430,6 +25130,7 @@ export const NotificationUncheckedUpdateWithoutAdminInputSchema: z.ZodType<Prism
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -24446,6 +25147,7 @@ export const NotificationUncheckedUpdateManyWithoutAdminInputSchema: z.ZodType<P
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -24588,6 +25290,8 @@ export const EmployeeUpdateWithoutCreatedByInputSchema: z.ZodType<Prisma.Employe
   payrolls: z.lazy(() => EmployeePayrollUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeUncheckedUpdateWithoutCreatedByInputSchema: z.ZodType<Prisma.EmployeeUncheckedUpdateWithoutCreatedByInput> = z.strictObject({
@@ -24619,6 +25323,8 @@ export const EmployeeUncheckedUpdateWithoutCreatedByInputSchema: z.ZodType<Prism
   payrolls: z.lazy(() => EmployeePayrollUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   orderStatusHistories: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
   assignedShipments: z.lazy(() => ShipmentUncheckedUpdateManyWithoutCarrierNestedInputSchema).optional(),
+  assignedOrders: z.lazy(() => OrderUncheckedUpdateManyWithoutAssignedEmployeeNestedInputSchema).optional(),
+  notifications: z.lazy(() => NotificationUncheckedUpdateManyWithoutEmployeeNestedInputSchema).optional(),
 });
 
 export const EmployeeUncheckedUpdateManyWithoutCreatedByInputSchema: z.ZodType<Prisma.EmployeeUncheckedUpdateManyWithoutCreatedByInput> = z.strictObject({
@@ -24759,6 +25465,41 @@ export const ShipmentCreateManyCarrierInputSchema: z.ZodType<Prisma.ShipmentCrea
   notes: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
+});
+
+export const OrderCreateManyAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderCreateManyAssignedEmployeeInput> = z.strictObject({
+  id: z.uuid().optional(),
+  orderCode: z.cuid().optional(),
+  clientId: z.string(),
+  subtotalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  discountAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  shippingFee: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }).optional(),
+  totalAmount: z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),
+  status: z.lazy(() => OrderStatusSchema).optional(),
+  notes: z.string().optional().nullable(),
+  receiverName: z.string().optional().nullable(),
+  receiverPhone: z.string().optional().nullable(),
+  shippingAddress: z.string().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
+  updatedAt: z.coerce.date().optional(),
+  cancelledAt: z.coerce.date().optional().nullable(),
+});
+
+export const NotificationCreateManyEmployeeInputSchema: z.ZodType<Prisma.NotificationCreateManyEmployeeInput> = z.strictObject({
+  id: z.uuid().optional(),
+  adminId: z.string().optional().nullable(),
+  clientId: z.string().optional().nullable(),
+  vendorId: z.string().optional().nullable(),
+  surveyId: z.string().optional().nullable(),
+  surveyResponseId: z.string().optional().nullable(),
+  type: z.lazy(() => NotificationTypeSchema),
+  title: z.string(),
+  content: z.string().optional().nullable(),
+  data: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  isRead: z.boolean().optional(),
+  readAt: z.coerce.date().optional().nullable(),
+  expiresAt: z.coerce.date().optional().nullable(),
+  createdAt: z.coerce.date().optional(),
 });
 
 export const EmployeeSalaryHistoryUpdateWithoutEmployeeInputSchema: z.ZodType<Prisma.EmployeeSalaryHistoryUpdateWithoutEmployeeInput> = z.strictObject({
@@ -24988,6 +25729,125 @@ export const ShipmentUncheckedUpdateManyWithoutCarrierInputSchema: z.ZodType<Pri
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 });
 
+export const OrderUpdateWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderUpdateWithoutAssignedEmployeeInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  client: z.lazy(() => ClientUpdateOneRequiredWithoutOrdersNestedInputSchema).optional(),
+  details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
+  payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
+  voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUpdateManyWithoutOrderNestedInputSchema).optional(),
+  surveyResponses: z.lazy(() => SurveyResponseUpdateManyWithoutOrderNestedInputSchema).optional(),
+  vendorOrders: z.lazy(() => VendorOrderUpdateManyWithoutOrderNestedInputSchema).optional(),
+  shipments: z.lazy(() => ShipmentUpdateManyWithoutOrderNestedInputSchema).optional(),
+});
+
+export const OrderUncheckedUpdateWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateWithoutAssignedEmployeeInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  clientId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  details: z.lazy(() => OrderDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+  payment: z.lazy(() => PaymentUncheckedUpdateOneWithoutOrderNestedInputSchema).optional(),
+  voucherDetails: z.lazy(() => VoucherDetailUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+  statusHistory: z.lazy(() => OrderStatusHistoryUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+  surveyResponses: z.lazy(() => SurveyResponseUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+  vendorOrders: z.lazy(() => VendorOrderUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+  shipments: z.lazy(() => ShipmentUncheckedUpdateManyWithoutOrderNestedInputSchema).optional(),
+});
+
+export const OrderUncheckedUpdateManyWithoutAssignedEmployeeInputSchema: z.ZodType<Prisma.OrderUncheckedUpdateManyWithoutAssignedEmployeeInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  orderCode: z.union([ z.cuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  clientId: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  subtotalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  discountAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  shippingFee: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  totalAmount: z.union([ z.union([z.number(),z.string(),z.instanceof(Prisma.Decimal),DecimalJsLikeSchema,]).refine((v) => isValidDecimalInput(v), { message: 'Must be a Decimal' }),z.lazy(() => DecimalFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => OrderStatusSchema), z.lazy(() => EnumOrderStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  notes: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+});
+
+export const NotificationUpdateWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationUpdateWithoutEmployeeInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  title: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  content: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  data: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  isRead: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
+  readAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  expiresAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  admin: z.lazy(() => AdminUpdateOneWithoutNotificationsNestedInputSchema).optional(),
+  client: z.lazy(() => ClientUpdateOneWithoutNotificationsNestedInputSchema).optional(),
+  vendor: z.lazy(() => VendorUpdateOneWithoutNotificationsNestedInputSchema).optional(),
+  survey: z.lazy(() => SurveyUpdateOneWithoutNotificationsNestedInputSchema).optional(),
+  response: z.lazy(() => SurveyResponseUpdateOneWithoutNotificationNestedInputSchema).optional(),
+});
+
+export const NotificationUncheckedUpdateWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationUncheckedUpdateWithoutEmployeeInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  title: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  content: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  data: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  isRead: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
+  readAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  expiresAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+});
+
+export const NotificationUncheckedUpdateManyWithoutEmployeeInputSchema: z.ZodType<Prisma.NotificationUncheckedUpdateManyWithoutEmployeeInput> = z.strictObject({
+  id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  title: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  content: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  data: z.union([ z.lazy(() => NullableJsonNullValueInputSchema), InputJsonValueSchema ]).optional(),
+  isRead: z.union([ z.boolean(),z.lazy(() => BoolFieldUpdateOperationsInputSchema) ]).optional(),
+  readAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  expiresAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+});
+
 export const SurveyResponseCreateManyClientInputSchema: z.ZodType<Prisma.SurveyResponseCreateManyClientInput> = z.strictObject({
   id: z.uuid().optional(),
   surveyId: z.string(),
@@ -25007,6 +25867,7 @@ export const NotificationCreateManyClientInputSchema: z.ZodType<Prisma.Notificat
   id: z.uuid().optional(),
   adminId: z.string().optional().nullable(),
   vendorId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyId: z.string().optional().nullable(),
   surveyResponseId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
@@ -25064,6 +25925,7 @@ export const OrderCreateManyClientInputSchema: z.ZodType<Prisma.OrderCreateManyC
   receiverName: z.string().optional().nullable(),
   receiverPhone: z.string().optional().nullable(),
   shippingAddress: z.string().optional().nullable(),
+  assignedEmployeeId: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   cancelledAt: z.coerce.date().optional().nullable(),
@@ -25142,6 +26004,7 @@ export const NotificationUpdateWithoutClientInputSchema: z.ZodType<Prisma.Notifi
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   admin: z.lazy(() => AdminUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   vendor: z.lazy(() => VendorUpdateOneWithoutNotificationsNestedInputSchema).optional(),
+  employee: z.lazy(() => EmployeeUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   survey: z.lazy(() => SurveyUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   response: z.lazy(() => SurveyResponseUpdateOneWithoutNotificationNestedInputSchema).optional(),
 });
@@ -25150,6 +26013,7 @@ export const NotificationUncheckedUpdateWithoutClientInputSchema: z.ZodType<Pris
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -25166,6 +26030,7 @@ export const NotificationUncheckedUpdateManyWithoutClientInputSchema: z.ZodType<
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -25292,6 +26157,7 @@ export const OrderUpdateWithoutClientInputSchema: z.ZodType<Prisma.OrderUpdateWi
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployee: z.lazy(() => EmployeeUpdateOneWithoutAssignedOrdersNestedInputSchema).optional(),
   details: z.lazy(() => OrderDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
   payment: z.lazy(() => PaymentUpdateOneWithoutOrderNestedInputSchema).optional(),
   voucherDetails: z.lazy(() => VoucherDetailUpdateManyWithoutOrderNestedInputSchema).optional(),
@@ -25313,6 +26179,7 @@ export const OrderUncheckedUpdateWithoutClientInputSchema: z.ZodType<Prisma.Orde
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -25337,6 +26204,7 @@ export const OrderUncheckedUpdateManyWithoutClientInputSchema: z.ZodType<Prisma.
   receiverName: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   receiverPhone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   shippingAddress: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  assignedEmployeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   cancelledAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
@@ -25399,6 +26267,7 @@ export const NotificationCreateManyVendorInputSchema: z.ZodType<Prisma.Notificat
   id: z.uuid().optional(),
   adminId: z.string().optional().nullable(),
   clientId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyId: z.string().optional().nullable(),
   surveyResponseId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
@@ -25538,6 +26407,7 @@ export const NotificationUpdateWithoutVendorInputSchema: z.ZodType<Prisma.Notifi
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   admin: z.lazy(() => AdminUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   client: z.lazy(() => ClientUpdateOneWithoutNotificationsNestedInputSchema).optional(),
+  employee: z.lazy(() => EmployeeUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   survey: z.lazy(() => SurveyUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   response: z.lazy(() => SurveyResponseUpdateOneWithoutNotificationNestedInputSchema).optional(),
 });
@@ -25546,6 +26416,7 @@ export const NotificationUncheckedUpdateWithoutVendorInputSchema: z.ZodType<Pris
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -25562,6 +26433,7 @@ export const NotificationUncheckedUpdateManyWithoutVendorInputSchema: z.ZodType<
   id: z.union([ z.uuid(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
@@ -25793,6 +26665,7 @@ export const NotificationCreateManySurveyInputSchema: z.ZodType<Prisma.Notificat
   adminId: z.string().optional().nullable(),
   clientId: z.string().optional().nullable(),
   vendorId: z.string().optional().nullable(),
+  employeeId: z.string().optional().nullable(),
   surveyResponseId: z.string().optional().nullable(),
   type: z.lazy(() => NotificationTypeSchema),
   title: z.string(),
@@ -25903,6 +26776,7 @@ export const NotificationUpdateWithoutSurveyInputSchema: z.ZodType<Prisma.Notifi
   admin: z.lazy(() => AdminUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   client: z.lazy(() => ClientUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   vendor: z.lazy(() => VendorUpdateOneWithoutNotificationsNestedInputSchema).optional(),
+  employee: z.lazy(() => EmployeeUpdateOneWithoutNotificationsNestedInputSchema).optional(),
   response: z.lazy(() => SurveyResponseUpdateOneWithoutNotificationNestedInputSchema).optional(),
 });
 
@@ -25911,6 +26785,7 @@ export const NotificationUncheckedUpdateWithoutSurveyInputSchema: z.ZodType<Pris
   adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
   title: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
@@ -25927,6 +26802,7 @@ export const NotificationUncheckedUpdateManyWithoutSurveyInputSchema: z.ZodType<
   adminId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   clientId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   vendorId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  employeeId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   surveyResponseId: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   type: z.union([ z.lazy(() => NotificationTypeSchema), z.lazy(() => EnumNotificationTypeFieldUpdateOperationsInputSchema) ]).optional(),
   title: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),

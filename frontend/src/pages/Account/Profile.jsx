@@ -6,7 +6,7 @@ import { addressService } from '../../services/addressService';
 import { useToast } from '../../components/common/Toast/Toast';
 import Button from '../../components/common/Button/Button';
 import Input from '../../components/common/Input/Input';
-import { User, Mail, MapPin, Phone, Calendar, Users, Pencil, X, Check, Upload, Trash2 } from 'lucide-react';
+import { User, Mail, MapPin, Phone, Calendar, Users, Pencil, X, Check, Upload, Trash2, LogOut, ShieldCheck } from 'lucide-react';
 
 const GENDER_OPTIONS = [
   { value: '', label: 'Chưa chọn' },
@@ -32,15 +32,35 @@ const getErrorMessage = (error, fallback) =>
 const joinAddress = (a) =>
   a ? [a.addressLine, a.ward, a.district, a.province].map((p) => (p || '').trim()).filter(Boolean).join(', ') : '';
 
-function InfoRow({ icon: Icon, label, value }) {
+function InfoCard({ icon: Icon, label, value, badge, className = '' }) {
+  const hasValue = Boolean(value);
   return (
-    <div className="flex items-center gap-4">
-      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-        <Icon className="w-6 h-6" />
+    <div
+      className={`flex items-start gap-3.5 p-4 rounded-xl border border-light-border/80 dark:border-dark-border/80 bg-light-bg/60 dark:bg-dark-bg/45 hover:border-primary/40 transition-colors ${className}`}
+    >
+      <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center text-primary shrink-0 mt-0.5">
+        <Icon className="w-4.5 h-4.5" />
       </div>
-      <div className="min-w-0">
-        <p className="text-sm text-light-muted dark:text-dark-muted">{label}</p>
-        <p className="font-semibold text-light-text dark:text-dark-text break-words">{value || 'Chưa cập nhật'}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-light-muted dark:text-dark-muted">
+            {label}
+          </p>
+          {badge && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
+              {badge}
+            </span>
+          )}
+        </div>
+        <p
+          className={`mt-1 text-sm break-words ${
+            hasValue
+              ? 'font-semibold text-light-text dark:text-dark-text'
+              : 'italic text-light-muted dark:text-dark-muted'
+          }`}
+        >
+          {hasValue ? value : 'Chưa cập nhật'}
+        </p>
       </div>
     </div>
   );
@@ -174,131 +194,154 @@ export default function Profile() {
     }
   };
 
-  return (
-    <div className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl p-6 sm:p-8 shadow-luxury dark:shadow-luxury-dark">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-8 border-b border-light-border dark:border-dark-border pb-6">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary overflow-hidden shrink-0">
-              {(isEditing ? form.avatarUrl.trim() : user.avatarUrl) ? (
-                <img
-                  src={isEditing ? form.avatarUrl.trim() : user.avatarUrl}
-                  alt={user.fullName}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <User className="w-8 h-8" />
-              )}
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-light-text dark:text-dark-text">Hồ sơ của tôi</h1>
-              <p className="text-sm text-light-muted dark:text-dark-muted">{user.email}</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            {!isEditing && (
-              <Button id="profile-edit-btn" variant="primary" onClick={() => setIsEditing(true)}>
-                <Pencil className="w-4 h-4 mr-2" /> Chỉnh sửa
-              </Button>
-            )}
-            <Button id="profile-logout-btn" variant="outline" onClick={() => logout()} isLoading={isLoggingOut}>
-              Đăng xuất
-            </Button>
-          </div>
-        </div>
+  const displayAddress = joinAddress(defaultAddress) || user.address || '';
 
-        {!isEditing ? (
-          <div className="space-y-6">
-            <InfoRow icon={User} label="Họ và tên" value={user.fullName} />
-            <InfoRow icon={Mail} label="Email" value={user.email} />
-            <InfoRow icon={Phone} label="Số điện thoại" value={user.phone} />
-            <InfoRow icon={Users} label="Giới tính" value={user.gender ? genderLabel(user.gender) : ''} />
-            <InfoRow icon={Calendar} label="Ngày sinh" value={formatDate(user.dateOfBirth)} />
-            <InfoRow icon={MapPin} label="Địa chỉ giao hàng mặc định" value={user.address} />
+  return (
+    <div className="bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-2xl p-5 sm:p-7 shadow-luxury dark:shadow-luxury-dark">
+      {/* Compact Header (no duplicate avatar/email since AccountLayout already displays it) */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-light-border dark:border-dark-border pb-5">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-light-text dark:text-dark-text">
+            {isEditing ? 'Chỉnh sửa hồ sơ' : 'Hồ sơ của tôi'}
+          </h1>
+          <p className="text-xs sm:text-sm text-light-muted dark:text-dark-muted mt-0.5">
+            Quản lý thông tin cá nhân và địa chỉ giao hàng mặc định
+          </p>
+        </div>
+        <div className="flex items-center gap-2.5">
+          {!isEditing && (
+            <Button id="profile-edit-btn" variant="primary" size="sm" onClick={() => setIsEditing(true)}>
+              <Pencil className="w-3.5 h-3.5 mr-1.5" /> Chỉnh sửa
+            </Button>
+          )}
+          <Button
+            id="profile-logout-btn"
+            variant="outline"
+            size="sm"
+            onClick={() => logout()}
+            isLoading={isLoggingOut}
+            className="hover:!border-rose-400 hover:!text-rose-500"
+          >
+            <LogOut className="w-3.5 h-3.5 mr-1.5" /> Đăng xuất
+          </Button>
+        </div>
+      </div>
+
+      {!isEditing ? (
+        <div className="space-y-5">
+          {/* 2-Column Balanced Personal Info Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <InfoCard icon={User} label="Họ và tên" value={user.fullName} />
+            <InfoCard icon={Mail} label="Email đăng nhập" value={user.email} />
+            <InfoCard icon={Phone} label="Số điện thoại" value={user.phone} />
+            <InfoCard icon={Users} label="Giới tính" value={user.gender ? genderLabel(user.gender) : ''} />
+            <InfoCard icon={Calendar} label="Ngày sinh" value={formatDate(user.dateOfBirth)} />
+            <InfoCard icon={ShieldCheck} label="Trạng thái tài khoản" value="Đang hoạt động" badge="Thành viên MIVA" />
           </div>
-        ) : (
-          <form id="profile-edit-form" onSubmit={handleSave} className="space-y-8" noValidate>
-            <section className="space-y-4">
-              <h2 className="text-lg font-semibold text-light-text dark:text-dark-text">Thông tin cá nhân</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input id="profile-fullname" label="Họ và tên" required value={form.fullName} onChange={setField('fullName')} error={errors.fullName} maxLength={255} />
-                <Input id="profile-email" label="Email" value={user.email} disabled className="opacity-70 cursor-not-allowed" />
-                <Input id="profile-phone" label="Số điện thoại" type="tel" value={form.phone} onChange={setField('phone')} error={errors.phone} placeholder="0912345678" />
-                <Input id="profile-dob" label="Ngày sinh" type="date" value={form.dateOfBirth} onChange={setField('dateOfBirth')} error={errors.dateOfBirth} max={new Date().toISOString().slice(0, 10)} />
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="profile-gender" className="text-sm font-semibold text-light-text dark:text-dark-text">Giới tính</label>
-                  <select
-                    id="profile-gender"
-                    value={form.gender}
-                    onChange={setField('gender')}
-                    className="w-full px-4 py-2.5 rounded-xl border bg-white dark:bg-dark-card text-light-text dark:text-dark-text outline-none border-light-border dark:border-dark-border focus:border-primary focus:ring-1 focus:ring-primary"
-                  >
-                    {GENDER_OPTIONS.map((g) => (
-                      <option key={g.value} value={g.value}>{g.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-sm font-semibold text-light-text dark:text-dark-text">Ảnh đại diện</span>
-                  <div className="flex items-center gap-3">
-                    <label
-                      htmlFor="profile-avatar-file"
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-light-border dark:border-dark-border bg-white dark:bg-dark-card text-sm font-semibold text-light-text dark:text-dark-text hover:border-primary hover:text-primary cursor-pointer transition-colors"
-                    >
-                      <Upload className="w-4 h-4" />
-                      {isUploadingAvatar ? 'Đang tải ảnh...' : 'Chọn ảnh'}
-                      <input
-                        id="profile-avatar-file"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleAvatarFileChange}
-                        disabled={isUploadingAvatar}
-                        className="hidden"
+
+          {/* Full-width Default Delivery Address Highlight */}
+          <InfoCard
+            icon={MapPin}
+            label="Địa chỉ giao hàng mặc định"
+            value={displayAddress}
+            badge={displayAddress ? 'Mặc định' : undefined}
+          />
+        </div>
+      ) : (
+        <form id="profile-edit-form" onSubmit={handleSave} className="space-y-7" noValidate>
+          <section className="space-y-4">
+            <h2 className="text-base font-bold text-light-text dark:text-dark-text">Thông tin cá nhân</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input id="profile-fullname" label="Họ và tên" required value={form.fullName} onChange={setField('fullName')} error={errors.fullName} maxLength={255} />
+              <Input id="profile-email" label="Email" value={user.email} disabled className="opacity-70 cursor-not-allowed" />
+              <Input id="profile-phone" label="Số điện thoại" type="tel" value={form.phone} onChange={setField('phone')} error={errors.phone} placeholder="0912345678" />
+              <Input id="profile-dob" label="Ngày sinh" type="date" value={form.dateOfBirth} onChange={setField('dateOfBirth')} error={errors.dateOfBirth} max={new Date().toISOString().slice(0, 10)} />
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="profile-gender" className="text-sm font-semibold text-light-text dark:text-dark-text">Giới tính</label>
+                <select
+                  id="profile-gender"
+                  value={form.gender}
+                  onChange={setField('gender')}
+                  className="w-full px-4 py-2.5 rounded-xl border bg-white dark:bg-dark-card text-light-text dark:text-dark-text outline-none border-light-border dark:border-dark-border focus:border-primary focus:ring-1 focus:ring-primary"
+                >
+                  {GENDER_OPTIONS.map((g) => (
+                    <option key={g.value} value={g.value}>{g.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-semibold text-light-text dark:text-dark-text">Ảnh đại diện</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full bg-primary/10 border border-primary/25 flex items-center justify-center text-primary overflow-hidden shrink-0">
+                    {form.avatarUrl.trim() ? (
+                      <img
+                        src={form.avatarUrl.trim()}
+                        alt={form.fullName || user.fullName}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
-                    </label>
-                    {form.avatarUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, avatarUrl: '' }))}
-                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> Xóa ảnh
-                      </button>
+                    ) : (
+                      <User className="w-5 h-5" />
                     )}
                   </div>
+                  <label
+                    htmlFor="profile-avatar-file"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-light-border dark:border-dark-border bg-white dark:bg-dark-card text-sm font-semibold text-light-text dark:text-dark-text hover:border-primary hover:text-primary cursor-pointer transition-colors"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {isUploadingAvatar ? 'Đang tải ảnh...' : 'Chọn ảnh'}
+                    <input
+                      id="profile-avatar-file"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarFileChange}
+                      disabled={isUploadingAvatar}
+                      className="hidden"
+                    />
+                  </label>
+                  {form.avatarUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, avatarUrl: '' }))}
+                      className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Xóa ảnh
+                    </button>
+                  )}
                 </div>
               </div>
-              <p className="text-xs text-light-muted dark:text-dark-muted">Email dùng để đăng nhập nên không thể thay đổi tại đây.</p>
-            </section>
-
-            <section className="space-y-4">
-              <h2 className="text-lg font-semibold text-light-text dark:text-dark-text">Địa chỉ giao hàng mặc định</h2>
-              <Input
-                id="address-full"
-                label="Địa chỉ"
-                value={addressText}
-                onChange={(e) => setAddressText(e.target.value)}
-                error={errors.address}
-                maxLength={500}
-                placeholder="VD: 123 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh"
-              />
-              {!defaultAddress && (
-                <p className="text-xs text-light-muted dark:text-dark-muted">Bạn chưa có địa chỉ. Điền thông tin để tạo địa chỉ mặc định, hoặc để trống nếu chưa cần.</p>
-              )}
-            </section>
-
-            <div className="flex justify-end gap-3 border-t border-light-border dark:border-dark-border pt-6">
-              <Button id="profile-cancel-btn" type="button" variant="ghost" onClick={() => setIsEditing(false)} disabled={isSaving}>
-                <X className="w-4 h-4 mr-2" /> Hủy
-              </Button>
-              <Button id="profile-save-btn" type="submit" variant="primary" isLoading={isSaving}>
-                <Check className="w-4 h-4 mr-2" /> Lưu thay đổi
-              </Button>
             </div>
-          </form>
-        )}
+            <p className="text-xs text-light-muted dark:text-dark-muted">Email dùng để đăng nhập nên không thể thay đổi tại đây.</p>
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-base font-bold text-light-text dark:text-dark-text">Địa chỉ giao hàng mặc định</h2>
+            <Input
+              id="address-full"
+              label="Địa chỉ"
+              value={addressText}
+              onChange={(e) => setAddressText(e.target.value)}
+              error={errors.address}
+              maxLength={500}
+              placeholder="VD: 123 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh"
+            />
+            {!defaultAddress && (
+              <p className="text-xs text-light-muted dark:text-dark-muted">Bạn chưa có địa chỉ. Điền thông tin để tạo địa chỉ mặc định, hoặc để trống nếu chưa cần.</p>
+            )}
+          </section>
+
+          <div className="flex justify-end gap-3 border-t border-light-border dark:border-dark-border pt-5">
+            <Button id="profile-cancel-btn" type="button" variant="ghost" onClick={() => setIsEditing(false)} disabled={isSaving}>
+              <X className="w-4 h-4 mr-2" /> Hủy
+            </Button>
+            <Button id="profile-save-btn" type="submit" variant="primary" isLoading={isSaving}>
+              <Check className="w-4 h-4 mr-2" /> Lưu thay đổi
+            </Button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

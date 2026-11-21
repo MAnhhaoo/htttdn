@@ -2,6 +2,21 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cartService } from '../services/cartService';
 import { useAuth } from './useAuth';
 
+export const useAddToCart = () => {
+  const queryClient = useQueryClient();
+  const addToCartMutation = useMutation({
+    mutationFn: ({ productVariantId, quantity }) =>
+      cartService.addToCart(productVariantId, quantity),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+    },
+  });
+  return {
+    addToCart: addToCartMutation.mutateAsync,
+    isAdding: addToCartMutation.isPending,
+  };
+};
+
 export const useCart = () => {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();

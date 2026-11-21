@@ -6,4 +6,5 @@ export * from './Select';
 export * from './AvatarUploadField';
 export * from './PaginationFooter';
 export * from './ToastProvider';
+export * from './ErrorBoundary';
 

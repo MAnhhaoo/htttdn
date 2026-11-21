@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Package,
   Truck,
@@ -10,8 +11,12 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import { useOrders } from '../../hooks/useOrders';
+import { orderService } from '../../services/orderService';
+import { useToast } from '../../components/common/Toast/Toast';
 import { formatPrice } from '../../utils/formatPrice';
 import {
   groupOrdersByCheckoutBatch,
@@ -89,6 +94,8 @@ function getStatusText(status) {
 
 export default function Orders() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const { orders, isLoading, refetch } = useOrders();
 
   const groupedOrders = useMemo(() => groupOrdersByCheckoutBatch(orders), [orders]);
@@ -98,6 +105,60 @@ export default function Orders() {
   const [reviewItem, setReviewItem] = useState(null);
   const [reviewedMap, setReviewedMap] = useState({});
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [reorderingKey, setReorderingKey] = useState(null);
+
+  const handleReorder = async (orderIds, key) => {
+    if (!orderIds?.length || reorderingKey) return;
+    try {
+      setReorderingKey(key);
+      const res = await orderService.reorder(orderIds);
+      const data = res?.data ?? res;
+
+      await queryClient.invalidateQueries({ queryKey: ['cart'] });
+
+      const warnings = data?.warnings || {};
+      const notices = [];
+      if (warnings.skippedItems?.length) {
+        notices.push(
+          `${warnings.skippedItems.length} sản phẩm đã hết hàng/ngừng bán và được bỏ qua`,
+        );
+      }
+      if (warnings.adjustedItems?.length) {
+        notices.push(
+          `${warnings.adjustedItems.length} sản phẩm được điều chỉnh theo tồn kho hiện tại`,
+        );
+      }
+      if (warnings.expiredVoucherCodes?.length) {
+        notices.push(
+          `Mã ${warnings.expiredVoucherCodes.join(', ')} đã hết hạn/hết lượt nên không áp dụng lại`,
+        );
+      }
+      if (notices.length > 0) {
+        toast.warning(notices.join('. '));
+      }
+
+      navigate('/checkout', {
+        state: {
+          cartItemIds: data.cartItemIds,
+          voucherSelections: data.voucherSelections || [],
+          platformVoucherCode: data.platformVoucherCode || null,
+          reorderData: {
+            paymentMethod: data.paymentMethod,
+            ...(data.shippingSnapshot || {}),
+          },
+        },
+      });
+    } catch (error) {
+      const msg =
+        error?.response?.data?.errors?.[0]?.message ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Không thể mua lại đơn hàng này. Vui lòng thử lại.';
+      toast.error(msg);
+    } finally {
+      setReorderingKey(null);
+    }
+  };
 
   const tabCounts = useMemo(() => {
     const counts = {};
@@ -589,23 +650,42 @@ export default function Orders() {
                                   </div>
                                 )}
 
-                                {isSubPending && (
-                                  <div className="pt-2 flex justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setCancelTarget({
-                                          type: 'single',
-                                          id: subOrder.id,
-                                          code: formatShortOrderCode(
-                                            subOrder.orderCode || subOrder.id,
-                                          ),
-                                        })
-                                      }
-                                      className="px-3 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-semibold transition cursor-pointer"
-                                    >
-                                      Hủy đơn hàng #{subIdx + 1}
-                                    </button>
+                                {(isSubPending || subOrder.status === 'completed') && (
+                                  <div className="pt-2 flex justify-end gap-2">
+                                    {isSubPending && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setCancelTarget({
+                                            type: 'single',
+                                            id: subOrder.id,
+                                            code: formatShortOrderCode(
+                                              subOrder.orderCode || subOrder.id,
+                                            ),
+                                          })
+                                        }
+                                        className="px-3 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[11px] font-semibold transition cursor-pointer"
+                                      >
+                                        Hủy đơn hàng #{subIdx + 1}
+                                      </button>
+                                    )}
+                                    {subOrder.status === 'completed' && (
+                                      <button
+                                        type="button"
+                                        disabled={Boolean(reorderingKey)}
+                                        onClick={() =>
+                                          handleReorder([subOrder.id], `sub-${subOrder.id}`)
+                                        }
+                                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary hover:bg-primary-dark text-white text-[11px] font-semibold transition cursor-pointer disabled:opacity-50"
+                                      >
+                                        {reorderingKey === `sub-${subOrder.id}` ? (
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                        ) : (
+                                          <RotateCcw className="w-3 h-3" />
+                                        )}
+                                        Mua lại đơn #{subIdx + 1}
+                                      </button>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -675,6 +755,43 @@ export default function Orders() {
                         className="px-3.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition cursor-pointer"
                       >
                         Hủy đơn hàng
+                      </button>
+                    )}
+
+                    {isMerged && isAllCompleted && (
+                      <button
+                        type="button"
+                        disabled={Boolean(reorderingKey)}
+                        onClick={() =>
+                          handleReorder(
+                            subOrders.map((so) => so.id),
+                            `batch-${order.id}`,
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-semibold transition cursor-pointer shadow-xs disabled:opacity-50"
+                      >
+                        {reorderingKey === `batch-${order.id}` ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        )}
+                        Mua lại toàn bộ {subOrders.length} đơn
+                      </button>
+                    )}
+
+                    {!isMerged && order.status === 'completed' && (
+                      <button
+                        type="button"
+                        disabled={Boolean(reorderingKey)}
+                        onClick={() => handleReorder([order.id], `single-${order.id}`)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-semibold transition cursor-pointer shadow-xs disabled:opacity-50"
+                      >
+                        {reorderingKey === `single-${order.id}` ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RotateCcw className="w-3.5 h-3.5" />
+                        )}
+                        Mua lại
                       </button>
                     )}
                   </div>

@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, ShipmentStatus } from '@prisma/client';
 import type { UserInfo } from 'src/common/decorators/user.decorator';
@@ -17,6 +18,11 @@ import {
   formatPaginatedList,
   normalizePagination,
 } from 'src/common/utils/paginaton-util/pagintion-util.service';
+import {
+  NotificationsService,
+  type OrderNotificationInput,
+  SHIPMENT_STATUS_LABELS,
+} from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { DEPARTMENT_KEYWORDS, OrdersService } from '../orders/orders.service';
 import {
@@ -37,6 +43,7 @@ export class ShippingService {
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
     private readonly orders: OrdersService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   async listShipments(query: GetShipmentsQueryDto, user?: UserInfo) {
@@ -58,23 +65,14 @@ export class ShippingService {
         throw new ForbiddenException('Không tìm thấy thông tin nhân viên');
       }
 
-      if (
-        !isShippingDept(emp.department) &&
-        emp.assignedOrderScope !== 'all_orders'
-      ) {
+      if (!isShippingDept(emp.department)) {
         throw new ForbiddenException(
           'Chỉ nhân viên thuộc Phòng Vận chuyển & Giao nhận (Bưu tá) mới quản lý phần giao hàng',
         );
       }
 
-      if (emp.assignedOrderScope === 'all_orders') {
-        if (carrierId) {
-          andConditions.push({ carrierId });
-        }
-      } else {
-        // [QUY TẮC BƯU TÁ]: Bưu tá chỉ quản lý phần giao hàng của các kiện hàng được phân công cho mình (carrierId)
-        andConditions.push({ carrierId: emp.id });
-      }
+      // [QUY TẮC BƯU TÁ]: Mọi bưu tá chỉ quản lý phần giao hàng của các kiện hàng được phân công cho mình (carrierId)
+      andConditions.push({ carrierId: emp.id });
     } else if (carrierId) {
       andConditions.push({ carrierId });
     }
@@ -349,20 +347,23 @@ export class ShippingService {
         ReturnType<OrdersService['deliverOrderCompletedSurveys']>
       > = [];
       if (isDelivered) {
-        if (shipment.vendorOrderId) {
-          await tx.vendorOrder.update({
-            where: { id: shipment.vendorOrderId },
-            data: { status: 'delivered' },
-          });
-        }
+        const [, remainingUndelivered] = await Promise.all([
+          shipment.vendorOrderId
+            ? tx.vendorOrder.update({
+                where: { id: shipment.vendorOrderId },
+                data: { status: 'delivered' },
+              })
+            : Promise.resolve(null),
+          tx.shipment.count({
+            where: {
+              orderId: shipment.orderId,
+              id: { not: id },
+              status: { not: ShipmentStatus.delivered },
+            },
+          }),
+        ]);
 
-        const allShipments = await tx.shipment.findMany({
-          where: { orderId: shipment.orderId },
-        });
-
-        const allDelivered = allShipments.every(
-          (s) => s.id === id || s.status === ShipmentStatus.delivered,
-        );
+        const allDelivered = remainingUndelivered === 0;
 
         if (allDelivered) {
           await tx.order.update({
@@ -461,6 +462,82 @@ export class ShippingService {
 
     await this.emitShipment(result.updatedShipment);
     this.orders.emitSurveyNotifications(result.surveyNotifications);
+
+    if (this.notifications) {
+      const shipLabel = SHIPMENT_STATUS_LABELS[dto.status] || dto.status;
+      const orderCode = shipment.order.orderCode;
+      const reasonSuffix = dto.failedReason ? ` (${dto.failedReason})` : '';
+      const shipNotifs: OrderNotificationInput[] = [];
+
+      if (shipment.order.clientId) {
+        shipNotifs.push({
+          clientId: shipment.order.clientId,
+          title: `Cập nhật giao hàng #${orderCode}`,
+          content: `Vận đơn ${shipment.trackingNumber} (đơn #${orderCode}) đã chuyển sang trạng thái "${shipLabel}"${reasonSuffix}.`,
+          data: {
+            orderId: shipment.orderId,
+            orderCode,
+            shipmentId: id,
+            trackingNumber: shipment.trackingNumber,
+            status: dto.status,
+            event: 'shipment_updated',
+          },
+        });
+      }
+
+      if (shipment.vendorOrder?.vendorId) {
+        shipNotifs.push({
+          vendorId: shipment.vendorOrder.vendorId,
+          title: `Vận đơn #${shipment.trackingNumber}: ${shipLabel}`,
+          content: `Bưu tá đã cập nhật vận đơn ${shipment.trackingNumber} (đơn #${orderCode}) sang trạng thái "${shipLabel}"${reasonSuffix}.`,
+          data: {
+            orderId: shipment.orderId,
+            orderCode,
+            shipmentId: id,
+            trackingNumber: shipment.trackingNumber,
+            status: dto.status,
+            event: 'shipment_updated',
+          },
+        });
+      }
+
+      if (
+        shipment.order.assignedEmployeeId &&
+        !(user.role === 'employee' && user.userID === shipment.order.assignedEmployeeId)
+      ) {
+        shipNotifs.push({
+          employeeId: shipment.order.assignedEmployeeId,
+          title: `Vận đơn #${shipment.trackingNumber}: ${shipLabel}`,
+          content: `Vận đơn ${shipment.trackingNumber} thuộc đơn #${orderCode} đã cập nhật: "${shipLabel}"${reasonSuffix}.`,
+          data: {
+            orderId: shipment.orderId,
+            orderCode,
+            shipmentId: id,
+            trackingNumber: shipment.trackingNumber,
+            status: dto.status,
+            event: 'shipment_updated',
+          },
+        });
+      }
+
+      if (result.exceptionEmp) {
+        shipNotifs.push({
+          employeeId: result.exceptionEmp.id,
+          title: `Sự cố vận đơn #${shipment.trackingNumber}`,
+          content: `Vận đơn ${shipment.trackingNumber} (đơn #${orderCode}) phát sinh sự cố${reasonSuffix || `: ${shipLabel}`}. Hồ sơ đã chuyển cho bạn xử lý.`,
+          data: {
+            orderId: shipment.orderId,
+            orderCode,
+            shipmentId: id,
+            trackingNumber: shipment.trackingNumber,
+            status: dto.status,
+            event: 'shipment_exception',
+          },
+        });
+      }
+
+      await this.notifications.notifyOrderUpdates(shipNotifs);
+    }
     if (result.exceptionEmp) {
       this.realtime.emitToUser(result.exceptionEmp.id, 'order:exception', {
         orderId: shipment.orderId,
@@ -525,6 +602,7 @@ export class ShippingService {
     shipment: {
       id: string;
       orderId: string;
+      trackingNumber?: string;
       status: ShipmentStatus;
       notes: string | null;
     },
@@ -538,53 +616,76 @@ export class ShippingService {
     user: UserInfo,
   ) {
     const id = shipment.id;
-    const updated = await this.prisma.extendedTransaction(async (tx) => {
-      const s = await tx.shipment.update({
-        where: { id },
-        data: {
-          carrierId: carrier.id,
-          carrierType: dto.carrierType || 'employee',
-          status: ShipmentStatus.assigned,
-          notes: dto.notes
-            ? `${shipment.notes ? shipment.notes + '\n' : ''}${dto.notes}`
-            : shipment.notes,
-        },
-      });
+    const { updated, parentOrder } = await this.prisma.extendedTransaction(
+      async (tx) => {
+        const [s, , orderInfo] = await Promise.all([
+          tx.shipment.update({
+            where: { id },
+            data: {
+              carrierId: carrier.id,
+              carrierType: dto.carrierType || 'employee',
+              status: ShipmentStatus.assigned,
+              notes: dto.notes
+                ? `${shipment.notes ? shipment.notes + '\n' : ''}${dto.notes}`
+                : shipment.notes,
+            },
+          }),
+          tx.shipmentEvent.create({
+            data: {
+              shipmentId: id,
+              status: ShipmentStatus.assigned,
+              location: 'Văn phòng điều phối MIVA',
+              description: `Đã phân công vận chuyển cho nhân sự ${carrier.fullName} (${carrier.employeeCode}) - ${carrier.department || 'Phòng Vận chuyển & Giao nhận'}`,
+              actorRole: user.role,
+              actorId: user.userID,
+            },
+          }),
+          tx.order.findUnique({
+            where: { id: shipment.orderId },
+            select: {
+              status: true,
+              clientId: true,
+              vendorOrders: { select: { vendorId: true } },
+            },
+          }),
+        ]);
 
-      await tx.shipmentEvent.create({
-        data: {
-          shipmentId: id,
-          status: ShipmentStatus.assigned,
-          location: 'Văn phòng điều phối MIVA',
-          description: `Đã phân công vận chuyển cho nhân sự ${carrier.fullName} (${carrier.employeeCode}) - ${carrier.department || 'Phòng Vận chuyển & Giao nhận'}`,
-          actorRole: user.role,
-          actorId: user.userID,
-        },
-      });
+        if (orderInfo) {
+          await tx.orderStatusHistory.create({
+            data: {
+              orderId: shipment.orderId,
+              employeeId: carrier.id,
+              adminId: user.userID,
+              fromStatus: orderInfo.status,
+              toStatus: orderInfo.status,
+              note: `[Chỉ định Bưu tá] Admin đã phân công bưu tá [${carrier.fullName} / ${carrier.employeeCode}] (${carrier.department || 'Phòng Vận chuyển & Giao nhận'}) phụ trách vận chuyển giao nhận${dto.notes ? `. Ghi chú: ${dto.notes}` : ''}`,
+            },
+          });
+        }
 
-      const parentOrder = await tx.order.findUnique({
-        where: { id: shipment.orderId },
-        select: { status: true },
-      });
-      if (parentOrder) {
-        await tx.orderStatusHistory.create({
-          data: {
-            orderId: shipment.orderId,
-            employeeId: carrier.id,
-            adminId: user.userID,
-            fromStatus: parentOrder.status,
-            toStatus: parentOrder.status,
-            note: `[Chỉ định Bưu tá] Admin đã phân công bưu tá [${carrier.fullName} / ${carrier.employeeCode}] (${carrier.department || 'Phòng Vận chuyển & Giao nhận'}) phụ trách vận chuyển giao nhận${dto.notes ? `. Ghi chú: ${dto.notes}` : ''}`,
-          },
-        });
-      }
+        return { updated: s, parentOrder: orderInfo };
+      },
+    );
 
-      return s;
-    });
-
-    await this.emitShipment(updated);
+    await this.emitShipment(updated, parentOrder);
     this.realtime.emitToAdmins('order:updated', { orderId: shipment.orderId });
     this.realtime.emitToEmployees('order:updated', { orderId: shipment.orderId });
+    if (this.notifications) {
+      const trackingCode = updated.trackingNumber || shipment.trackingNumber || shipment.id;
+      await this.notifications.notifyOrderUpdates([
+        {
+          employeeId: carrier.id,
+          title: `Phân công giao vận đơn #${trackingCode}`,
+          content: `Admin vừa phân công bạn phụ trách giao vận đơn ${trackingCode}${dto.notes ? `. Ghi chú: ${dto.notes}` : ''}.`,
+          data: {
+            orderId: shipment.orderId,
+            shipmentId: shipment.id,
+            trackingNumber: trackingCode,
+            event: 'shipment_assigned',
+          },
+        },
+      ]);
+    }
     return updated;
   }
 
@@ -640,6 +741,20 @@ export class ShippingService {
           carrierId: null,
           status: { in: [ShipmentStatus.pending, ShipmentStatus.assigned] },
         },
+        select: {
+          id: true,
+          orderId: true,
+          trackingNumber: true,
+          notes: true,
+          order: {
+            select: {
+              status: true,
+              clientId: true,
+              vendorOrders: { select: { vendorId: true } },
+            },
+          },
+        },
+        take: 200,
       }),
       loadShipperPoolWithLoads(this.prisma.extended, {
         fallbackToAnyActive: true,
@@ -660,19 +775,91 @@ export class ShippingService {
       );
     }
 
-    let count = 0;
-    for (const ship of unassignedShipments) {
-      const carrier = pickNextShipperFromPool(shipperPool);
-      if (!carrier) break;
-      await this.executeAssignCarrier(
+    const assignments = unassignedShipments
+      .map((ship) => ({
         ship,
-        carrier,
-        { carrierId: carrier.id, carrierType: 'employee' },
-        user,
+        carrier: pickNextShipperFromPool(shipperPool),
+      }))
+      .filter(
+        (
+          item,
+        ): item is {
+          ship: (typeof unassignedShipments)[number];
+          carrier: NonNullable<ReturnType<typeof pickNextShipperFromPool>>;
+        } => Boolean(item.carrier),
       );
-      count++;
+
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < assignments.length; i += CHUNK_SIZE) {
+      const chunk = assignments.slice(i, i + CHUNK_SIZE);
+      await this.prisma.extendedTransaction(async (tx) => {
+        await Promise.all([
+          ...chunk.map(({ ship, carrier }) =>
+            tx.shipment.update({
+              where: { id: ship.id },
+              data: {
+                carrierId: carrier.id,
+                carrierType: 'employee',
+                status: ShipmentStatus.assigned,
+              },
+            }),
+          ),
+          tx.shipmentEvent.createMany({
+            data: chunk.map(({ ship, carrier }) => ({
+              shipmentId: ship.id,
+              status: ShipmentStatus.assigned,
+              location: 'Văn phòng điều phối MIVA',
+              description: `Đã phân công vận chuyển cho nhân sự ${carrier.fullName} (${carrier.employeeCode}) - ${carrier.department || 'Phòng Vận chuyển & Giao nhận'}`,
+              actorRole: user.role,
+              actorId: user.userID,
+            })),
+          }),
+          tx.orderStatusHistory.createMany({
+            data: chunk
+              .filter(({ ship }) => Boolean(ship.order))
+              .map(({ ship, carrier }) => ({
+                orderId: ship.orderId,
+                employeeId: carrier.id,
+                adminId: user.userID,
+                fromStatus: ship.order.status,
+                toStatus: ship.order.status,
+                note: `[Chỉ định Bưu tá] Admin đã phân công bưu tá [${carrier.fullName} / ${carrier.employeeCode}] (${carrier.department || 'Phòng Vận chuyển & Giao nhận'}) phụ trách vận chuyển giao nhận`,
+              })),
+          }),
+        ]);
+      });
+
+      for (const { ship, carrier } of chunk) {
+        await this.emitShipment(
+          {
+            id: ship.id,
+            orderId: ship.orderId,
+            status: ShipmentStatus.assigned,
+            carrierId: carrier.id,
+          },
+          ship.order,
+        );
+        this.realtime.emitToAdmins('order:updated', { orderId: ship.orderId });
+        this.realtime.emitToEmployees('order:updated', { orderId: ship.orderId });
+      }
+      if (this.notifications) {
+        await this.notifications.notifyOrderUpdates(
+          chunk.map(({ ship, carrier }) => ({
+            employeeId: carrier.id,
+            title: `Phân công giao vận đơn #${ship.trackingNumber}`,
+            content: `Admin vừa phân công bạn phụ trách giao vận đơn ${ship.trackingNumber}.`,
+            data: {
+              orderId: ship.orderId,
+              shipmentId: ship.id,
+              trackingNumber: ship.trackingNumber,
+              event: 'shipment_assigned',
+            },
+          })),
+        );
+      }
     }
 
+    const count = assignments.length;
     return {
       success: true,
       count,
@@ -707,15 +894,21 @@ export class ShippingService {
     return shippingEmployees;
   }
 
-  private async emitShipment(shipment: { id: string; orderId: string; status: ShipmentStatus; carrierId: string | null }) {
+  private async emitShipment(
+    shipment: { id: string; orderId: string; status: ShipmentStatus; carrierId: string | null },
+    preloadedOrder?: { clientId: string; vendorOrders: Array<{ vendorId: string }> } | null,
+  ) {
     const payload = { shipmentId: shipment.id, orderId: shipment.orderId, status: shipment.status };
     this.realtime.emitToAdmins('shipment:updated', payload);
     this.realtime.emitToEmployees('shipment:updated', payload);
     if (shipment.carrierId) this.realtime.emitToUser(shipment.carrierId, 'shipment:updated', payload);
-    const order = await this.prisma.extended.order.findUnique({
-      where: { id: shipment.orderId },
-      select: { clientId: true, vendorOrders: { select: { vendorId: true } } },
-    });
+    const order =
+      preloadedOrder !== undefined
+        ? preloadedOrder
+        : await this.prisma.extended.order.findUnique({
+            where: { id: shipment.orderId },
+            select: { clientId: true, vendorOrders: { select: { vendorId: true } } },
+          });
     if (order) {
       this.realtime.emitToUser(order.clientId, 'shipment:updated', payload);
       for (const { vendorId } of order.vendorOrders) {
@@ -741,11 +934,6 @@ export class ShippingService {
 
       if (!emp) {
         throw new ForbiddenException('Không tìm thấy thông tin nhân viên');
-      }
-
-      // Quản lý được xem và xử lý toàn bộ
-      if (emp.assignedOrderScope === 'all_orders') {
-        return;
       }
 
       // Chỉ nhân viên thuộc Phòng Vận chuyển & Giao nhận (Bưu tá) mới quản lý phần giao hàng

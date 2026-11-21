@@ -109,9 +109,14 @@ export const formatOrder = (item) => {
     isVendorSlaWarning,
     vendorSlaDeadline: assignedVendor?.slaDeadline || null,
     shipments: item.shipments || [],
+    assignedEmployee: item.assignedEmployee || null,
     handlingEmployee:
+      (item.assignedEmployee && !item.assignedEmployee.department?.includes('Sự cố')
+        ? item.assignedEmployee
+        : null) ||
       item.statusHistory?.find((h) => h.employee && h.employee?.department?.includes('Điều phối'))
-        ?.employee || null,
+        ?.employee ||
+      null,
     assignedCarrier:
       item.shipments?.find((s) => s.carrier)?.carrier ||
       item.statusHistory
@@ -125,10 +130,14 @@ export const formatOrder = (item) => {
         )?.employee ||
       null,
     exceptionEmployee:
+      (item.assignedEmployee && item.assignedEmployee.department?.includes('Sự cố')
+        ? item.assignedEmployee
+        : null) ||
       item.statusHistory
         ?.slice()
         .reverse()
-        .find((h) => h.employee && h.employee?.department?.includes('Sự cố'))?.employee || null,
+        .find((h) => h.employee && h.employee?.department?.includes('Sự cố'))?.employee ||
+      null,
     exception: (() => {
       const hasIncidentHistory = item.statusHistory?.some(
         (h) =>

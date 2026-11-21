@@ -251,6 +251,14 @@ const SUITES = [
     cmdArgs: ['test/vendor-sync.manual.cjs'],
     needs: ['postgres', 'backend', 'frontend', 'admin', 'vendor'],
   },
+  {
+    id: 'notification-bell',
+    tier: 'browser',
+    name: '4-Portal Realtime Notification Bells, Employee Isolation & Reorder UI',
+    cmd: 'node',
+    cmdArgs: ['test/notification-bell-e2e.manual.cjs'],
+    needs: ['postgres', 'backend', 'frontend', 'admin', 'vendor', 'employee'],
+  },
   // Tầng 4: Master Thesis Showcase (8 Chương Liên Hoàn Qua 4 Cổng & 5 Vai Trò)
   {
     id: 'thesis-showcase',

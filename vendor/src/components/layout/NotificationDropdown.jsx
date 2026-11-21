@@ -23,6 +23,10 @@ export default function NotificationDropdown({ onSelectSurvey }) {
           } else {
             navigate(`/surveys?tab=from_admin&responseId=${notif.id}`);
           }
+          return;
+        }
+        if (notif.type === 'order_update' || notif.data?.orderId) {
+          navigate('/orders');
         }
       }}
     />

@@ -4,17 +4,20 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   OrderStatus,
   PaymentMethod,
   PaymentStatus,
   Prisma,
+  ProductStatus,
   ShipmentStatus,
   SurveyResponseStatus,
   SurveyTriggerType,
   VendorOrderStatus,
   VoucherScope,
+  VoucherStatus,
 } from '@prisma/client';
 
 import type { UserInfo } from 'src/common/decorators/user.decorator';
@@ -29,6 +32,12 @@ import {
   formatPaginatedList,
   normalizePagination,
 } from 'src/common/utils/paginaton-util/pagintion-util.service';
+import {
+  NotificationsService,
+  ORDER_STATUS_LABELS,
+  type OrderNotificationInput,
+  VENDOR_ORDER_STATUS_LABELS,
+} from 'src/app/notifications/notifications.service';
 import { RealtimeService } from 'src/app/realtime/realtime.service';
 import { SurveysService } from 'src/app/surveys/surveys.service';
 import { VouchersService } from 'src/app/vouchers/vouchers.service';
@@ -81,6 +90,9 @@ const orderInclude = {
       avatarUrl: true,
     },
   },
+  assignedEmployee: {
+    select: EMPLOYEE_ACTOR_SELECT,
+  },
   details: {
     include: {
       productVariant: {
@@ -120,6 +132,30 @@ const orderInclude = {
       client: { select: { id: true, fullName: true } },
     },
     orderBy: { createdAt: 'asc' as const },
+  },
+};
+
+const orderListInclude = {
+  ...orderInclude,
+  shipments: {
+    include: {
+      events: { orderBy: { createdAt: 'desc' as const }, take: 3 },
+      carrier: {
+        select: CARRIER_SUMMARY_SELECT,
+      },
+    },
+  },
+  statusHistory: {
+    include: {
+      admin: { select: { id: true, fullName: true, email: true } },
+      employee: {
+        select: EMPLOYEE_ACTOR_SELECT,
+      },
+      vendor: { select: { id: true, storeName: true, fullName: true } },
+      client: { select: { id: true, fullName: true } },
+    },
+    orderBy: { createdAt: 'desc' as const },
+    take: 5,
   },
 };
 
@@ -174,6 +210,7 @@ export class OrdersService {
     private readonly vouchersService: VouchersService,
     private readonly realtime: RealtimeService,
     private readonly surveysService: SurveysService,
+    @Optional() private readonly notifications?: NotificationsService,
   ) {}
 
   private async createShipmentWithInitialEvent(
@@ -207,21 +244,21 @@ export class OrdersService {
         receiverName: params.receiverName,
         receiverPhone: params.receiverPhone,
         notes: params.notes,
+        ...(params.eventDescription
+          ? {
+              events: {
+                create: {
+                  status: params.status,
+                  location: params.eventLocation || 'Trung tâm điều phối MIVA Hub',
+                  description: params.eventDescription,
+                  actorRole: params.actorRole || 'system',
+                  ...(params.actorId ? { actorId: params.actorId } : {}),
+                },
+              },
+            }
+          : {}),
       },
     });
-
-    if (params.eventDescription && db.shipmentEvent) {
-      await db.shipmentEvent.create({
-        data: {
-          shipmentId: shipment.id,
-          status: params.status,
-          location: params.eventLocation || 'Trung tâm điều phối MIVA Hub',
-          description: params.eventDescription,
-          actorRole: params.actorRole || 'system',
-          ...(params.actorId ? { actorId: params.actorId } : {}),
-        },
-      });
-    }
 
     return shipment;
   }
@@ -427,7 +464,7 @@ export class OrdersService {
 
   async checkout(clientId: string, dto: CheckoutDto) {
     let result:
-      { orders: any[]; order: any; surveyNotifications: any[] } | undefined;
+      { orderIds: string[]; surveyNotifications: any[] } | undefined;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         result = await this.prisma.extendedTransaction(
@@ -445,6 +482,8 @@ export class OrdersService {
               loadShipperPoolWithLoads(tx),
             ]);
 
+            const createdOrderSummaries: Array<{ id: string; totalAmount: Prisma.Decimal }> = [];
+
             for (const [vId, vendorItems] of vendorGroups.entries()) {
               const calculated = await this.vouchersService.calculate(
                 codesByVendor.get(vId) || [],
@@ -460,6 +499,7 @@ export class OrdersService {
               const order = await tx.order.create({
                 data: {
                   clientId,
+                  assignedEmployeeId: sharedHandlingEmp?.id ?? null,
                   subtotalAmount: calculated.subtotalAmount,
                   discountAmount: calculated.discountAmount,
                   shippingFee: 0,
@@ -471,38 +511,8 @@ export class OrdersService {
                 },
               });
 
-              // Decrement variant stock & create OrderDetail records
-              for (const item of calculated.items) {
-                const changed = await tx.productVariant.updateMany({
-                  where: {
-                    id: item.productVariantId,
-                    deletedAt: null,
-                    stock: { gte: item.quantity },
-                  },
-                  data: { stock: { decrement: item.quantity } },
-                });
-                if (!changed.count) {
-                  throw new ConflictException(
-                    `Sản phẩm "${item.variant.productColor.product.name}" vừa thay đổi tồn kho, vui lòng thử lại`,
-                  );
-                }
-
-                await tx.orderDetail.create({
-                  data: {
-                    orderId: order.id,
-                    productVariantId: item.productVariantId,
-                    quantity: item.quantity,
-                    price: item.variant.price,
-                    productName: item.variant.productColor.product.name,
-                    colorName: item.variant.productColor.color,
-                    sizeName: item.variant.size,
-                    imageUrl: item.variant.productColor.imageUrls[0],
-                  },
-                });
-              }
-
-              // Immediately create VendorOrder for this vendor
-              let vOrder: any = null;
+              // Immediately create VendorOrder BEFORE OrderDetail so vendorOrderId is linked in 1 insert
+              let vOrder: { id: string } | null = null;
               if (vId !== 'platform') {
                 const randomCode = uniqueCodeSuffix();
                 vOrder = await tx.vendorOrder.create({
@@ -516,58 +526,76 @@ export class OrdersService {
                     status: VendorOrderStatus.pending,
                     notes: 'Kiện hàng đóng gói riêng cho gian hàng đối tác',
                   },
+                  select: { id: true },
                 });
+              }
 
-                await tx.orderDetail.updateMany({
-                  where: { orderId: order.id },
-                  data: { vendorOrderId: vOrder.id },
+              // Atomic decrement variant stock in parallel, then batch-insert OrderDetail rows
+              await Promise.all(
+                calculated.items.map(async (item) => {
+                  const changed = await tx.productVariant.updateMany({
+                    where: {
+                      id: item.productVariantId,
+                      deletedAt: null,
+                      stock: { gte: item.quantity },
+                    },
+                    data: { stock: { decrement: item.quantity } },
+                  });
+                  if (!changed.count) {
+                    throw new ConflictException(
+                      `Sản phẩm "${item.variant.productColor.product.name}" vừa thay đổi tồn kho, vui lòng thử lại`,
+                    );
+                  }
+                }),
+              );
+
+              if (calculated.items.length > 0) {
+                await tx.orderDetail.createMany({
+                  data: calculated.items.map((item) => ({
+                    orderId: order.id,
+                    vendorOrderId: vOrder?.id ?? null,
+                    productVariantId: item.productVariantId,
+                    quantity: item.quantity,
+                    price: item.variant.price,
+                    productName: item.variant.productColor.product.name,
+                    colorName: item.variant.productColor.color,
+                    sizeName: item.variant.size,
+                    imageUrl: item.variant.productColor.imageUrls[0],
+                  })),
                 });
               }
 
               // [GHI DATABASE - ÁP DỤNG KHUYẾN MÃI CHO HÓA ĐƠN (YÊU CẦU 1 & 3)]:
               // Cập nhật nguyên tử số lượt đã dùng (usedQuantity + 1) trên bảng Voucher
               // và lưu lịch sử áp dụng mã giảm giá vào bảng VoucherDetail gắn với orderId.
-              for (const application of calculated.applications) {
-                const reserved = await tx.voucher.updateMany({
-                  where: {
-                    id: application.voucherId,
-                    usedQuantity: application.expectedUsedQuantity,
-                    quantity: { gt: application.expectedUsedQuantity },
-                    status: 'active',
-                  },
-                  data: { usedQuantity: { increment: 1 } },
-                });
-                if (!reserved.count) {
-                  throw new ConflictException('Voucher vừa hết lượt sử dụng');
-                }
-                await tx.voucherDetail.create({
-                  data: {
+              if (calculated.applications.length > 0) {
+                await Promise.all(
+                  calculated.applications.map(async (application) => {
+                    const reserved = await tx.voucher.updateMany({
+                      where: {
+                        id: application.voucherId,
+                        usedQuantity: application.expectedUsedQuantity,
+                        quantity: { gt: application.expectedUsedQuantity },
+                        status: 'active',
+                      },
+                      data: { usedQuantity: { increment: 1 } },
+                    });
+                    if (!reserved.count) {
+                      throw new ConflictException('Voucher vừa hết lượt sử dụng');
+                    }
+                  }),
+                );
+
+                await tx.voucherDetail.createMany({
+                  data: calculated.applications.map((application) => ({
                     voucherId: application.voucherId,
                     orderId: order.id,
                     eligibleAmount: application.eligibleAmount,
                     discountAmount: application.discountAmount,
                     sequence: application.sequence,
-                  },
+                  })),
                 });
               }
-
-              // Create Payment for this order
-              await tx.payment.create({
-                data: {
-                  orderId: order.id,
-                  method: dto.paymentMethod,
-                  amount: calculated.totalAmount,
-                },
-              });
-
-              // Create OrderStatusHistory record
-              await tx.orderStatusHistory.create({
-                data: {
-                  orderId: order.id,
-                  clientId: clientId,
-                  toStatus: OrderStatus.pending,
-                },
-              });
 
               // 1. Dùng chung 1 Điều phối viên (Bộ phận Điều phối & Liên kết Vendor) cho tất cả đơn hàng nhỏ trong lượt đặt
               const handlingEmp = sharedHandlingEmp;
@@ -576,55 +604,69 @@ export class OrdersService {
                 excludeEmployeeId: handlingEmp?.id,
               });
 
-              // Kiện hàng khởi tạo và tự động phân công bưu tá Phòng Vận chuyển & Giao nhận
-              await this.createShipmentWithInitialEvent(tx, {
-                yearMonth,
-                orderId: order.id,
-                vendorOrderId: vOrder ? vOrder.id : undefined,
-                carrierId: shipperEmp ? shipperEmp.id : null,
-                status: shipperEmp
-                  ? ShipmentStatus.assigned
-                  : ShipmentStatus.pending,
-                shippingAddress: order.shippingAddress,
-                receiverName: order.receiverName,
-                receiverPhone: order.receiverPhone,
-                notes: shipperEmp
-                  ? `Bưu tá tiếp nhận: ${shipperEmp.fullName} (${shipperEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`
-                  : handlingEmp
-                    ? `Chuyên viên điều phối phụ trách: ${handlingEmp.fullName} (${handlingEmp.employeeCode}) - ${handlingEmp.department}.`
-                    : 'Kiện hàng đang chờ tiếp nhận',
-                eventLocation: 'Trung tâm điều phối MIVA Hub',
-                eventDescription: shipperEmp
-                  ? `Đơn hàng mới tạo. Hệ thống tự động phân công bưu tá [${shipperEmp.fullName} / ${shipperEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận kiện hàng`
-                  : handlingEmp
-                    ? `Đơn hàng mới tạo. Hệ thống chuyển tới chuyên viên [${handlingEmp.fullName} / ${handlingEmp.employeeCode}] (Bộ phận Điều phối & Liên kết Vendor) tiếp nhận và kiểm duyệt`
-                    : 'Đơn hàng mới tạo, chờ Bộ phận Điều phối & Liên kết Vendor tiếp nhận',
-                actorRole: 'system',
-              });
-
+              const statusHistoryRows: Prisma.OrderStatusHistoryCreateManyInput[] = [
+                {
+                  orderId: order.id,
+                  clientId,
+                  toStatus: OrderStatus.pending,
+                },
+              ];
               if (handlingEmp) {
-                await tx.orderStatusHistory.create({
-                  data: {
-                    orderId: order.id,
-                    employeeId: handlingEmp.id,
-                    fromStatus: OrderStatus.pending,
-                    toStatus: OrderStatus.pending,
-                    note: `[Phân công tiếp nhận] Chuyên viên [${handlingEmp.fullName} / ${handlingEmp.employeeCode}] (${handlingEmp.department}) tiếp nhận đơn hàng để đối soát, xác nhận và chuyển giao cho Vendor`,
-                  },
+                statusHistoryRows.push({
+                  orderId: order.id,
+                  employeeId: handlingEmp.id,
+                  fromStatus: OrderStatus.pending,
+                  toStatus: OrderStatus.pending,
+                  note: `[Phân công tiếp nhận] Chuyên viên [${handlingEmp.fullName} / ${handlingEmp.employeeCode}] (${handlingEmp.department}) tiếp nhận đơn hàng để đối soát, xác nhận và chuyển giao cho Vendor`,
+                });
+              }
+              if (shipperEmp) {
+                statusHistoryRows.push({
+                  orderId: order.id,
+                  employeeId: shipperEmp.id,
+                  fromStatus: OrderStatus.pending,
+                  toStatus: OrderStatus.pending,
+                  note: `[Tự động phân công] Bưu tá [${shipperEmp.fullName} / ${shipperEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận đơn hàng`,
                 });
               }
 
-              if (shipperEmp) {
-                await tx.orderStatusHistory.create({
+              // Run independent order writes in parallel inside tx
+              await Promise.all([
+                tx.payment.create({
                   data: {
                     orderId: order.id,
-                    employeeId: shipperEmp.id,
-                    fromStatus: OrderStatus.pending,
-                    toStatus: OrderStatus.pending,
-                    note: `[Tự động phân công] Bưu tá [${shipperEmp.fullName} / ${shipperEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận đơn hàng`,
+                    method: dto.paymentMethod,
+                    amount: calculated.totalAmount,
                   },
-                });
-              }
+                }),
+                tx.orderStatusHistory.createMany({
+                  data: statusHistoryRows,
+                }),
+                this.createShipmentWithInitialEvent(tx, {
+                  yearMonth,
+                  orderId: order.id,
+                  vendorOrderId: vOrder ? vOrder.id : undefined,
+                  carrierId: shipperEmp ? shipperEmp.id : null,
+                  status: shipperEmp
+                    ? ShipmentStatus.assigned
+                    : ShipmentStatus.pending,
+                  shippingAddress: order.shippingAddress,
+                  receiverName: order.receiverName,
+                  receiverPhone: order.receiverPhone,
+                  notes: shipperEmp
+                    ? `Bưu tá tiếp nhận: ${shipperEmp.fullName} (${shipperEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`
+                    : handlingEmp
+                      ? `Chuyên viên điều phối phụ trách: ${handlingEmp.fullName} (${handlingEmp.employeeCode}) - ${handlingEmp.department}.`
+                      : 'Kiện hàng đang chờ tiếp nhận',
+                  eventLocation: 'Trung tâm điều phối MIVA Hub',
+                  eventDescription: shipperEmp
+                    ? `Đơn hàng mới tạo. Hệ thống tự động phân công bưu tá [${shipperEmp.fullName} / ${shipperEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận kiện hàng`
+                    : handlingEmp
+                      ? `Đơn hàng mới tạo. Hệ thống chuyển tới chuyên viên [${handlingEmp.fullName} / ${handlingEmp.employeeCode}] (Bộ phận Điều phối & Liên kết Vendor) tiếp nhận và kiểm duyệt`
+                      : 'Đơn hàng mới tạo, chờ Bộ phận Điều phối & Liên kết Vendor tiếp nhận',
+                  actorRole: 'system',
+                }),
+              ]);
 
               // Deliver survey notifications if applicable
               const surveyNotifications =
@@ -635,27 +677,15 @@ export class OrdersService {
                 );
               allSurveyNotifications.push(...surveyNotifications);
 
-              const createdOrder = await tx.order.findUniqueOrThrow({
-                where: { id: order.id },
-                include: orderInclude,
+              createdOrderSummaries.push({
+                id: order.id,
+                totalAmount: calculated.totalAmount,
               });
-
-              const surveyPrompts = await tx.surveyResponse.findMany({
-                where: {
-                  orderId: order.id,
-                  clientId,
-                  status: SurveyResponseStatus.pending,
-                },
-                select: surveyPromptSelect,
-                orderBy: { createdAt: 'asc' },
-              });
-
-              createdOrders.push({ ...createdOrder, surveyPrompts });
             }
 
             // Soft-delete only the checked out cart items
             if (dto.expectedTotalAmount !== undefined) {
-              const actualTotal = createdOrders.reduce(
+              const actualTotal = createdOrderSummaries.reduce(
                 (sum, order) => sum.plus(order.totalAmount),
                 new Prisma.Decimal(0),
               );
@@ -677,8 +707,7 @@ export class OrdersService {
             });
 
             return {
-              orders: createdOrders,
-              order: createdOrders[0],
+              orderIds: createdOrderSummaries.map((o) => o.id),
               surveyNotifications: allSurveyNotifications,
             };
           },
@@ -708,8 +737,87 @@ export class OrdersService {
         'Dữ liệu vừa thay đổi, vui lòng thực hiện checkout lại',
       );
 
-    for (const o of result.orders) {
+    // Hydrate full order payloads & pending survey prompts OUTSIDE Serializable transaction
+    const [hydratedOrders, allPrompts] = await Promise.all([
+      this.prisma.extended.order.findMany({
+        where: { id: { in: result.orderIds } },
+        include: orderInclude,
+      }),
+      this.prisma.extended.surveyResponse.findMany({
+        where: {
+          orderId: { in: result.orderIds },
+          clientId,
+          status: SurveyResponseStatus.pending,
+        },
+        select: surveyPromptSelect,
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+    const promptsByOrder = new Map<string, typeof allPrompts>();
+    for (const p of allPrompts) {
+      if (!p.orderId) continue;
+      const list = promptsByOrder.get(p.orderId) || [];
+      list.push(p);
+      promptsByOrder.set(p.orderId, list);
+    }
+    const orderById = new Map(hydratedOrders.map((o) => [o.id, o]));
+    const fullOrders = result.orderIds
+      .map((id) => orderById.get(id))
+      .filter((o): o is NonNullable<typeof o> => Boolean(o))
+      .map((o) => ({ ...o, surveyPrompts: promptsByOrder.get(o.id) || [] }));
+
+    for (const o of fullOrders) {
       this.emitOrder(o, 'order:created');
+    }
+    if (this.notifications) {
+      const checkoutNotifs: OrderNotificationInput[] = [];
+      for (const o of fullOrders) {
+        const vendorIds = new Set<string>();
+        for (const vo of o.vendorOrders || []) {
+          if (vo.vendorId) vendorIds.add(vo.vendorId);
+        }
+        for (const d of o.details || []) {
+          const vId = d.productVariant?.productColor?.product?.vendorId;
+          if (vId) vendorIds.add(vId);
+        }
+        for (const vendorId of vendorIds) {
+          checkoutNotifs.push({
+            vendorId,
+            title: `Đơn hàng mới #${o.orderCode}`,
+            content: `Khách hàng ${o.receiverName || o.client?.fullName || 'MIVA'} vừa đặt đơn hàng mới #${o.orderCode}. Vui lòng kiểm tra và chuẩn bị hàng.`,
+            data: { orderId: o.id, orderCode: o.orderCode, status: o.status, event: 'order_created' },
+          });
+        }
+        if (o.assignedEmployeeId) {
+          checkoutNotifs.push({
+            employeeId: o.assignedEmployeeId,
+            title: `Đơn hàng mới được phân công #${o.orderCode}`,
+            content: `Bạn vừa được phân công tiếp nhận và điều phối đơn hàng #${o.orderCode}.`,
+            data: { orderId: o.id, orderCode: o.orderCode, status: o.status, event: 'order_assigned' },
+          });
+        }
+        const notifiedCarriers = new Set<string>();
+        for (const s of o.shipments || []) {
+          if (s.carrierId && s.carrierId !== o.assignedEmployeeId && !notifiedCarriers.has(s.carrierId)) {
+            notifiedCarriers.add(s.carrierId);
+            checkoutNotifs.push({
+              employeeId: s.carrierId,
+              title: `Vận đơn mới #${s.trackingNumber || o.orderCode}`,
+              content: `Bạn vừa được phân công phụ trách giao đơn hàng #${o.orderCode} (mã vận đơn ${s.trackingNumber}).`,
+              data: {
+                orderId: o.id,
+                orderCode: o.orderCode,
+                shipmentId: s.id,
+                trackingNumber: s.trackingNumber,
+                status: s.status,
+                event: 'shipment_assigned',
+              },
+            });
+          }
+        }
+      }
+      await this.notifications.notifyOrderUpdates(checkoutNotifs);
     }
     if (
       dto.voucherCodes?.length ||
@@ -720,22 +828,283 @@ export class OrdersService {
     this.surveysService.emitNotifications(result.surveyNotifications);
 
     return {
-      ...result.order,
-      orders: result.orders,
-      orderIds: result.orders.map((o) => o.id),
-      totalOrders: result.orders.length,
+      ...fullOrders[0],
+      orders: fullOrders,
+      orderIds: fullOrders.map((o) => o.id),
+      totalOrders: fullOrders.length,
+    };
+  }
+
+  async reorder(clientId: string, rawOrderIds: string[]) {
+    const uniqueOrderIds = [...new Set(rawOrderIds)];
+    const orders = await this.prisma.extended.order.findMany({
+      where: {
+        id: { in: uniqueOrderIds },
+        clientId,
+      },
+      include: {
+        details: {
+          include: {
+            productVariant: {
+              select: {
+                id: true,
+                stock: true,
+                deletedAt: true,
+                productColor: {
+                  select: {
+                    deletedAt: true,
+                    product: {
+                      select: {
+                        id: true,
+                        name: true,
+                        vendorId: true,
+                        status: true,
+                        deletedAt: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        payment: {
+          select: { method: true },
+        },
+        voucherDetails: {
+          where: { productId: null, reversedAt: null },
+          include: { voucher: true },
+          orderBy: { sequence: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (orders.length !== uniqueOrderIds.length) {
+      throw new NotFoundException('Không tìm thấy đơn hàng hoặc bạn không có quyền truy cập');
+    }
+
+    const nonCompleted = orders.find((o) => o.status !== OrderStatus.completed);
+    if (nonCompleted) {
+      throw new BadRequestException('Chỉ có thể mua lại đơn hàng đã hoàn thành');
+    }
+
+    // Aggregate quantities per variant across all selected completed orders
+    const variantRequests = new Map<
+      string,
+      {
+        quantity: number;
+        productName: string;
+        variant: (typeof orders)[number]['details'][number]['productVariant'];
+      }
+    >();
+
+    for (const order of orders) {
+      for (const detail of order.details) {
+        const existing = variantRequests.get(detail.productVariantId);
+        if (existing) {
+          existing.quantity += detail.quantity;
+        } else {
+          variantRequests.set(detail.productVariantId, {
+            quantity: detail.quantity,
+            productName:
+              detail.productName ||
+              detail.productVariant?.productColor?.product?.name ||
+              'Sản phẩm',
+            variant: detail.productVariant,
+          });
+        }
+      }
+    }
+
+    const skippedItems: Array<{ productName: string; reason: string }> = [];
+    const adjustedItems: Array<{
+      productName: string;
+      requested: number;
+      adjusted: number;
+    }> = [];
+    const validItems: Array<{
+      productVariantId: string;
+      quantity: number;
+      vendorId: string;
+    }> = [];
+
+    for (const [productVariantId, req] of variantRequests.entries()) {
+      const variant = req.variant;
+      const product = variant?.productColor?.product;
+      const isSellable =
+        Boolean(variant) &&
+        !variant.deletedAt &&
+        !variant.productColor.deletedAt &&
+        Boolean(product) &&
+        !product.deletedAt &&
+        product.status === ProductStatus.active;
+
+      if (!isSellable) {
+        skippedItems.push({
+          productName: req.productName,
+          reason: 'Sản phẩm đã ngừng kinh doanh',
+        });
+        continue;
+      }
+
+      if (variant.stock <= 0) {
+        skippedItems.push({
+          productName: req.productName,
+          reason: 'Sản phẩm hiện đã hết hàng',
+        });
+        continue;
+      }
+
+      const finalQty = Math.min(req.quantity, variant.stock);
+      if (finalQty < req.quantity) {
+        adjustedItems.push({
+          productName: req.productName,
+          requested: req.quantity,
+          adjusted: finalQty,
+        });
+      }
+
+      validItems.push({
+        productVariantId,
+        quantity: finalQty,
+        vendorId: product.vendorId || 'platform',
+      });
+    }
+
+    if (validItems.length === 0) {
+      throw new BadRequestException(
+        'Tất cả sản phẩm trong đơn hàng cũ hiện đã hết hàng hoặc ngừng kinh doanh',
+      );
+    }
+
+    // Upsert cart & cart items with exact reorder quantities so Checkout selects only these items
+    const cart = await this.prisma.extended.cart.upsert({
+      where: { clientId },
+      create: { clientId },
+      update: { deletedAt: null },
+      select: { id: true },
+    });
+
+    const cartItems = await Promise.all(
+      validItems.map((item) =>
+        this.prisma.extended.cartItem.upsert({
+          where: {
+            cartId_productVariantId: {
+              cartId: cart.id,
+              productVariantId: item.productVariantId,
+            },
+          },
+          create: {
+            cartId: cart.id,
+            productVariantId: item.productVariantId,
+            quantity: item.quantity,
+          },
+          update: {
+            quantity: item.quantity,
+            deletedAt: null,
+          },
+          select: { id: true },
+        }),
+      ),
+    );
+
+    // Check which vouchers from the previous order(s) are still valid for this client
+    const now = new Date();
+    const validVendorSet = new Set(validItems.map((i) => i.vendorId));
+    const uniqueVouchers = new Map<
+      string,
+      (typeof orders)[number]['voucherDetails'][number]['voucher']
+    >();
+    for (const order of orders) {
+      for (const vd of order.voucherDetails || []) {
+        if (vd.voucher && !uniqueVouchers.has(vd.voucher.id)) {
+          uniqueVouchers.set(vd.voucher.id, vd.voucher);
+        }
+      }
+    }
+
+    const voucherIds = [...uniqueVouchers.keys()];
+    const usageGroups =
+      voucherIds.length > 0
+        ? await this.prisma.extended.voucherDetail.groupBy({
+            by: ['voucherId'],
+            where: {
+              voucherId: { in: voucherIds },
+              order: { clientId },
+              reversedAt: null,
+            },
+            _count: { _all: true },
+          })
+        : [];
+    const usedByClient = new Map<string, number>(
+      usageGroups.map((g) => [g.voucherId, g._count._all ?? 0]),
+    );
+
+    const vendorVoucherMap = new Map<string, string[]>();
+    let platformVoucherCode: string | null = null;
+    const expiredVoucherCodes: string[] = [];
+
+    for (const voucher of uniqueVouchers.values()) {
+      const usedCount = usedByClient.get(voucher.id) ?? 0;
+      const isStillValid =
+        !voucher.deletedAt &&
+        voucher.status === VoucherStatus.active &&
+        voucher.startDate <= now &&
+        voucher.endDate >= now &&
+        voucher.usedQuantity < voucher.quantity &&
+        usedCount < voucher.perUserLimit;
+
+      if (!isStillValid) {
+        expiredVoucherCodes.push(voucher.code);
+        continue;
+      }
+
+      if (voucher.scope === VoucherScope.platform) {
+        if (!platformVoucherCode) platformVoucherCode = voucher.code;
+      } else if (voucher.vendorId && validVendorSet.has(voucher.vendorId)) {
+        const list = vendorVoucherMap.get(voucher.vendorId) || [];
+        if (list.length === 0) {
+          list.push(voucher.code);
+          vendorVoucherMap.set(voucher.vendorId, list);
+        }
+      }
+    }
+
+    const voucherSelections = Array.from(vendorVoucherMap.entries()).map(
+      ([vendorId, codes]) => ({ vendorId, codes }),
+    );
+
+    const primaryOrder = orders[0];
+    return {
+      cartItemIds: cartItems.map((ci) => ci.id),
+      paymentMethod: primaryOrder.payment?.method || PaymentMethod.cod,
+      shippingSnapshot: {
+        receiverName: primaryOrder.receiverName || '',
+        receiverPhone: primaryOrder.receiverPhone || '',
+        shippingAddress: primaryOrder.shippingAddress || '',
+        notes: primaryOrder.notes || null,
+      },
+      voucherSelections,
+      platformVoucherCode,
+      warnings: {
+        skippedItems,
+        adjustedItems,
+        expiredVoucherCodes,
+      },
     };
   }
 
   listMine(clientId: string) {
     return this.prisma.extended.order.findMany({
       where: { clientId },
-      include: orderInclude,
+      include: orderListInclude,
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async listForVendor(vendorId: string) {
+    const { client: _omitClient, ...vendorOrderListInclude } = orderListInclude;
     const orders = await this.prisma.extended.order.findMany({
       where: {
         OR: [
@@ -750,7 +1119,7 @@ export class OrdersService {
         ],
       },
       include: {
-        ...orderInclude,
+        ...vendorOrderListInclude,
         details: {
           where: {
             productVariant: { productColor: { product: { vendorId } } },
@@ -1106,6 +1475,66 @@ export class OrdersService {
     });
     if (parentOrder) this.emitOrder(parentOrder, 'order:updated');
 
+    if (this.notifications && parentOrder) {
+      const statusLabel = VENDOR_ORDER_STATUS_LABELS[newStatus] || newStatus;
+      const vendorNotifs: OrderNotificationInput[] = [];
+      const courierId =
+        updated.assignedShipper?.id || vendorOrder.shipment?.carrierId || null;
+
+      if (courierId) {
+        const isReady = newStatus === VendorOrderStatus.ready_for_pickup;
+        vendorNotifs.push({
+          employeeId: courierId,
+          title: isReady
+            ? `Kiện hàng #${vendorOrder.vendorOrderCode} sẵn sàng lấy hàng`
+            : `Shop cập nhật kiện #${vendorOrder.vendorOrderCode}`,
+          content: isReady
+            ? `Shop đã đóng gói xong kiện ${vendorOrder.vendorOrderCode} (đơn #${parentOrder.orderCode}). Vui lòng đến kho lấy hàng.`
+            : `Kiện hàng ${vendorOrder.vendorOrderCode} (đơn #${parentOrder.orderCode}) chuyển sang trạng thái: ${statusLabel}.`,
+          data: {
+            orderId: parentOrder.id,
+            orderCode: parentOrder.orderCode,
+            vendorOrderId: vendorOrder.id,
+            shipmentId: vendorOrder.shipment?.id,
+            status: newStatus,
+            event: 'vendor_order_updated',
+          },
+        });
+      }
+
+      if (parentOrder.assignedEmployeeId && parentOrder.assignedEmployeeId !== courierId) {
+        vendorNotifs.push({
+          employeeId: parentOrder.assignedEmployeeId,
+          title: `Shop cập nhật đơn #${parentOrder.orderCode}`,
+          content: `Kiện hàng ${vendorOrder.vendorOrderCode} đã chuyển sang trạng thái: ${statusLabel}.`,
+          data: {
+            orderId: parentOrder.id,
+            orderCode: parentOrder.orderCode,
+            vendorOrderId: vendorOrder.id,
+            status: newStatus,
+            event: 'vendor_order_updated',
+          },
+        });
+      }
+
+      if (parentOrder.clientId) {
+        vendorNotifs.push({
+          clientId: parentOrder.clientId,
+          title: `Cập nhật đơn hàng #${parentOrder.orderCode}`,
+          content: `Shop đã cập nhật kiện hàng thuộc đơn #${parentOrder.orderCode} sang trạng thái: ${statusLabel}.`,
+          data: {
+            orderId: parentOrder.id,
+            orderCode: parentOrder.orderCode,
+            vendorOrderId: vendorOrder.id,
+            status: newStatus,
+            event: 'vendor_order_updated',
+          },
+        });
+      }
+
+      await this.notifications.notifyOrderUpdates(vendorNotifs);
+    }
+
     if (updated.assignedShipper && vendorOrder.shipment) {
       const shipPayload = {
         shipmentId: vendorOrder.shipment.id,
@@ -1168,63 +1597,13 @@ export class OrdersService {
     const resolvedTargetEmp =
       targetEmp === undefined ? emp : targetEmp;
 
-    // Nếu người dùng là nhân viên (employee), hiển thị đơn hàng theo đúng phân công và ban nghiệp vụ
+    // [QUY TẮC CÔ LẬP NHÂN VIÊN]: Mọi tài khoản employee CHỈ thấy đơn hàng đang được phân công cho chính mình
+    // (không được thấy đơn hàng của nhân viên khác, kể cả khi assignedOrderScope === 'all_orders').
     if (needViewerEmp) {
       if (emp) {
-        const isManager = emp.assignedOrderScope === 'all_orders';
-        const isVendorLink = emp.department.includes(
-          DEPARTMENT_KEYWORDS.VENDOR_COORDINATION,
-        );
         const isShipping = this.isShippingDepartment(emp.department);
-        const isExceptions = emp.department.includes(
-          DEPARTMENT_KEYWORDS.EXCEPTION,
-        );
-
-        if (isManager) {
-          if (isVendorLink) {
-            baseWhere.OR = [
-              {
-                status: {
-                  in: [
-                    OrderStatus.pending,
-                    OrderStatus.confirmed,
-                    OrderStatus.processing,
-                  ],
-                },
-              },
-              { statusHistory: { some: { employeeId: emp.id } } },
-            ];
-          } else if (isShipping) {
-            baseWhere.OR = [
-              { shipments: { some: {} } },
-              {
-                status: {
-                  in: [
-                    OrderStatus.processing,
-                    OrderStatus.shipping,
-                    OrderStatus.completed,
-                  ],
-                },
-              },
-              { statusHistory: { some: { employeeId: emp.id } } },
-            ];
-          } else if (isExceptions) {
-            baseWhere.OR = [
-              { status: OrderStatus.cancelled },
-              {
-                shipments: {
-                  some: {
-                    status: {
-                      in: [ShipmentStatus.failed, ShipmentStatus.returned],
-                    },
-                  },
-                },
-              },
-              { statusHistory: { some: { employeeId: emp.id } } },
-            ];
-          }
-        } else if (isShipping) {
-          // [QUY TẮC BƯU TÁ]: Bưu tá CHỈ quản lý và xem các đơn hàng nhỏ được phân công giao cho chính mình (carrierId)
+        if (isShipping) {
+          // Bưu tá: CHỈ thấy các đơn có vận đơn phân công cho mình (carrierId)
           isCourierUser = true;
           baseWhere.shipments = {
             some: {
@@ -1232,11 +1611,8 @@ export class OrdersService {
             },
           };
         } else {
-          // [QUY TẮC PHÂN QUYỀN]: Điều phối viên / xử lý sự cố CHỈ NHÌN THẤY đơn hàng được phân công cho mình
-          baseWhere.OR = [
-            { shipments: { some: { carrierId: emp.id } } },
-            { statusHistory: { some: { employeeId: emp.id } } },
-          ];
+          // Điều phối / Xử lý sự cố / Vận hành: CHỈ thấy đơn có assignedEmployeeId === emp.id
+          baseWhere.assignedEmployeeId = emp.id;
         }
       } else {
         isCourierUser = true;
@@ -1264,18 +1640,7 @@ export class OrdersService {
           {
             details: {
               some: {
-                OR: [
-                  { productName: { contains: q, mode: 'insensitive' } },
-                  {
-                    productVariant: {
-                      productColor: {
-                        product: {
-                          name: { contains: q, mode: 'insensitive' },
-                        },
-                      },
-                    },
-                  },
-                ],
+                productName: { contains: q, mode: 'insensitive' },
               },
             },
           },
@@ -1283,10 +1648,9 @@ export class OrdersService {
       });
     }
 
-    if (employeeId && employeeId !== 'all') {
+    if (!needViewerEmp && employeeId && employeeId !== 'all') {
       const isTargetCourier =
         resolvedTargetEmp &&
-        resolvedTargetEmp.assignedOrderScope !== 'all_orders' &&
         this.isShippingDepartment(resolvedTargetEmp.department);
 
       if (isTargetCourier) {
@@ -1295,10 +1659,7 @@ export class OrdersService {
         });
       } else {
         whereConditions.push({
-          OR: [
-            { shipments: { some: { carrierId: employeeId } } },
-            { statusHistory: { some: { employeeId } } },
-          ],
+          assignedEmployeeId: employeeId,
         });
       }
     }
@@ -1372,9 +1733,8 @@ export class OrdersService {
     };
 
     if (shouldGroupByBatch) {
-      const [countsByStatus, totalItems, headers] = await Promise.all([
+      const [countsByStatus, headers] = await Promise.all([
         loadCountsByStatus(),
-        this.prisma.extended.order.count({ where }),
         this.prisma.extended.order.findMany({
           where,
           select: {
@@ -1388,6 +1748,7 @@ export class OrdersService {
           orderBy: [{ createdAt: sortDir }, { id: sortDir }],
         }),
       ]);
+      const totalItems = headers.length;
 
       const batches = this.groupOrdersByBatchHeaders(headers);
       const pageBatches = batches.slice(skip, skip + itemPerPage);
@@ -1396,7 +1757,7 @@ export class OrdersService {
       const rawList = targetOrderIds.length
         ? await this.prisma.extended.order.findMany({
             where: { id: { in: targetOrderIds } },
-            include: orderInclude,
+            include: orderListInclude,
             orderBy: [{ createdAt: sortDir }, { id: sortDir }],
           })
         : [];
@@ -1418,7 +1779,7 @@ export class OrdersService {
       this.prisma.extended.order.count({ where }),
       this.prisma.extended.order.findMany({
         where,
-        include: orderInclude,
+        include: orderListInclude,
         orderBy: [{ createdAt: sortDir }, { id: sortDir }],
         skip,
         take: itemPerPage,
@@ -1639,20 +2000,14 @@ export class OrdersService {
     );
 
     if (user.role === 'employee') {
-      const isManager = cachedEmp?.assignedOrderScope === 'all_orders';
       const isCourier =
-        cachedEmp && !isManager && this.isShippingDepartment(cachedEmp.department);
+        cachedEmp && this.isShippingDepartment(cachedEmp.department);
       const isAssigned = isCourier
         ? (current.shipments || []).some(
             (s: any) => s.carrierId === user.userID,
           )
-        : (current.shipments || []).some(
-            (s: any) => s.carrierId === user.userID,
-          ) ||
-          (current.statusHistory || []).some(
-            (h: any) => h.employeeId === user.userID,
-          );
-      if (!isManager && !isAssigned) {
+        : current.assignedEmployeeId === user.userID;
+      if (!isAssigned) {
         throw new ForbiddenException(
           'Bạn không có quyền thao tác trên đơn hàng được phân công cho nhân viên khác',
         );
@@ -1756,74 +2111,81 @@ export class OrdersService {
             .filter((parcel) => parcel.status === VendorOrderStatus.cancelled)
             .map((parcel) => parcel.id),
         );
-        for (const detail of current.details.filter(
+        const detailsToRestock = current.details.filter(
           (detail) =>
             !detail.vendorOrderId ||
             !cancelledParcels.has(detail.vendorOrderId),
-        )) {
-          await tx.productVariant.update({
-            where: { id: detail.productVariantId },
-            data: { stock: { increment: detail.quantity } },
-          });
-        }
+        );
         const usages = current.voucherDetails.filter(
           (detail) => !detail.reversedAt,
         );
-        if (usages.length > 0) {
-          const reversedAt = new Date();
-          await tx.voucherDetail.updateMany({
-            where: { id: { in: usages.map((u) => u.id) } },
-            data: { reversedAt },
-          });
-          for (const usage of usages) {
-            await tx.voucher.updateMany({
-              where: { id: usage.voucherId, usedQuantity: { gt: 0 } },
-              data: { usedQuantity: { decrement: 1 } },
-            });
-          }
-        }
-        await tx.payment.update({
-          where: { orderId: id },
-          data: {
-            status:
-              current.payment?.status === PaymentStatus.paid
-                ? PaymentStatus.refunded
-                : PaymentStatus.cancelled,
-          },
-        });
+        const shipmentsToReturn = current.shipments.filter(
+          (shipment) =>
+            ![ShipmentStatus.returned, ShipmentStatus.delivered].includes(
+              shipment.status as any,
+            ),
+        );
+        const reversedAt = new Date();
 
-        await tx.vendorOrder.updateMany({
-          where: { orderId: id, status: { not: 'delivered' } },
-          data: { status: 'cancelled' },
-        });
-
-        await tx.shipment.updateMany({
-          where: { orderId: id, status: { not: ShipmentStatus.delivered } },
-          data: {
-            status: ShipmentStatus.returned,
-            failedReason: dto.note || 'Đơn hàng bị hủy, hoàn hàng về kho',
-            notes: dto.note
-              ? `Hủy đơn: ${dto.note}`
-              : 'Đơn hàng bị hủy, hoàn hàng về kho',
-          },
-        });
-        if (current.shipments.length)
-          await tx.shipmentEvent.createMany({
-            data: current.shipments
-              .filter(
-                (shipment) =>
-                  ![ShipmentStatus.returned, ShipmentStatus.delivered].includes(
-                    shipment.status as any,
-                  ),
-              )
-              .map((shipment) => ({
-                shipmentId: shipment.id,
-                status: ShipmentStatus.returned,
-                actorRole: user.role,
-                actorId: user.userID,
-                description: dto.note || 'Đơn hàng bị hủy, hoàn hàng về kho',
-              })),
-          });
+        await Promise.all([
+          ...detailsToRestock.map((detail) =>
+            tx.productVariant.update({
+              where: { id: detail.productVariantId },
+              data: { stock: { increment: detail.quantity } },
+            }),
+          ),
+          ...(usages.length > 0
+            ? [
+                tx.voucherDetail.updateMany({
+                  where: { id: { in: usages.map((u) => u.id) } },
+                  data: { reversedAt },
+                }),
+                tx.voucher.updateMany({
+                  where: {
+                    id: { in: usages.map((u) => u.voucherId) },
+                    usedQuantity: { gt: 0 },
+                  },
+                  data: { usedQuantity: { decrement: 1 } },
+                }),
+              ]
+            : []),
+          tx.payment.update({
+            where: { orderId: id },
+            data: {
+              status:
+                current.payment?.status === PaymentStatus.paid
+                  ? PaymentStatus.refunded
+                  : PaymentStatus.cancelled,
+            },
+          }),
+          tx.vendorOrder.updateMany({
+            where: { orderId: id, status: { not: 'delivered' } },
+            data: { status: 'cancelled' },
+          }),
+          tx.shipment.updateMany({
+            where: { orderId: id, status: { not: ShipmentStatus.delivered } },
+            data: {
+              status: ShipmentStatus.returned,
+              failedReason: dto.note || 'Đơn hàng bị hủy, hoàn hàng về kho',
+              notes: dto.note
+                ? `Hủy đơn: ${dto.note}`
+                : 'Đơn hàng bị hủy, hoàn hàng về kho',
+            },
+          }),
+          ...(shipmentsToReturn.length > 0
+            ? [
+                tx.shipmentEvent.createMany({
+                  data: shipmentsToReturn.map((shipment) => ({
+                    shipmentId: shipment.id,
+                    status: ShipmentStatus.returned,
+                    actorRole: user.role,
+                    actorId: user.userID,
+                    description: dto.note || 'Đơn hàng bị hủy, hoàn hàng về kho',
+                  })),
+                }),
+              ]
+            : []),
+        ]);
       }
       if (
         dto.status === OrderStatus.completed &&
@@ -2135,6 +2497,94 @@ export class OrdersService {
 
     this.emitOrder(result.updated, 'order:updated');
     this.emitSurveyNotifications(result.surveyNotifications);
+
+    if (this.notifications) {
+      const orderCodeStr = result.updated.orderCode;
+      const statusLabel = ORDER_STATUS_LABELS[dto.status] || dto.status;
+      const noteText = dto.note?.trim() ? ` (${dto.note.trim()})` : '';
+      const statusNotifs: OrderNotificationInput[] = [];
+
+      if (result.updated.clientId && !(user.role === 'client' && user.userID === result.updated.clientId)) {
+        statusNotifs.push({
+          clientId: result.updated.clientId,
+          title: `Đơn hàng #${orderCodeStr}: ${statusLabel}`,
+          content: `Đơn hàng #${orderCodeStr} đã chuyển sang trạng thái "${statusLabel}"${noteText}.`,
+          data: { orderId: id, orderCode: orderCodeStr, status: dto.status, event: 'order_status_updated' },
+        });
+      }
+
+      const vendorIds = new Set<string>();
+      for (const vo of result.updated.vendorOrders || []) {
+        if (vo.vendorId) vendorIds.add(vo.vendorId);
+      }
+      for (const d of result.updated.details || []) {
+        const vId = d.productVariant?.productColor?.product?.vendorId;
+        if (vId) vendorIds.add(vId);
+      }
+      for (const vendorId of vendorIds) {
+        if (user.role === 'vendor' && user.userID === vendorId) continue;
+        statusNotifs.push({
+          vendorId,
+          title: `Đơn hàng #${orderCodeStr}: ${statusLabel}`,
+          content: `Đơn hàng #${orderCodeStr} đã chuyển sang trạng thái "${statusLabel}"${noteText}.`,
+          data: { orderId: id, orderCode: orderCodeStr, status: dto.status, event: 'order_status_updated' },
+        });
+      }
+
+      const notifiedEmployees = new Set<string>();
+      if (
+        result.updated.assignedEmployeeId &&
+        !(user.role === 'employee' && user.userID === result.updated.assignedEmployeeId)
+      ) {
+        notifiedEmployees.add(result.updated.assignedEmployeeId);
+        statusNotifs.push({
+          employeeId: result.updated.assignedEmployeeId,
+          title: `Đơn hàng #${orderCodeStr}: ${statusLabel}`,
+          content: `Đơn hàng #${orderCodeStr} bạn phụ trách đã chuyển sang trạng thái "${statusLabel}"${noteText}.`,
+          data: { orderId: id, orderCode: orderCodeStr, status: dto.status, event: 'order_status_updated' },
+        });
+      }
+
+      for (const s of result.updated.shipments || []) {
+        if (
+          s.carrierId &&
+          !notifiedEmployees.has(s.carrierId) &&
+          !(user.role === 'employee' && user.userID === s.carrierId)
+        ) {
+          notifiedEmployees.add(s.carrierId);
+          statusNotifs.push({
+            employeeId: s.carrierId,
+            title: `Vận đơn #${s.trackingNumber || orderCodeStr}: ${statusLabel}`,
+            content: `Đơn hàng #${orderCodeStr} bạn phụ trách giao đã chuyển sang trạng thái "${statusLabel}"${noteText}.`,
+            data: {
+              orderId: id,
+              orderCode: orderCodeStr,
+              shipmentId: s.id,
+              status: dto.status,
+              event: 'order_status_updated',
+            },
+          });
+        }
+      }
+
+      if (result.assignedExceptionEmp && !notifiedEmployees.has(result.assignedExceptionEmp.id)) {
+        statusNotifs.push({
+          employeeId: result.assignedExceptionEmp.id,
+          title: `Phân công xử lý sự cố đơn #${orderCodeStr}`,
+          content: `Hồ sơ sự cố đơn hàng #${orderCodeStr} vừa được chuyển giao cho bạn tiếp nhận và giải quyết${noteText}.`,
+          data: { orderId: id, orderCode: orderCodeStr, status: dto.status, event: 'order_exception' },
+        });
+      }
+
+      await this.notifications.notifyOrderUpdates(statusNotifs);
+    }
+
+    if (user.role === 'employee' && (dto.notifyTarget === 'admin' || dto.notifyTarget === 'both')) {
+      this.realtime.emitToAdmins('notification:created', {
+        orderId: id,
+        orderCode: result.updated.orderCode,
+      });
+    }
     if (result.assignedExceptionEmp) {
       this.realtime.emitToUser(
         result.assignedExceptionEmp.id,
@@ -2507,6 +2957,13 @@ export class OrdersService {
         }
       }
 
+      if (!isShipper) {
+        await tx.order.updateMany({
+          where: { id: { in: targetOrders.map((t) => t.id) } },
+          data: { assignedEmployeeId: employee.id },
+        });
+      }
+
       for (const target of targetOrders) {
         const siblingSuffix =
           isHandling && targetOrders.length > 1
@@ -2565,6 +3022,31 @@ export class OrdersService {
         orderCode: updated.orderCode,
         reason: dto.note || 'Admin chỉ định xử lý sự cố',
       });
+    }
+
+    if (this.notifications) {
+      const siblingNote =
+        isHandling && updatedSiblings.length > 0
+          ? ` (gồm ${updatedSiblings.length + 1} đơn cùng lượt đặt)`
+          : '';
+      const assignTitle = isShipper
+        ? `Phân công giao vận đơn #${updated.orderCode}`
+        : isException
+          ? `Phân công xử lý sự cố đơn #${updated.orderCode}`
+          : `Phân công tiếp nhận đơn #${updated.orderCode}`;
+      await this.notifications.notifyOrderUpdates([
+        {
+          employeeId: employee.id,
+          title: assignTitle,
+          content: `Admin vừa phân công bạn phụ trách đơn hàng #${updated.orderCode}${siblingNote}${dto.note ? `. Ghi chú: ${dto.note}` : ''}.`,
+          data: {
+            orderId: updated.id,
+            orderCode: updated.orderCode,
+            shipmentId: updated.shipments?.[0]?.id,
+            event: isShipper ? 'shipment_assigned' : 'order_assigned',
+          },
+        },
+      ]);
     }
 
     return updated;
@@ -2639,13 +3121,27 @@ export class OrdersService {
               status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
             },
           },
-          include: { order: true },
+          select: {
+            id: true,
+            orderId: true,
+            trackingNumber: true,
+            order: { select: { status: true } },
+          },
+          take: 200,
         }),
         this.prisma.extended.order.findMany({
           where: {
             shipments: { none: {} },
             status: { notIn: [OrderStatus.completed, OrderStatus.cancelled] },
           },
+          select: {
+            id: true,
+            status: true,
+            shippingAddress: true,
+            receiverName: true,
+            receiverPhone: true,
+          },
+          take: 200,
         }),
         loadShipperPoolWithLoads(this.prisma.extended),
       ]);
@@ -2658,86 +3154,103 @@ export class OrdersService {
       };
     }
 
-    let count = 0;
-    for (const shipment of unassignedShipments) {
-      const bestEmp = pickNextShipperFromPool(shipperPool);
-      if (!bestEmp) break;
+    const shipmentAssignments = unassignedShipments
+      .map((shipment) => ({
+        shipment,
+        bestEmp: pickNextShipperFromPool(shipperPool),
+      }))
+      .filter((item): item is { shipment: (typeof unassignedShipments)[number]; bestEmp: NonNullable<ReturnType<typeof pickNextShipperFromPool>> } => Boolean(item.bestEmp));
 
+    const orderAssignments = ordersWithoutShipment
+      .map((order) => ({
+        order,
+        bestEmp: pickNextShipperFromPool(shipperPool),
+      }))
+      .filter((item): item is { order: (typeof ordersWithoutShipment)[number]; bestEmp: NonNullable<ReturnType<typeof pickNextShipperFromPool>> } => Boolean(item.bestEmp));
+
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < shipmentAssignments.length; i += CHUNK_SIZE) {
+      const chunk = shipmentAssignments.slice(i, i + CHUNK_SIZE);
       await this.prisma.extendedTransaction(async (tx) => {
-        await tx.shipment.update({
-          where: { id: shipment.id },
-          data: {
-            carrierId: bestEmp.id,
-            carrierType: 'employee',
-            status: ShipmentStatus.assigned,
-            notes: `Hệ thống tự động phân công cho ${bestEmp.fullName} (${bestEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`,
-          },
-        });
-
-        await tx.shipmentEvent.create({
-          data: {
-            shipmentId: shipment.id,
-            status: ShipmentStatus.assigned,
-            location: 'Trung tâm phân phối MIVA Hub',
-            description: `Hệ thống tự động phân công kiện hàng cho nhân sự ${bestEmp.fullName} (${bestEmp.employeeCode}) (Phòng Vận chuyển & Giao nhận)`,
-            actorRole: user.role,
-            actorId: user.userID,
-          },
-        });
-
-        await tx.orderStatusHistory.create({
-          data: {
-            orderId: shipment.orderId,
-            employeeId: bestEmp.id,
-            fromStatus: shipment.order.status,
-            toStatus: shipment.order.status,
-            note: `[Tự động phân công] Hệ thống phân công bưu tá [${bestEmp.fullName} / ${bestEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách kiện ${shipment.trackingNumber}`,
-          },
-        });
+        await Promise.all([
+          ...chunk.map(({ shipment, bestEmp }) =>
+            tx.shipment.update({
+              where: { id: shipment.id },
+              data: {
+                carrierId: bestEmp.id,
+                carrierType: 'employee',
+                status: ShipmentStatus.assigned,
+                notes: `Hệ thống tự động phân công cho ${bestEmp.fullName} (${bestEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`,
+              },
+            }),
+          ),
+          tx.shipmentEvent.createMany({
+            data: chunk.map(({ shipment, bestEmp }) => ({
+              shipmentId: shipment.id,
+              status: ShipmentStatus.assigned,
+              location: 'Trung tâm phân phối MIVA Hub',
+              description: `Hệ thống tự động phân công kiện hàng cho nhân sự ${bestEmp.fullName} (${bestEmp.employeeCode}) (Phòng Vận chuyển & Giao nhận)`,
+              actorRole: user.role,
+              actorId: user.userID,
+            })),
+          }),
+          tx.orderStatusHistory.createMany({
+            data: chunk.map(({ shipment, bestEmp }) => ({
+              orderId: shipment.orderId,
+              employeeId: bestEmp.id,
+              fromStatus: shipment.order.status,
+              toStatus: shipment.order.status,
+              note: `[Tự động phân công] Hệ thống phân công bưu tá [${bestEmp.fullName} / ${bestEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách kiện ${shipment.trackingNumber}`,
+            })),
+          }),
+        ]);
       });
-      const payload = {
-        shipmentId: shipment.id,
-        orderId: shipment.orderId,
-        status: ShipmentStatus.assigned,
-      };
-      this.realtime.emitToAdmins('shipment:updated', payload);
-      this.realtime.emitToEmployees('shipment:updated', payload);
-      this.realtime.emitToUser(bestEmp.id, 'shipment:updated', payload);
-      count++;
-    }
 
-    for (const order of ordersWithoutShipment) {
-      const bestEmp = pickNextShipperFromPool(shipperPool);
-      if (!bestEmp) break;
-
-      await this.prisma.extendedTransaction(async (tx) => {
-        await this.createShipmentWithInitialEvent(tx, {
-          orderId: order.id,
-          carrierId: bestEmp.id,
+      for (const { shipment, bestEmp } of chunk) {
+        const payload = {
+          shipmentId: shipment.id,
+          orderId: shipment.orderId,
           status: ShipmentStatus.assigned,
-          shippingAddress: order.shippingAddress,
-          receiverName: order.receiverName,
-          receiverPhone: order.receiverPhone,
-          notes: `Hệ thống tự động phân công cho ${bestEmp.fullName} (${bestEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`,
-          eventLocation: 'Trung tâm phân phối MIVA Hub',
-          eventDescription: `Hệ thống tự động phân công kiện hàng cho bưu tá ${bestEmp.fullName} (${bestEmp.employeeCode}) (Phòng Vận chuyển & Giao nhận)`,
-          actorRole: user.role,
-          actorId: user.userID,
-        });
-
-        await tx.orderStatusHistory.create({
-          data: {
-            orderId: order.id,
-            employeeId: bestEmp.id,
-            fromStatus: order.status,
-            toStatus: order.status,
-            note: `[Tự động phân công] Hệ thống phân công bưu tá [${bestEmp.fullName} / ${bestEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận đơn hàng`,
-          },
-        });
-      });
-      count++;
+        };
+        this.realtime.emitToAdmins('shipment:updated', payload);
+        this.realtime.emitToEmployees('shipment:updated', payload);
+        this.realtime.emitToUser(bestEmp.id, 'shipment:updated', payload);
+      }
     }
 
+    for (let i = 0; i < orderAssignments.length; i += CHUNK_SIZE) {
+      const chunk = orderAssignments.slice(i, i + CHUNK_SIZE);
+      await this.prisma.extendedTransaction(async (tx) => {
+        await Promise.all([
+          ...chunk.map(({ order, bestEmp }) =>
+            this.createShipmentWithInitialEvent(tx, {
+              orderId: order.id,
+              carrierId: bestEmp.id,
+              status: ShipmentStatus.assigned,
+              shippingAddress: order.shippingAddress,
+              receiverName: order.receiverName,
+              receiverPhone: order.receiverPhone,
+              notes: `Hệ thống tự động phân công cho ${bestEmp.fullName} (${bestEmp.employeeCode}) - Phòng Vận chuyển & Giao nhận`,
+              eventLocation: 'Trung tâm phân phối MIVA Hub',
+              eventDescription: `Hệ thống tự động phân công kiện hàng cho bưu tá ${bestEmp.fullName} (${bestEmp.employeeCode}) (Phòng Vận chuyển & Giao nhận)`,
+              actorRole: user.role,
+              actorId: user.userID,
+            }),
+          ),
+          tx.orderStatusHistory.createMany({
+            data: chunk.map(({ order, bestEmp }) => ({
+              orderId: order.id,
+              employeeId: bestEmp.id,
+              fromStatus: order.status,
+              toStatus: order.status,
+              note: `[Tự động phân công] Hệ thống phân công bưu tá [${bestEmp.fullName} / ${bestEmp.employeeCode}] (Phòng Vận chuyển & Giao nhận) phụ trách giao nhận đơn hàng`,
+            })),
+          }),
+        ]);
+      });
+    }
+
+    const count = shipmentAssignments.length + orderAssignments.length;
     return {
       success: true,
       message: `Đã tự động phân công bưu tá thành công cho ${count} đơn / kiện hàng`,
@@ -2764,8 +3277,6 @@ export class OrdersService {
               select: { department: true, assignedOrderScope: true },
             });
 
-      if (emp?.assignedOrderScope === 'all_orders') return;
-
       const isCourier = emp && this.isShippingDepartment(emp.department);
       if (isCourier) {
         const hasMyShipment = (order.shipments || []).some(
@@ -2777,15 +3288,10 @@ export class OrdersService {
         );
       }
 
-      const isAssigned =
-        (order.shipments || []).some((s: any) => s.carrierId === user.userID) ||
-        (order.statusHistory || []).some(
-          (h: any) => h.employeeId === user.userID,
-        );
-      if (isAssigned) return;
+      if (order.assignedEmployeeId === user.userID) return;
 
       throw new ForbiddenException(
-        'Bạn không được phân công phụ trách đơn hàng này',
+        'Bạn chỉ được xem và xử lý đơn hàng được phân công cho mình',
       );
     }
 

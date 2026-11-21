@@ -46,21 +46,24 @@ describe('OrdersService', () => {
             productVariant: { productColor: { product: { vendorId } } } }]})},
       order: {
         create: jest.fn().mockResolvedValue(order),
-        findUniqueOrThrow: jest.fn().mockResolvedValue(order)},
+        findUniqueOrThrow: jest.fn().mockResolvedValue(order),
+        findMany: jest.fn().mockResolvedValue([order])},
       productVariant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      orderDetail: { create: jest.fn(), updateMany: jest.fn() },
+      orderDetail: { create: jest.fn(), createMany: jest.fn(), updateMany: jest.fn() },
       vendorOrder: { create: jest.fn().mockResolvedValue({ id: 'vendor-order' }) },
       employee: { findMany: jest.fn().mockResolvedValue([]) },
       shipment: { create: jest.fn().mockResolvedValue({ id: 'shipment' }) },
       payment: { create: jest.fn() },
-      orderStatusHistory: { create: jest.fn() },
+      orderStatusHistory: { create: jest.fn(), createMany: jest.fn() },
       cartItem: { updateMany: jest.fn() },
       surveyResponse: {
         findMany: jest.fn().mockResolvedValue([prompt])}};
     const prisma = {
       $transaction: jest.fn(
         (callback: (client: typeof tx) => Promise<unknown>) => callback(tx),
-      )};
+      ),
+      order: tx.order,
+      surveyResponse: tx.surveyResponse};
     Object.assign(prisma, { extended: prisma, extendedTransaction: prisma.$transaction });
     const vouchers = {
       calculate: jest.fn().mockResolvedValue({
@@ -205,7 +208,7 @@ describe('OrdersService', () => {
       where: { id: { in: [current.voucherDetails[0].id] } },
       data: { reversedAt: expect.any(Date) as Date }});
     expect(tx.voucher.updateMany).toHaveBeenCalledWith({
-      where: { id: voucherId, usedQuantity: { gt: 0 } },
+      where: { id: { in: [voucherId] }, usedQuantity: { gt: 0 } },
       data: { usedQuantity: { decrement: 1 } }});
     expect(tx.payment.update).toHaveBeenCalledWith({
       where: { orderId },
@@ -394,9 +397,18 @@ describe('OrdersService', () => {
           shipments: [],
           vendorOrders: [],
         })),
+        findMany: jest.fn().mockImplementation(async ({ where }: any) =>
+          (where?.id?.in || []).map((id: string) => ({
+            id,
+            clientId,
+            totalAmount: new Prisma.Decimal(100),
+            details: [],
+            vendorOrders: [],
+          })),
+        ),
       },
       productVariant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      orderDetail: { create: jest.fn(), updateMany: jest.fn() },
+      orderDetail: { create: jest.fn(), createMany: jest.fn(), updateMany: jest.fn() },
       vendorOrder: { create: jest.fn().mockResolvedValue({ id: 'vo-1' }) },
       employee: {
         findMany: jest.fn().mockImplementation(async ({ where }: any) => {
@@ -417,6 +429,10 @@ describe('OrdersService', () => {
           createdHistory.push(data);
           return data;
         }),
+        createMany: jest.fn().mockImplementation(async ({ data }: any) => {
+          if (Array.isArray(data)) createdHistory.push(...data);
+          return { count: Array.isArray(data) ? data.length : 0 };
+        }),
       },
       cartItem: { updateMany: jest.fn() },
       surveyResponse: { findMany: jest.fn().mockResolvedValue([]) },
@@ -424,6 +440,8 @@ describe('OrdersService', () => {
 
     const prisma = {
       $transaction: jest.fn((cb: any) => cb(tx)),
+      order: tx.order,
+      surveyResponse: tx.surveyResponse,
     };
     Object.assign(prisma, { extended: prisma, extendedTransaction: prisma.$transaction });
 
@@ -527,6 +545,7 @@ describe('OrdersService', () => {
           details: [],
           shipments: [{ id: 's1', carrierId: courier.id, trackingNumber: 'SHIP-1' }],
         })),
+        updateMany: jest.fn().mockResolvedValue({ count: 4 }),
       },
       orderStatusHistory: {
         create: jest.fn().mockImplementation(async ({ data }: any) => {
@@ -620,6 +639,204 @@ describe('OrdersService', () => {
         where: expect.objectContaining({
           shipments: { some: { carrierId: courierId } },
         }),
+      }),
+    );
+  });
+
+  it('reorders a completed order with matching items, shipping snapshot, payment method and still-valid vouchers', async () => {
+    const clientId = '11111111-1111-4111-8111-111111111111';
+    const orderId = '22222222-2222-4222-8222-222222222222';
+    const vendorId = '33333333-3333-4333-8333-333333333333';
+    const variantActive = '44444444-4444-4444-8444-444444444444';
+    const variantLowStock = '55555555-5555-4555-8555-555555555555';
+    const variantOutOfStock = '66666666-6666-4666-8666-666666666666';
+    const now = new Date();
+    const past = new Date(now.getTime() - 86400000);
+    const future = new Date(now.getTime() + 86400000);
+
+    const completedOrder = {
+      id: orderId,
+      clientId,
+      status: OrderStatus.completed,
+      receiverName: 'Nguyễn Văn A',
+      receiverPhone: '0912345678',
+      shippingAddress: '123 An Dương Vương, Q5, TP.HCM',
+      notes: 'Giao giờ hành chính',
+      payment: { method: PaymentMethod.credit_card },
+      details: [
+        {
+          productVariantId: variantActive,
+          quantity: 2,
+          productName: 'Áo sơ mi',
+          productVariant: {
+            id: variantActive,
+            stock: 10,
+            deletedAt: null,
+            productColor: {
+              deletedAt: null,
+              product: { id: 'p1', name: 'Áo sơ mi', vendorId, status: 'active', deletedAt: null },
+            },
+          },
+        },
+        {
+          productVariantId: variantLowStock,
+          quantity: 5,
+          productName: 'Quần jean',
+          productVariant: {
+            id: variantLowStock,
+            stock: 3,
+            deletedAt: null,
+            productColor: {
+              deletedAt: null,
+              product: { id: 'p2', name: 'Quần jean', vendorId, status: 'active', deletedAt: null },
+            },
+          },
+        },
+        {
+          productVariantId: variantOutOfStock,
+          quantity: 1,
+          productName: 'Giày cũ',
+          productVariant: {
+            id: variantOutOfStock,
+            stock: 0,
+            deletedAt: null,
+            productColor: {
+              deletedAt: null,
+              product: { id: 'p3', name: 'Giày cũ', vendorId, status: 'active', deletedAt: null },
+            },
+          },
+        },
+      ],
+      voucherDetails: [
+        {
+          voucher: {
+            id: 'v-shop-ok',
+            code: 'SHOP10',
+            scope: 'vendor',
+            vendorId,
+            status: 'active',
+            deletedAt: null,
+            startDate: past,
+            endDate: future,
+            quantity: 100,
+            usedQuantity: 10,
+            perUserLimit: 3,
+          },
+        },
+        {
+          voucher: {
+            id: 'v-expired',
+            code: 'OLD50',
+            scope: 'platform',
+            vendorId: null,
+            status: 'active',
+            deletedAt: null,
+            startDate: past,
+            endDate: past,
+            quantity: 100,
+            usedQuantity: 10,
+            perUserLimit: 3,
+          },
+        },
+      ],
+    };
+
+    const prisma = {
+      order: { findMany: jest.fn().mockResolvedValue([completedOrder]) },
+      cart: { upsert: jest.fn().mockResolvedValue({ id: 'cart-1' }) },
+      cartItem: {
+        upsert: jest
+          .fn()
+          .mockResolvedValueOnce({ id: 'ci-1' })
+          .mockResolvedValueOnce({ id: 'ci-2' }),
+      },
+      voucherDetail: {
+        groupBy: jest.fn().mockResolvedValue([{ voucherId: 'v-shop-ok', _count: { _all: 1 } }]),
+      },
+    };
+    Object.assign(prisma, { extended: prisma });
+
+    const service = new OrdersService(prisma as any, {} as any, {} as any, {} as any);
+    const res = await service.reorder(clientId, [orderId]);
+
+    expect(res.cartItemIds).toEqual(['ci-1', 'ci-2']);
+    expect(res.paymentMethod).toBe(PaymentMethod.credit_card);
+    expect(res.shippingSnapshot).toEqual({
+      receiverName: 'Nguyễn Văn A',
+      receiverPhone: '0912345678',
+      shippingAddress: '123 An Dương Vương, Q5, TP.HCM',
+      notes: 'Giao giờ hành chính',
+    });
+    expect(res.voucherSelections).toEqual([{ vendorId, codes: ['SHOP10'] }]);
+    expect(res.platformVoucherCode).toBeNull();
+    expect(res.warnings.skippedItems).toHaveLength(1);
+    expect(res.warnings.adjustedItems).toEqual([
+      { productName: 'Quần jean', requested: 5, adjusted: 3 },
+    ]);
+    expect(res.warnings.expiredVoucherCodes).toEqual(['OLD50']);
+  });
+
+  it('rejects reordering a non-completed order', async () => {
+    const clientId = '11111111-1111-4111-8111-111111111111';
+    const orderId = '22222222-2222-4222-8222-222222222222';
+    const prisma = {
+      order: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: orderId, clientId, status: OrderStatus.pending, details: [], voucherDetails: [] },
+        ]),
+      },
+    };
+    Object.assign(prisma, { extended: prisma });
+    const service = new OrdersService(prisma as any, {} as any, {} as any, {} as any);
+
+    await expect(service.reorder(clientId, [orderId])).rejects.toThrow(
+      'Chỉ có thể mua lại đơn hàng đã hoàn thành',
+    );
+  });
+
+  it('strictly isolates handling employees to orders with assignedEmployeeId === emp.id even if assignedOrderScope is all_orders', async () => {
+    const empA = 'aaaa1111-1111-4111-8111-111111111111';
+    const empB = 'bbbb2222-2222-4222-8222-222222222222';
+    const reassignedOrder = {
+      id: 'ord-reassigned',
+      clientId: 'client-1',
+      status: OrderStatus.pending,
+      assignedEmployeeId: empB,
+      shipments: [],
+      statusHistory: [{ employeeId: empA, note: '[Phân công tiếp nhận] cũ' }],
+      details: [],
+    };
+
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue(reassignedOrder),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
+      employee: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: empA,
+          department: 'Bộ phận Điều phối & Liên kết Vendor',
+          assignedOrderScope: 'all_orders',
+        }),
+      },
+    };
+    Object.assign(prisma, { extended: prisma });
+
+    const service = new OrdersService(prisma as any, {} as any, {} as any, {} as any);
+    const empAUser = { userID: empA, role: 'employee' } as any;
+
+    // Even with assignedOrderScope = 'all_orders' and old statusHistory row, empA cannot view empB's order
+    await expect(service.getById('ord-reassigned', empAUser)).rejects.toThrow(
+      ForbiddenException,
+    );
+
+    // listAll strictly filters by assignedEmployeeId === empA and ignores spoofed employeeId query param
+    await service.listAll({ page: 1, itemPerPage: 10, employeeId: empB } as any, empAUser);
+    expect(prisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { assignedEmployeeId: empA },
       }),
     );
   });

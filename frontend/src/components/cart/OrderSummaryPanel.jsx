@@ -133,6 +133,8 @@ export default function OrderSummaryPanel({
                             <img
                               src={imgUrl}
                               alt={pName}
+                              loading="lazy"
+                              decoding="async"
                               className="w-10 h-10 rounded-lg object-cover border border-light-border dark:border-dark-border bg-white dark:bg-dark-card shrink-0"
                             />
                             <div className="min-w-0">

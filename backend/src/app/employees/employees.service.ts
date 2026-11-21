@@ -499,21 +499,61 @@ export class EmployeesService {
   }
 
   async getMyNotifications(employeeId: string) {
-    const emp = await this.prisma.extended.employee.findUnique({
-      where: { id: employeeId },
-      select: { permissions: true },
-    });
+    const [emp, dbNotifications] = await Promise.all([
+      this.prisma.extended.employee.findUnique({
+        where: { id: employeeId },
+        select: { permissions: true },
+      }),
+      this.prisma.extended.notification
+        .findMany({
+          where: { employeeId },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        })
+        .catch(() => []),
+    ]);
 
     if (!emp) {
       throw new NotFoundException('Không tìm thấy nhân viên');
     }
 
     const perms = (emp.permissions as Record<string, any>) || {};
-    const notifications: any[] = Array.isArray(perms.notifications) ? perms.notifications : [];
-    const unreadCount = notifications.filter((n) => !n.isRead).length;
+    const legacyNotifications: any[] = Array.isArray(perms.notifications)
+      ? perms.notifications
+      : [];
+
+    const mappedDbNotifications = dbNotifications.map((n) => ({
+      id: n.id,
+      type: n.type,
+      title: n.title,
+      content: n.content,
+      message: n.content,
+      data: n.data,
+      sender:
+        n.type === 'order_update' ? 'Hệ thống Đơn hàng' : 'Ban Quản Trị MIVA',
+      isRead: n.isRead,
+      readAt: n.readAt,
+      createdAt: n.createdAt,
+    }));
+
+    const seenIds = new Set<string>();
+    const merged = [...mappedDbNotifications, ...legacyNotifications]
+      .filter((item) => {
+        if (!item?.id || seenIds.has(item.id)) return false;
+        seenIds.add(item.id);
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt || 0).getTime() -
+          new Date(a.createdAt || 0).getTime(),
+      )
+      .slice(0, 60);
+
+    const unreadCount = merged.filter((n) => !n.isRead).length;
 
     return {
-      list: notifications,
+      list: merged,
       unreadCount,
     };
   }
@@ -526,19 +566,41 @@ export class EmployeesService {
 
     if (!emp) throw new NotFoundException('Không tìm thấy nhân viên');
 
-    const perms = (emp.permissions as Record<string, any>) || {};
-    const notifications: any[] = Array.isArray(perms.notifications) ? perms.notifications : [];
-    const updatedNotifs = notifications.map((n) => (n.id === notifId ? { ...n, isRead: true, readAt: new Date().toISOString() } : n));
+    const now = new Date();
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        notifId,
+      );
 
-    await this.prisma.extended.employee.update({
-      where: { id: employeeId },
-      data: {
-        permissions: {
-          ...perms,
-          notifications: updatedNotifs,
+    if (isUuid) {
+      await this.prisma.extended.notification
+        .updateMany({
+          where: { id: notifId, employeeId },
+          data: { isRead: true, readAt: now },
+        })
+        .catch(() => null);
+    }
+
+    const perms = (emp.permissions as Record<string, any>) || {};
+    const notifications: any[] = Array.isArray(perms.notifications)
+      ? perms.notifications
+      : [];
+    const hasLegacyMatch = notifications.some((n) => n.id === notifId);
+    if (hasLegacyMatch) {
+      const updatedNotifs = notifications.map((n) =>
+        n.id === notifId ? { ...n, isRead: true, readAt: now.toISOString() } : n,
+      );
+
+      await this.prisma.extended.employee.update({
+        where: { id: employeeId },
+        data: {
+          permissions: {
+            ...perms,
+            notifications: updatedNotifs,
+          },
         },
-      },
-    });
+      });
+    }
 
     this.realtime.emitToUser(employeeId, 'notification:updated', { id: notifId });
 
@@ -553,23 +615,41 @@ export class EmployeesService {
 
     if (!emp) throw new NotFoundException('Không tìm thấy nhân viên');
 
-    const perms = (emp.permissions as Record<string, any>) || {};
-    const notifications: any[] = Array.isArray(perms.notifications) ? perms.notifications : [];
-    const now = new Date().toISOString();
-    const updatedNotifs = notifications.map((n) => ({ ...n, isRead: true, readAt: now }));
+    const now = new Date();
+    const dbRes = await this.prisma.extended.notification
+      .updateMany({
+        where: { employeeId, isRead: false },
+        data: { isRead: true, readAt: now },
+      })
+      .catch(() => ({ count: 0 }));
 
-    await this.prisma.extended.employee.update({
-      where: { id: employeeId },
-      data: {
-        permissions: {
-          ...perms,
-          notifications: updatedNotifs,
+    const perms = (emp.permissions as Record<string, any>) || {};
+    const notifications: any[] = Array.isArray(perms.notifications)
+      ? perms.notifications
+      : [];
+    const updatedNotifs = notifications.map((n) => ({
+      ...n,
+      isRead: true,
+      readAt: now.toISOString(),
+    }));
+
+    if (notifications.length > 0) {
+      await this.prisma.extended.employee.update({
+        where: { id: employeeId },
+        data: {
+          permissions: {
+            ...perms,
+            notifications: updatedNotifs,
+          },
         },
-      },
+      });
+    }
+
+    const totalUpdated = (dbRes?.count || 0) + updatedNotifs.length;
+    this.realtime.emitToUser(employeeId, 'notification:updated', {
+      updatedCount: totalUpdated,
     });
 
-    this.realtime.emitToUser(employeeId, 'notification:updated', { updatedCount: updatedNotifs.length });
-
-    return { success: true, count: updatedNotifs.length };
+    return { success: true, count: totalUpdated };
   }
 }

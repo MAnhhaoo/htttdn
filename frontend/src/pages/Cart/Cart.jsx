@@ -238,6 +238,8 @@ export default function Cart() {
                               'https://placehold.co/400x400?text=No+Image'
                             }
                             alt={item.productVariant?.productColor?.product?.name}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover"
                           />
                         </div>

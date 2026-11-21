@@ -85,11 +85,8 @@ export class PrismaService
             ) {
               args.where = { ...args.where, deletedAt: null };
             }
-            if (!args.orderBy) {
-              const orderBy = ['updatedAt', 'createdAt']
-                .filter((field) => this.hasField(model, field))
-                .map((field) => ({ [field]: 'desc' as const }));
-              if (orderBy.length) args.orderBy = orderBy;
+            if (!args.orderBy && this.hasField(model, 'createdAt')) {
+              args.orderBy = { createdAt: 'desc' as const };
             }
             return query(args);
           },

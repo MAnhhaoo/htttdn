@@ -404,8 +404,9 @@ export class UsersService {
           approvalStatus: 'approved',
           approvedAt: new Date(),
         },
+        select: VENDOR_ACCOUNT_SELECT,
       });
-      return this.getUser(createdVendor.id);
+      return this.mapVendorRecord(createdVendor);
     }
 
     if (roleInput === 'admin') {
@@ -419,8 +420,9 @@ export class UsersService {
           department: data.department?.trim() || null,
           status,
         },
+        select: ADMIN_ACCOUNT_SELECT,
       });
-      return this.getUser(createdAdmin.id);
+      return this.mapAdminRecord(createdAdmin);
     }
 
     const dob =
@@ -439,6 +441,7 @@ export class UsersService {
         dateOfBirth: dob,
         status,
       },
+      select: CLIENT_ACCOUNT_SELECT,
     });
 
     if (data.address?.trim()) {
@@ -448,9 +451,10 @@ export class UsersService {
         createdClient.phone,
         data.address.trim(),
       );
+      return this.getUser(createdClient.id);
     }
 
-    return this.getUser(createdClient.id);
+    return this.mapClientRecord(createdClient);
   }
 
   async getUser(id: string) {

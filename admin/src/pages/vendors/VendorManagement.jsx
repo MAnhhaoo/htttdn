@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
 import {
   Search,
   Eye,
@@ -28,11 +29,13 @@ import { formatPrice, formatDateOnly } from '../../utils/formatHelpers';
 export default function VendorManagement() {
   const [vendors, setVendors] = useState([]);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const prevFilterRef = useRef(`${debouncedSearch}|${statusFilter}`);
 
   // Vendor Detail Modal State
   const [selectedVendor, setSelectedVendor] = useState(null);
@@ -45,7 +48,7 @@ export default function VendorManagement() {
     setLoading(true);
     try {
       const params = { page, itemPerPage: 10, role: 'vendor' };
-      if (search) params.search = search;
+      if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter) params.status = statusFilter;
 
       const res = await usersApi.getUsers(params);
@@ -58,15 +61,19 @@ export default function VendorManagement() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter]);
+  }, [page, debouncedSearch, statusFilter]);
 
   useEffect(() => {
+    const filterKey = `${debouncedSearch}|${statusFilter}`;
+    if (prevFilterRef.current !== filterKey) {
+      prevFilterRef.current = filterKey;
+      if (page !== 1) {
+        setPage(1);
+        return;
+      }
+    }
     fetchVendors();
-  }, [fetchVendors]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter]);
+  }, [fetchVendors, debouncedSearch, statusFilter, page]);
 
   const getStatusBadge = (status) => {
     switch (status) {

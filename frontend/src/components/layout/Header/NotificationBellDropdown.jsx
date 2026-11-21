@@ -9,6 +9,7 @@ import {
   ClipboardList,
   CheckCircle2,
   ExternalLink,
+  Package,
 } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 import { notificationService } from '../../../services/notificationService';
@@ -126,6 +127,12 @@ export default function NotificationBellDropdown() {
       setActiveSurveyResponseId(responseId);
       setIsModalOpen(true);
       setIsOpen(false);
+      return;
+    }
+
+    if (notif.type === 'order_update' || notif.data?.orderId) {
+      setIsOpen(false);
+      navigate('/orders');
     }
   };
 
@@ -244,6 +251,7 @@ export default function NotificationBellDropdown() {
               ) : (
                 filteredNotifications.map((notif) => {
                   const isSurvey = notif.type === 'survey_invitation' || notif.surveyId;
+                  const isOrderUpdate = notif.type === 'order_update' || Boolean(notif.data?.orderId);
                   const responseStatus = notif.response?.status;
                   const isSubmitted = responseStatus === 'submitted';
                   const isExpired = notif.expiresAt && new Date(notif.expiresAt) < new Date();
@@ -269,6 +277,8 @@ export default function NotificationBellDropdown() {
                       <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text border border-light-border dark:border-dark-border">
                         {isSurvey ? (
                           <ClipboardList className="w-5 h-5 text-emerald-600" />
+                        ) : isOrderUpdate ? (
+                          <Package className="w-5 h-5 text-emerald-600" />
                         ) : (
                           <Bell className="w-5 h-5 text-primary" />
                         )}
@@ -283,6 +293,12 @@ export default function NotificationBellDropdown() {
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
                               <Store className="w-3 h-3" /> {senderName}
+                            </span>
+                          )}
+
+                          {isOrderUpdate && !isSurvey && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded">
+                              Đơn hàng
                             </span>
                           )}
 

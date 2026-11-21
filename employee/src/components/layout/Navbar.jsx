@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Building2,
   ShieldCheck,
@@ -35,13 +35,14 @@ export const Navbar = ({ onOpenSidebar, onOpenCheckIn }) => {
   const { user } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
   const [showSalary, setShowSalary] = useState(false);
 
   const pageTitle = resolvePageTitle(location.pathname, location.search);
-  const scopeLabel =
-    user?.assignedOrderScope === 'all_orders'
-      ? 'Toàn bộ đơn'
-      : user?.scopeName || user?.assignedOrderScope || 'Phân quyền';
+  const scopeLabel = 'Đơn được phân công';
+  const deptLower = (user?.department || '').toLowerCase();
+  const isShippingEmployee =
+    deptLower.includes('vận chuyển') || deptLower.includes('giao nhận');
 
   return (
     <header className="h-16 bg-white/95 dark:bg-[#131B17]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 px-4 sm:px-6 flex items-center justify-between shrink-0 z-20 transition-colors">
@@ -127,6 +128,11 @@ export const Navbar = ({ onOpenSidebar, onOpenCheckIn }) => {
           markAsReadFn={notificationsApi.markRead}
           markAllAsReadFn={notificationsApi.markAllAsRead}
           enabled={Boolean(user?.id)}
+          onNotificationClick={(notif) => {
+            if (notif.type === 'order_update' || notif.data?.orderId || notif.data?.shipmentId) {
+              navigate(isShippingEmployee ? '/shipping' : '/orders');
+            }
+          }}
         />
       </div>
     </header>

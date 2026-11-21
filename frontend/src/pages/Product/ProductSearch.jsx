@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { SlidersHorizontal, X, ChevronRight, RotateCcw, Search } from 'lucide-react';
+import { SlidersHorizontal, X, ChevronRight, ChevronDown, RotateCcw, Search } from 'lucide-react';
 import { useProducts } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
 import ProductGrid from '../../components/product/ProductGrid/ProductGrid';
 
 const ITEMS_PER_PAGE = 12;
+const INITIAL_VISIBLE_CATEGORIES = 5;
 
 const PRICE_PRESETS = [
   { label: 'Dưới 200.000đ', min: '', max: 200000 },
@@ -17,6 +18,7 @@ const PRICE_PRESETS = [
 export default function ProductSearch() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const productGridRef = useRef(null);
 
   // Read URL params
@@ -48,6 +50,17 @@ export default function ProductSearch() {
 
   // Fetch all categories for filter sidebar
   const { categories, isLoading: isLoadingCategories } = useCategories({ itemPerPage: 100 });
+  const visibleCategories = categories.slice(0, INITIAL_VISIBLE_CATEGORIES);
+  const extraCategories = categories.slice(INITIAL_VISIBLE_CATEGORIES);
+
+  useEffect(() => {
+    if (
+      category &&
+      categories.slice(INITIAL_VISIBLE_CATEGORIES).some((c) => c.slug === category)
+    ) {
+      setShowAllCategories(true);
+    }
+  }, [category, categories]);
 
   // Get the active category name
   const activeCategoryName = category
@@ -129,8 +142,8 @@ export default function ProductSearch() {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
 
-  // ── Filter Sidebar Content (shared desktop/mobile) ──
-  const FilterContent = () => (
+  // ── Filter Sidebar Content (shared desktop/mobile; rendered as element to avoid remounting & losing focus) ──
+  const filterContent = (
     <div className="space-y-6">
       {/* Section: Categories */}
       <div>
@@ -157,20 +170,85 @@ export default function ProductSearch() {
               ))}
             </div>
           ) : (
-            categories.map(cat => (
-              <label key={cat.id} className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-light-surface dark:hover:bg-dark-surface transition-colors">
-                <input
-                  type="radio"
-                  name="category"
-                  checked={category === cat.slug}
-                  onChange={() => handleCategoryChange(cat.slug)}
-                  className="w-4 h-4 text-primary accent-primary"
-                />
-                <span className={`text-sm ${category === cat.slug ? 'font-semibold text-primary' : 'text-light-text dark:text-dark-text'}`}>
-                  {cat.name}
-                </span>
-              </label>
-            ))
+            <>
+              {visibleCategories.map((cat) => (
+                <label
+                  key={cat.id}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-light-surface dark:hover:bg-dark-surface transition-colors"
+                >
+                  <input
+                    type="radio"
+                    name="category"
+                    checked={category === cat.slug}
+                    onChange={() => handleCategoryChange(cat.slug)}
+                    className="w-4 h-4 shrink-0 text-primary accent-primary"
+                  />
+                  <span
+                    className={`text-sm leading-snug break-words ${
+                      category === cat.slug
+                        ? 'font-semibold text-primary'
+                        : 'text-light-text dark:text-dark-text'
+                    }`}
+                  >
+                    {cat.name}
+                  </span>
+                </label>
+              ))}
+
+              {extraCategories.length > 0 && (
+                <>
+                  <div
+                    className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+                      showAllCategories
+                        ? 'grid-rows-[1fr] opacity-100'
+                        : 'grid-rows-[0fr] opacity-0 pointer-events-none'
+                    }`}
+                  >
+                    <div className="overflow-hidden space-y-1">
+                      {extraCategories.map((cat) => (
+                        <label
+                          key={cat.id}
+                          className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-light-surface dark:hover:bg-dark-surface transition-colors"
+                        >
+                          <input
+                            type="radio"
+                            name="category"
+                            checked={category === cat.slug}
+                            onChange={() => handleCategoryChange(cat.slug)}
+                            className="w-4 h-4 shrink-0 text-primary accent-primary"
+                          />
+                          <span
+                            className={`text-sm leading-snug break-words ${
+                              category === cat.slug
+                                ? 'font-semibold text-primary'
+                                : 'text-light-text dark:text-dark-text'
+                            }`}
+                          >
+                            {cat.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAllCategories((prev) => !prev)}
+                    aria-expanded={showAllCategories}
+                    className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                  >
+                    <span>
+                      {showAllCategories ? 'Thu gọn' : `Xem thêm (${extraCategories.length})`}
+                    </span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-300 ease-out ${
+                        showAllCategories ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                </>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -364,7 +442,7 @@ export default function ProductSearch() {
                 <SlidersHorizontal className="w-4 h-4 text-primary" />
                 Bộ lọc
               </h3>
-              <FilterContent />
+              {filterContent}
             </div>
           </aside>
 
@@ -413,7 +491,7 @@ export default function ProductSearch() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-5">
-              <FilterContent />
+              {filterContent}
             </div>
           </div>
         </div>

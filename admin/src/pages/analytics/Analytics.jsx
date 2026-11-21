@@ -141,10 +141,13 @@ export default function Analytics() {
     reportsApi.getFinanceConfig()
       .then((res) => {
         if (res.data?.current) {
-          setFinanceConfig({
-            vendorRegistrationFee: res.data.current.vendorRegistrationFee,
-            commissionTaxRate: res.data.current.commissionTaxRate,
-          });
+          const nextFee = res.data.current.vendorRegistrationFee;
+          const nextRate = res.data.current.commissionTaxRate;
+          setFinanceConfig((prev) =>
+            prev.vendorRegistrationFee === nextFee && prev.commissionTaxRate === nextRate
+              ? prev
+              : { vendorRegistrationFee: nextFee, commissionTaxRate: nextRate },
+          );
         }
       })
       .catch((err) => console.error('Error fetching finance config:', err));

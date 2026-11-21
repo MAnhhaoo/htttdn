@@ -504,11 +504,7 @@ export const OrdersPage = () => {
                     className="w-4 h-4 accent-[#1A3A2C] dark:accent-[#C9A84C] rounded border-slate-300 dark:border-slate-600 focus:ring-[#2A5C4A]"
                   />
                   <span className="font-semibold text-slate-700 dark:text-slate-200">
-                    Phạm vi (
-                    {user?.assignedOrderScope === 'all_orders'
-                      ? 'Toàn bộ'
-                      : user?.scopeName || user?.assignedOrderScope || 'Phân quyền'}
-                    )
+                    Phạm vi (Đơn được phân công)
                   </span>
                 </label>
 
@@ -594,7 +590,7 @@ export const OrdersPage = () => {
                     <th className="py-3 px-4 text-right">Tổng tiền</th>
                     <th className="py-3 px-4 text-center">Trạng thái</th>
                     <th className="py-3 px-4">Vendor &amp; SLA</th>
-                    <th className="py-3 px-4">Nhân viên phụ trách</th>
+                    <th className="py-3 px-4">Nhân viên vận chuyển</th>
                     <th className="py-3 px-4 text-center">Thao tác</th>
                   </tr>
                 </thead>
@@ -623,8 +619,7 @@ export const OrdersPage = () => {
                   ) : (
                     filteredOrders.map((order) => {
                       const statusBadge = STATUS_BADGE[order.status] || STATUS_BADGE.pending;
-                      const primaryEmp =
-                        order.assignedCarrier || order.handlingEmployee || order.exceptionEmployee;
+                      const carrierEmp = order.assignedCarrier;
 
                       return (
                         <tr
@@ -745,28 +740,28 @@ export const OrdersPage = () => {
                           </td>
 
                           <td className="py-3.5 px-4">
-                            {primaryEmp ? (
+                            {carrierEmp ? (
                               <div>
                                 <p className="font-semibold text-slate-800 dark:text-white text-[11px] flex items-center space-x-1">
-                                  <UserCheck className="w-3.5 h-3.5 text-[#2A5C4A] dark:text-[#DEC47E] shrink-0" />
-                                  <span className="line-clamp-1">{primaryEmp.fullName}</span>
+                                  <Truck className="w-3.5 h-3.5 text-[#2A5C4A] dark:text-[#DEC47E] shrink-0" />
+                                  <span className="line-clamp-1">{carrierEmp.fullName}</span>
                                 </p>
                                 <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                                  {primaryEmp.employeeCode && (
+                                  {carrierEmp.employeeCode && (
                                     <span className="text-[10px] text-[#8C6B1F] dark:text-[#DEC47E] bg-[#FBF7EC] dark:bg-[#C9A84C]/15 px-1 py-0.2 rounded font-mono font-medium">
-                                      {primaryEmp.employeeCode}
+                                      {carrierEmp.employeeCode}
                                     </span>
                                   )}
-                                  {primaryEmp.department && (
+                                  {carrierEmp.department && (
                                     <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded">
-                                      {primaryEmp.department}
+                                      {carrierEmp.department}
                                     </span>
                                   )}
                                 </div>
                               </div>
                             ) : (
                               <span className="inline-block text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/35 px-1.5 py-0.5 rounded">
-                                Chờ phân công
+                                Chưa phân công bưu tá
                               </span>
                             )}
                           </td>

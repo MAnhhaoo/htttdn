@@ -102,6 +102,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
         products: {
           where: { deletedAt: null },
           orderBy: { createdAt: 'desc' },
+          take: 50,
           select: {
             id: true,
             name: true,
@@ -123,6 +124,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
         },
         vendorOrders: {
           orderBy: { createdAt: 'desc' },
+          take: 50,
           select: {
             id: true,
             vendorOrderCode: true,
@@ -158,6 +160,7 @@ export class VendorsService extends PrismaBaseService<'vendor'> {
         vouchers: {
           where: { deletedAt: null },
           orderBy: { createdAt: 'desc' },
+          take: 50,
           select: {
             id: true,
             code: true,

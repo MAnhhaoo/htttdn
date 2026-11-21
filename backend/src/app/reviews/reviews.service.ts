@@ -27,6 +27,49 @@ export class ReviewsService {
     });
   }
 
+  async listForVendor(vendorId: string, summaryOnly = false) {
+    const where = {
+      deletedAt: null,
+      product: {
+        vendorId,
+        deletedAt: null,
+      },
+    };
+
+    const agg = await this.prisma.extended.review.aggregate({
+      where,
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+
+    const summary = {
+      avgRating: agg._avg.rating ? Number(agg._avg.rating).toFixed(1) : '0.0',
+      reviewCount: agg._count._all ?? 0,
+    };
+
+    if (summaryOnly) {
+      return { summary, list: [] };
+    }
+
+    const list = await this.prisma.extended.review.findMany({
+      where,
+      include: {
+        client: { select: { id: true, fullName: true, avatarUrl: true } },
+        product: { select: { id: true, name: true, slug: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+
+    return {
+      summary,
+      list: list.map((r) => ({
+        ...r,
+        productName: r.product?.name || 'Sản phẩm của Shop',
+      })),
+    };
+  }
+
   listByProduct(productId: string) {
     return this.prisma.extended.review.findMany({
       where: {

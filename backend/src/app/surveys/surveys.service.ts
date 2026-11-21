@@ -1104,13 +1104,22 @@ export class SurveysService {
   ) {
     const order = await tx.order.findUniqueOrThrow({
       where: { id: orderId },
-      include: {
+      select: {
+        clientId: true,
+        status: true,
         details: {
           select: {
             productVariant: {
               select: {
                 productColor: {
-                  select: { product: { select: { vendorId: true } } }}}}}}}});
+                  select: { product: { select: { vendorId: true } } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
     const vendorIds = new Set(
       order.details.flatMap((detail) => {
         const id = detail.productVariant.productColor.product.vendorId;
@@ -1126,9 +1135,14 @@ export class SurveysService {
           { vendorId: { in: [...vendorIds] } },
         ],
       },
-      include: {
-        admin: { select: { id: true, fullName: true } },
-        vendor: { select: { id: true, fullName: true, storeName: true } },
+      select: {
+        id: true,
+        adminId: true,
+        vendorId: true,
+        audienceType: true,
+        title: true,
+        description: true,
+        endDate: true,
       },
     });
     const eligible = surveys.filter((survey) => {
@@ -1463,28 +1477,20 @@ export class SurveysService {
     const vendorSurveyIds = list
       .filter((s) => s.audienceType === SurveyAudienceType.all_vendors)
       .map((s) => s.id);
-    if (vendorSurveyIds.length && this.prisma.extended.notification?.findMany) {
-      const vendorNotifs = await this.prisma.extended.notification.findMany({
-        where: {
-          surveyId: { in: vendorSurveyIds },
-          vendorId: { not: null },
-        },
-        select: { surveyId: true, data: true },
-      });
-      const submittedBySurvey = new Map<string, number>();
-      for (const n of vendorNotifs) {
-        if (!n.surveyId) continue;
-        const meta =
-          n.data && typeof n.data === 'object' && !Array.isArray(n.data)
-            ? (n.data as Record<string, any>)
-            : {};
-        if (meta.status === SurveyResponseStatus.submitted) {
-          submittedBySurvey.set(
-            n.surveyId,
-            (submittedBySurvey.get(n.surveyId) ?? 0) + 1,
-          );
-        }
-      }
+    if (vendorSurveyIds.length && this.prisma.extended.$queryRaw) {
+      const submittedRows = await this.prisma.extended.$queryRaw<
+        Array<{ surveyId: string; cnt: number }>
+      >(Prisma.sql`
+        SELECT "surveyId", COUNT(*)::int AS cnt
+        FROM "Notification"
+        WHERE "surveyId" IN (${Prisma.join(vendorSurveyIds.map((sid) => Prisma.sql`${sid}::uuid`))})
+          AND "vendorId" IS NOT NULL
+          AND data->>'status' = ${SurveyResponseStatus.submitted}
+        GROUP BY "surveyId"
+      `);
+      const submittedBySurvey = new Map<string, number>(
+        submittedRows.map((row) => [row.surveyId, Number(row.cnt) || 0]),
+      );
       for (const s of list) {
         if (s.audienceType === SurveyAudienceType.all_vendors) {
           s._count.responses = submittedBySurvey.get(s.id) ?? 0;

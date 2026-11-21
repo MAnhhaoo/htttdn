@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Star, Loader2, Search } from 'lucide-react';
 import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
-import { productService } from '../../services/productService';
 import { reviewService } from '../../services/reviewService';
 import { formatDate } from '../../utils/formatHelpers';
 
@@ -25,26 +24,8 @@ export default function ReviewManagement({ embedded = false }) {
     const fetchAllReviews = async () => {
       try {
         setLoading(true);
-        const prodData = await productService.getVendorProducts({ itemPerPage: 100 });
-        const products = Array.isArray(prodData) ? prodData : prodData?.list || [];
-
-        const perProductLists = await Promise.all(
-          products.map(async (product) => {
-            try {
-              const prodReviews = await reviewService.getReviewsByProduct(product.id);
-              return (Array.isArray(prodReviews) ? prodReviews : []).map((r) => ({
-                ...r,
-                productName: product.name,
-              }));
-            } catch {
-              return [];
-            }
-          }),
-        );
-
-        const allReviews = perProductLists
-          .flat()
-          .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        const res = await reviewService.getVendorReviews();
+        const allReviews = Array.isArray(res) ? res : res?.list || [];
 
         if (mounted) {
           setReviews(allReviews);

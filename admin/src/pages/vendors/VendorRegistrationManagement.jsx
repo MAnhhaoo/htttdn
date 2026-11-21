@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
 import {
   Search,
   CheckCircle,
@@ -20,8 +21,10 @@ import { formatPrice, formatDateOnly } from '../../utils/formatHelpers';
 export default function VendorRegistrationManagement() {
   const [activeTab, setActiveTab] = useState('pending');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const prevFilterRef = useRef(`${activeTab}|${debouncedSearch}`);
   const [data, setData] = useState({
     list: [],
     totalItems: 0,
@@ -51,7 +54,7 @@ export default function VendorRegistrationManagement() {
         tab: activeTab,
         page,
         itemPerPage: 10,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
       });
       const result = res.data?.data !== undefined ? res.data.data : res.data;
       if (result) {
@@ -62,15 +65,19 @@ export default function VendorRegistrationManagement() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, page, search]);
+  }, [activeTab, page, debouncedSearch]);
 
   useEffect(() => {
+    const filterKey = `${activeTab}|${debouncedSearch}`;
+    if (prevFilterRef.current !== filterKey) {
+      prevFilterRef.current = filterKey;
+      if (page !== 1) {
+        setPage(1);
+        return;
+      }
+    }
     fetchRegistrations();
-  }, [fetchRegistrations]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [activeTab, search]);
+  }, [fetchRegistrations, activeTab, debouncedSearch, page]);
 
   const openApproveModal = (vendor) => {
     setSelectedVendor(vendor);

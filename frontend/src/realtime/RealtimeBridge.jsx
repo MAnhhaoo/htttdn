@@ -9,15 +9,24 @@ export default function RealtimeBridge() {
 
   useEffect(() => {
     const socket = io('/realtime', { auth: { role: userId ? 'client' : 'guest' }, withCredentials: true });
-    const refreshOrders = (event) => {
+    let hasConnectedOnce = false;
+    let needsReconnectSync = false;
+
+    const refreshOrders = (event, includeProducts = false) => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       if (event?.orderId) queryClient.invalidateQueries({ queryKey: ['order', event.orderId] });
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      queryClient.invalidateQueries({ queryKey: ['product'] });
+      if (includeProducts) {
+        queryClient.invalidateQueries({ queryKey: ['products'], refetchType: 'none' });
+        queryClient.invalidateQueries({ queryKey: ['product'], refetchType: 'none' });
+      }
     };
-    const refreshProducts = () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
-      queryClient.invalidateQueries({ queryKey: ['product'] });
+    const refreshProducts = (event) => {
+      if (event?.productId) {
+        queryClient.invalidateQueries({ queryKey: ['product', event.productId] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['product'] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['products'], refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: ['checkout-preview'] });
       queryClient.invalidateQueries({ queryKey: ['cart'] });
       queryClient.invalidateQueries({ queryKey: ['voucher-offers'] });
@@ -28,20 +37,29 @@ export default function RealtimeBridge() {
     };
     const refreshCategories = () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
-      refreshProducts();
+      queryClient.invalidateQueries({ queryKey: ['products'], refetchType: 'none' });
     };
-    socket.on('realtime:ready', ({ role }) => {
+
+    socket.on('disconnect', () => {
+      if (hasConnectedOnce) needsReconnectSync = true;
+    });
+
+    socket.on('realtime:ready', ({ role } = {}) => {
+      const shouldSync = needsReconnectSync;
+      hasConnectedOnce = true;
+      needsReconnectSync = false;
+      if (!shouldSync) return;
       refreshCategories();
       refreshVouchers();
       if (role === 'client') {
-        refreshOrders();
+        refreshOrders(null, false);
         window.dispatchEvent(new Event('miva:notification'));
       }
     });
-    socket.on('order:created', refreshOrders);
-    socket.on('order:updated', refreshOrders);
-    socket.on('payment:updated', refreshOrders);
-    socket.on('shipment:updated', refreshOrders);
+    socket.on('order:created', (event) => refreshOrders(event, true));
+    socket.on('order:updated', (event) => refreshOrders(event, true));
+    socket.on('payment:updated', (event) => refreshOrders(event, false));
+    socket.on('shipment:updated', (event) => refreshOrders(event, false));
     socket.on('product:updated', refreshProducts);
     socket.on('category:updated', refreshCategories);
     socket.on('voucher:updated', refreshVouchers);

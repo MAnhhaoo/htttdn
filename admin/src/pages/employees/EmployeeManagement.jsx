@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useDebouncedValue } from '@shared/hooks/useDebouncedValue';
 import { 
   Users, UserPlus, Search,
   Lock, Unlock, Edit, TrendingUp, CheckCircle,
@@ -22,10 +23,12 @@ export default function EmployeeManagement() {
 
   // Filters
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [departments, setDepartments] = useState([]);
+  const prevFilterRef = useRef(`${debouncedSearch}|${departmentFilter}|${typeFilter}|${statusFilter}`);
 
   // Modals
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -43,7 +46,7 @@ export default function EmployeeManagement() {
       const params = {
         page,
         itemPerPage: 10,
-        ...(search ? { q: search } : {}),
+        ...(debouncedSearch ? { q: debouncedSearch } : {}),
         ...(departmentFilter ? { department: departmentFilter } : {}),
         ...(typeFilter ? { employmentType: typeFilter } : {}),
         ...(statusFilter ? { status: statusFilter } : {}),
@@ -60,11 +63,19 @@ export default function EmployeeManagement() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, departmentFilter, typeFilter, statusFilter]);
+  }, [page, debouncedSearch, departmentFilter, typeFilter, statusFilter]);
 
   useEffect(() => {
+    const filterKey = `${debouncedSearch}|${departmentFilter}|${typeFilter}|${statusFilter}`;
+    if (prevFilterRef.current !== filterKey) {
+      prevFilterRef.current = filterKey;
+      if (page !== 1) {
+        setPage(1);
+        return;
+      }
+    }
     fetchEmployees();
-  }, [fetchEmployees]);
+  }, [fetchEmployees, debouncedSearch, departmentFilter, typeFilter, statusFilter, page]);
 
   useEffect(() => {
     const fetchDepartments = async () => {

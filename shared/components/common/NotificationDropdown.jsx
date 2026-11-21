@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Check, Clock, ShieldCheck, ClipboardList, CheckCircle2 } from 'lucide-react';
+import { Bell, Check, Clock, ShieldCheck, ClipboardList, CheckCircle2, Package } from 'lucide-react';
 
 /**
  * Dropdown Chuông Thông Báo dùng chung cho Admin, Vendor và Employee.
@@ -173,6 +173,9 @@ export function SharedNotificationDropdown({
             ) : (
               notifications.map((notif) => {
                 const isSurvey = notif.type === 'survey_invitation' || Boolean(notif.surveyId);
+                const isOrderUpdate =
+                  notif.type === 'order_update' ||
+                  Boolean(notif.data?.orderId || notif.data?.shipmentId);
                 const isSubmitted =
                   notif.response?.status === 'submitted' || notif.data?.status === 'submitted';
 
@@ -191,6 +194,8 @@ export function SharedNotificationDropdown({
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                       {isSurvey ? (
                         <ClipboardList className="w-5 h-5 text-[#1A3A2C] dark:text-[#8BBAA1]" />
+                      ) : isOrderUpdate ? (
+                        <Package className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                       ) : (
                         <Bell className="w-5 h-5 text-[#C9A84C]" />
                       )}
@@ -201,6 +206,11 @@ export function SharedNotificationDropdown({
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1A3A2C] dark:text-[#8BBAA1] bg-[#EEF5F1] dark:bg-[#1A3A2C]/40 px-1.5 py-0.5 rounded">
                           <ShieldCheck className="w-3 h-3" /> {notif.sender || senderBadgeLabel}
                         </span>
+                        {isOrderUpdate && !isSurvey && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded">
+                            Đơn hàng
+                          </span>
+                        )}
                         {isSurvey &&
                           (isSubmitted ? (
                             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 bg-emerald-100/60 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded">

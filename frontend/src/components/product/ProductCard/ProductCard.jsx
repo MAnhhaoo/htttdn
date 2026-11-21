@@ -1,12 +1,11 @@
-import { useState } from 'react';
+import { lazy, memo, Suspense, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Package, ShoppingCart, Loader2, Heart, Zap, MapPin } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import { formatPrice } from '../../../utils/formatPrice';
-import { useCart } from '../../../hooks/useCart';
+import { useAddToCart } from '../../../hooks/useCart';
 import { useFavorites } from '../../../hooks/useFavorites';
 import { useToast } from '../../common/Toast/Toast';
-import QuickAddModal from '../QuickAddModal/QuickAddModal';
 import {
   computeProductVoucherDeal,
   buildCheckoutVoucherState,
@@ -23,7 +22,9 @@ import {
   PromoOutlineTag,
 } from '../VoucherBadges';
 
-export default function ProductCard({ product }) {
+const QuickAddModal = lazy(() => import('../QuickAddModal/QuickAddModal'));
+
+const ProductCard = memo(function ProductCard({ product }) {
   const [imgError, setImgError] = useState(false);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
@@ -32,7 +33,7 @@ export default function ProductCard({ product }) {
 
   const navigate = useNavigate();
   const isAuthenticated = useSelector((state) => state.auth.isAuthenticated);
-  const { addToCart } = useCart();
+  const { addToCart } = useAddToCart();
   const { isFavorite, toggleFavorite } = useFavorites();
   const toast = useToast();
 
@@ -44,7 +45,10 @@ export default function ProductCard({ product }) {
   const maxPrice = product.maxPrice;
   const totalStock = product.totalStock ?? 0;
   const showPriceRange = Boolean(maxPrice && price && maxPrice !== price);
-  const deal = computeProductVoucherDeal(price, 1, product.voucherOffers, product.id);
+  const deal = useMemo(
+    () => computeProductVoucherDeal(price, 1, product.voucherOffers, product.id),
+    [price, product.voucherOffers, product.id],
+  );
   const vendorId = product.vendor?.id || product.vendorId || 'platform';
   const vendorLocation = extractVendorLocation(product.vendor);
   const soldCount = Number(product.soldQuantity || 0);
@@ -52,10 +56,15 @@ export default function ProductCard({ product }) {
     deal.hasDiscount || soldCount >= 5 || Boolean(product.vendor?.id || product.vendorId);
 
   // Variant analysis for cart logic
-  const allVariants = product.colors?.flatMap((c) => c.variants || []) || [];
-  const purchasableVariants = allVariants.filter((v) => v.stock > 0);
-  const hasSingleVariant = purchasableVariants.length === 1;
-  const hasMultipleVariants = purchasableVariants.length > 1;
+  const { purchasableVariants, hasSingleVariant, hasMultipleVariants } = useMemo(() => {
+    const all = product.colors?.flatMap((c) => c.variants || []) || [];
+    const purchasable = all.filter((v) => v.stock > 0);
+    return {
+      purchasableVariants: purchasable,
+      hasSingleVariant: purchasable.length === 1,
+      hasMultipleVariants: purchasable.length > 1,
+    };
+  }, [product.colors]);
 
   const handleToggleFavorite = async (e) => {
     e.preventDefault();
@@ -349,15 +358,19 @@ export default function ProductCard({ product }) {
 
       {/* Quick Add Modal */}
       {showQuickAdd && (
-        <QuickAddModal
-          product={product}
-          initialMode={quickAddInitialMode}
-          onClose={() => {
-            setShowQuickAdd(false);
-            setQuickAddInitialMode('add_to_cart');
-          }}
-        />
+        <Suspense fallback={null}>
+          <QuickAddModal
+            product={product}
+            initialMode={quickAddInitialMode}
+            onClose={() => {
+              setShowQuickAdd(false);
+              setQuickAddInitialMode('add_to_cart');
+            }}
+          />
+        </Suspense>
       )}
     </>
   );
-}
+});
+
+export default ProductCard;

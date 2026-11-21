@@ -14,11 +14,30 @@ export function SharedRealtimeBridge({ userId, role }) {
       withCredentials: true,
     });
 
-    const emit = (channel) => {
-      window.dispatchEvent(new Event(`miva:${channel}`));
+    const pendingTimers = new Map();
+    const emit = (channel, detail = null) => {
+      if (pendingTimers.has(channel)) {
+        clearTimeout(pendingTimers.get(channel));
+      }
+      const timer = setTimeout(() => {
+        pendingTimers.delete(channel);
+        window.dispatchEvent(new CustomEvent(`miva:${channel}`, { detail }));
+      }, 300);
+      pendingTimers.set(channel, timer);
     };
 
+    let hasConnectedOnce = false;
+    let needsReconnectSync = false;
+
+    socket.on('disconnect', () => {
+      if (hasConnectedOnce) needsReconnectSync = true;
+    });
+
     socket.on('realtime:ready', () => {
+      const shouldSync = needsReconnectSync;
+      hasConnectedOnce = true;
+      needsReconnectSync = false;
+      if (!shouldSync) return;
       emit('orders');
       emit('shipping');
       emit('products');
@@ -27,47 +46,51 @@ export function SharedRealtimeBridge({ userId, role }) {
       emit('dashboard');
     });
 
-    socket.on('order:created', () => {
-      emit('orders');
-      emit('shipping');
-      emit('products');
-      emit('notification');
-      emit('dashboard');
+    socket.on('order:created', (payload) => {
+      emit('orders', payload);
+      emit('shipping', payload);
+      emit('products', payload);
+      emit('notification', payload);
+      emit('dashboard', payload);
     });
 
-    socket.on('order:updated', () => {
-      emit('orders');
-      emit('shipping');
-      emit('products');
-      emit('notification');
-      emit('dashboard');
+    socket.on('order:updated', (payload) => {
+      emit('orders', payload);
+      emit('shipping', payload);
+      emit('products', payload);
+      emit('notification', payload);
+      emit('dashboard', payload);
     });
 
-    socket.on('payment:updated', () => {
-      emit('orders');
-      emit('dashboard');
+    socket.on('payment:updated', (payload) => {
+      emit('orders', payload);
+      emit('dashboard', payload);
     });
 
-    socket.on('shipment:updated', () => {
-      emit('shipping');
-      emit('orders');
-      emit('dashboard');
+    socket.on('shipment:updated', (payload) => {
+      emit('shipping', payload);
+      emit('orders', payload);
+      emit('dashboard', payload);
     });
 
-    socket.on('product:updated', () => {
-      emit('products');
-      emit('dashboard');
+    socket.on('product:updated', (payload) => {
+      emit('products', payload);
+      emit('dashboard', payload);
     });
 
-    socket.on('category:updated', () => {
-      emit('categories');
-      emit('dashboard');
+    socket.on('category:updated', (payload) => {
+      emit('categories', payload);
+      emit('dashboard', payload);
     });
 
-    socket.on('notification:created', () => emit('notification'));
-    socket.on('notification:updated', () => emit('notification'));
+    socket.on('notification:created', (payload) => emit('notification', payload));
+    socket.on('notification:updated', (payload) => emit('notification', payload));
 
-    return () => socket.disconnect();
+    return () => {
+      pendingTimers.forEach((timer) => clearTimeout(timer));
+      pendingTimers.clear();
+      socket.disconnect();
+    };
   }, [userId, role]);
 
   return null;
