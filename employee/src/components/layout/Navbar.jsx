@@ -4,9 +4,6 @@ import {
   Building2, 
   ShieldCheck, 
   LogOut, 
-  DollarSign, 
-  Eye,
-  EyeOff,
   Bell
 } from 'lucide-react';
 import { notificationsApi } from '../../api/axiosClient';
@@ -14,7 +11,6 @@ import { EmployeeNotificationsModal } from '../notifications/EmployeeNotificatio
 
 export const Navbar = () => {
   const { user, logout } = useAuth();
-  const [showSalary, setShowSalary] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
@@ -37,10 +33,6 @@ export const Navbar = () => {
     window.addEventListener('miva:notification', fetchUnread);
     return () => window.removeEventListener('miva:notification', fetchUnread);
   });
-
-  const formatCurrency = (val) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
-  };
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
@@ -89,17 +81,6 @@ export const Navbar = () => {
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
-            </button>
-
-            {/* Salary preview toggle */}
-            <button
-              onClick={() => setShowSalary(!showSalary)}
-              title="Xem thông tin lương nhân viên"
-              className="flex items-center space-x-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition"
-            >
-              <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{showSalary ? formatCurrency(user?.salary || 0) : 'Lương: ••••••••'}</span>
-              {showSalary ? <EyeOff className="w-3 h-3 text-slate-400" /> : <Eye className="w-3 h-3 text-slate-400" />}
             </button>
 
             {/* Profile Pill & Logout */}

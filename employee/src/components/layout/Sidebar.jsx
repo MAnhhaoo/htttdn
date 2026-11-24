@@ -82,7 +82,7 @@ export const Sidebar = ({ pendingCount = 2, confirmedCount = 1, exceptionCount =
     {
       to: '/profile',
       icon: User,
-      label: 'Hồ sơ & Hợp đồng lương',
+      label: 'Hồ sơ nhân viên',
       roles: ['vendor_link', 'shipping', 'exceptions', 'all'],
     },
   ];

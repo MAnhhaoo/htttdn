@@ -21,6 +21,7 @@ const STATUS_CONFIG = {
 
 export default function ShippingManagement() {
   const [shipments, setShipments] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -75,6 +76,9 @@ export default function ShippingManagement() {
       setShipments(data.list || []);
       setTotalItems(data.totalItems || 0);
       setTotalPages(data.totalPages || 1);
+      if (data.summary || res.summary) {
+        setSummary(data.summary || res.summary);
+      }
     } catch (err) {
       console.error('Error fetching shipments:', err);
     } finally {
@@ -194,10 +198,21 @@ export default function ShippingManagement() {
     }
   };
 
-  // Quick Stats
-  const pendingCount = shipments.filter(s => s.status === 'pending').length;
-  const inTransitCount = shipments.filter(s => s.status === 'in_transit' || s.status === 'out_for_delivery').length;
-  const deliveredCount = shipments.filter(s => s.status === 'delivered').length;
+  // Quick Stats (thống kê toàn bộ hệ thống từ server summary)
+  const pendingCount =
+    summary?.pending ?? shipments.filter((s) => s.status === 'pending').length;
+  const inTransitCount =
+    summary?.inTransit ??
+    shipments.filter(
+      (s) =>
+        s.status === 'assigned' ||
+        s.status === 'picking_up' ||
+        s.status === 'in_transit' ||
+        s.status === 'out_for_delivery',
+    ).length;
+  const deliveredCount =
+    summary?.delivered ?? shipments.filter((s) => s.status === 'delivered').length;
+  const totalShipmentsCount = summary?.total ?? totalItems;
 
   return (
     <div className="space-y-6">
@@ -238,7 +253,7 @@ export default function ShippingManagement() {
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Tổng vận đơn</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{totalItems}</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{totalShipmentsCount}</p>
           </div>
           <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl text-blue-600">
             <Package className="w-6 h-6" />

@@ -12,7 +12,6 @@ import {
   LogOut,
   UserCheck,
   Truck,
-  Calculator,
   ClipboardList,
   ShieldCheck,
   PieChart,
@@ -43,7 +42,6 @@ const navGroups = [
     title: 'NHÂN SỰ & VẬN HÀNH CRM',
     items: [
       { name: 'Nhân sự & Nhân viên', path: '/employees', icon: UserCheck },
-      { name: 'Bảng lương & Chấm công', path: '/payroll', icon: Calculator },
       { name: 'Khảo sát CRM', path: '/surveys', icon: ClipboardList },
       { name: 'Khách hàng', path: '/users', icon: Users },
       { name: 'Đánh giá sản phẩm', path: '/reviews', icon: Star },
