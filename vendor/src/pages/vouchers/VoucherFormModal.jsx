@@ -118,6 +118,25 @@ export default function VoucherFormModal({ isOpen, onClose, voucherToEdit, onSav
   }
   const filteredProducts = [...productOptions.values()].filter(product => product.name.toLowerCase().includes(productSearch.trim().toLowerCase()));
 
+  const allAvailableProducts = products.filter(product => productOptions.get(product.id)?.available !== false);
+  const targetList = productSearch.trim() ? filteredProducts.filter(p => p.available !== false) : allAvailableProducts;
+  const isAllSelected = targetList.length > 0 && targetList.every(product => formData.productIds.includes(product.id));
+
+  const handleToggleAll = () => {
+    const targetIds = targetList.map(p => p.id);
+    if (isAllSelected) {
+      setFormData(current => ({
+        ...current,
+        productIds: current.productIds.filter(id => !targetIds.includes(id)),
+      }));
+    } else {
+      setFormData(current => ({
+        ...current,
+        productIds: [...new Set([...current.productIds, ...targetIds])].slice(0, 100),
+      }));
+    }
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -205,7 +224,18 @@ export default function VoucherFormModal({ isOpen, onClose, voucherToEdit, onSav
           onChange={e => setFormData({ ...formData, status: e.target.value })}
         />
         <section className="md:col-span-2 space-y-2" aria-label="Sản phẩm áp dụng">
-          <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">Sản phẩm áp dụng * ({formData.productIds.length}/100)</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">Sản phẩm áp dụng * ({formData.productIds.length}/100)</h3>
+            {targetList.length > 0 && (
+              <button
+                type="button"
+                onClick={handleToggleAll}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:underline cursor-pointer"
+              >
+                {isAllSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả các sản phẩm'}
+              </button>
+            )}
+          </div>
           <Input aria-label="Tìm sản phẩm áp dụng" placeholder="Tìm sản phẩm của shop..." value={productSearch} onChange={event => setProductSearch(event.target.value)} />
           {productsLoading ? <p role="status" className="text-sm text-slate-500">Đang tải sản phẩm...</p> : productsError ? (
             <div role="alert" className="text-sm text-red-600">
@@ -213,6 +243,20 @@ export default function VoucherFormModal({ isOpen, onClose, voucherToEdit, onSav
             </div>
           ) : (
             <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 p-2 space-y-1">
+              {targetList.length > 0 && (
+                <label className="flex items-center gap-2 p-2 text-sm font-semibold border-b border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-800/90 sticky top-0 z-10 text-slate-800 dark:text-slate-100 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={handleToggleAll}
+                  />
+                  <span>
+                    {productSearch.trim()
+                      ? `Chọn tất cả kết quả tìm kiếm (${targetList.length})`
+                      : 'Chọn tất cả các sản phẩm'}
+                  </span>
+                </label>
+              )}
               {filteredProducts.map(product => {
                 const checked = formData.productIds.includes(product.id);
                 return (

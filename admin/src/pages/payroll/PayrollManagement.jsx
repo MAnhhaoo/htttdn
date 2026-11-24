@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-  Calculator, DollarSign, Calendar, Filter, RefreshCw, CheckCircle2, 
+import {
+  Calculator, DollarSign, Calendar, Filter, RefreshCw, CheckCircle2,
   Clock, AlertCircle, Edit, Check, CreditCard, ChevronLeft, ChevronRight,
   TrendingUp, Users, FileSpreadsheet, Building2, User
 } from 'lucide-react';
@@ -20,7 +20,6 @@ const formatVND = (val) => {
 export default function PayrollManagement() {
   const [payrolls, setPayrolls] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [calculating, setCalculating] = useState(false);
 
   // Filters
   const [month, setMonth] = useState(new Date().getMonth() + 1); // Current month
@@ -60,23 +59,6 @@ export default function PayrollManagement() {
   useEffect(() => {
     fetchPayrolls();
   }, [fetchPayrolls]);
-
-  // Handle calculate payroll engine
-  const handleCalculatePayroll = async () => {
-    if (!window.confirm(`Xác nhận tính toán bảng lương tự động cho Tháng ${month}/${year}?`)) {
-      return;
-    }
-    try {
-      setCalculating(true);
-      await payrollApi.calculate({ month: Number(month), year: Number(year) });
-      alert(`Đã tính toán và cập nhật bảng lương Tháng ${month}/${year} thành công!`);
-      fetchPayrolls();
-    } catch (err) {
-      alert(`Lỗi tính bảng lương: ${err.response?.data?.message || err.message}`);
-    } finally {
-      setCalculating(false);
-    }
-  };
 
   // Open Edit Modal
   const handleOpenEdit = (item) => {
@@ -133,30 +115,21 @@ export default function PayrollManagement() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
             <Calculator className="w-7 h-7 text-emerald-600" />
-            Quản trị Bảng lương & Chấm công (Payroll Engine)
+            Quản trị Bảng lương & Chấm công
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Tính toán tự động tiền lương theo hợp đồng Full-time / Part-time, kiểm duyệt và chi trả minh bạch.
+            Theo dõi danh sách bảng lương nhân viên, kiểm duyệt và chi trả minh bạch.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
-          <Button 
-            variant="outline" 
-            onClick={fetchPayrolls} 
+          <Button
+            variant="outline"
+            onClick={fetchPayrolls}
             className="flex items-center gap-2"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Làm mới
-          </Button>
-
-          <Button 
-            onClick={handleCalculatePayroll} 
-            disabled={calculating}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 shadow-xs"
-          >
-            <Calculator className={`w-4 h-4 ${calculating ? 'animate-spin' : ''}`} />
-            {calculating ? 'Đang tính toán...' : `Tính lương Tháng ${month}/${year}`}
           </Button>
         </div>
       </div>
@@ -299,15 +272,6 @@ export default function PayrollManagement() {
                   <td colSpan="9" className="text-center py-12 text-slate-400">
                     <Calculator className="w-10 h-10 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
                     Chưa có bảng lương cho Tháng {month}/{year}.
-                    <div className="mt-3">
-                      <Button 
-                        size="sm" 
-                        onClick={handleCalculatePayroll} 
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                      >
-                        Bấm để tính lương tự động ngay
-                      </Button>
-                    </div>
                   </td>
                 </tr>
               ) : (
